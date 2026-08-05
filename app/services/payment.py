@@ -1,0 +1,241 @@
+from decimal import Decimal
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.money import to_decimal
+from app.models.payment import Payment, PaymentAllocation, PaymentReversal
+from app.models.schedule import AdditionalCharge, OutstandingBalance
+from app.schemas.payment import PaymentAllocationCreate, PaymentCreate, PaymentReversalCreate
+
+
+class PaymentService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def record_payment(self, data: PaymentCreate, user_id: str) -> Payment:
+        payment = Payment(
+            **data.model_dump(),
+            status="pending",
+            allocated_by=user_id,
+        )
+        self.db.add(payment)
+        await self.db.flush()
+        return payment
+
+    async def get(self, payment_id: str) -> Payment | None:
+        return await self.db.get(Payment, payment_id)
+
+    async def list_for_student(
+        self, student_id: str, limit: int = 50, offset: int = 0
+    ) -> list[Payment]:
+        stmt = (
+            select(Payment)
+            .where(Payment.student_id == student_id)
+            .order_by(Payment.payment_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_for_students(
+        self, student_ids: list[str], limit: int = 50, offset: int = 0
+    ) -> list[Payment]:
+        stmt = (
+            select(Payment)
+            .where(Payment.student_id.in_(student_ids))
+            .order_by(Payment.payment_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_pending(self, limit: int = 50, offset: int = 0) -> list[Payment]:
+        stmt = (
+            select(Payment)
+            .where(Payment.status == "pending")
+            .order_by(Payment.payment_date)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_all(self, limit: int = 50, offset: int = 0) -> list[Payment]:
+        stmt = (
+            select(Payment)
+            .order_by(Payment.payment_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def allocate(self, data: PaymentAllocationCreate) -> PaymentAllocation:
+        payment = await self.get(data.payment_id)
+        if not payment:
+            raise NotFoundError("Payment", data.payment_id)
+        if payment.status == "reversed":
+            raise BusinessRuleError("Cannot allocate against a reversed payment")
+
+        # Validate allocation doesn't exceed the target's remaining balance
+        if data.outstanding_balance_id:
+            await self._validate_balance_allocation(
+                data.outstanding_balance_id, data.amount_allocated
+            )
+        if data.additional_charge_id:
+            await self._validate_charge_allocation(
+                data.additional_charge_id, data.amount_allocated
+            )
+
+        allocation = PaymentAllocation(
+            payment_id=data.payment_id,
+            outstanding_balance_id=data.outstanding_balance_id,
+            additional_charge_id=data.additional_charge_id,
+            amount_allocated=data.amount_allocated,
+        )
+        self.db.add(allocation)
+
+        if data.outstanding_balance_id:
+            await self._apply_to_balance(data.outstanding_balance_id, data.amount_allocated)
+
+        if data.additional_charge_id:
+            await self._apply_to_charge(data.additional_charge_id, data.amount_allocated)
+
+        await self.db.flush()
+        return allocation
+
+    async def _validate_balance_allocation(
+        self, balance_id: str, amount: Decimal
+    ) -> None:
+        balance = await self.db.get(OutstandingBalance, balance_id)
+        if not balance:
+            raise NotFoundError("OutstandingBalance", balance_id)
+        if balance.status == "paid":
+            raise BusinessRuleError("Balance is already fully paid")
+        remaining = to_decimal(
+            balance.original_amount + balance.rollover_amount - balance.amount_paid
+        )
+        if amount > remaining:
+            raise BusinessRuleError(
+                f"Allocation of {amount} exceeds remaining balance of {remaining}"
+            )
+
+    async def _validate_charge_allocation(
+        self, charge_id: str, amount: Decimal
+    ) -> None:
+        charge = await self.db.get(AdditionalCharge, charge_id)
+        if not charge:
+            raise NotFoundError("AdditionalCharge", charge_id)
+        if charge.is_paid:
+            raise BusinessRuleError("Charge is already paid")
+        if amount > charge.amount:
+            raise BusinessRuleError(
+                f"Allocation of {amount} exceeds charge amount of {charge.amount}"
+            )
+
+    async def _apply_to_balance(self, balance_id: str, amount: Decimal) -> None:
+        balance = await self.db.get(OutstandingBalance, balance_id)
+        if not balance:
+            raise NotFoundError("OutstandingBalance", balance_id)
+
+        balance.amount_paid = to_decimal(balance.amount_paid + amount)
+        balance.balance = to_decimal(
+            balance.original_amount + balance.rollover_amount - balance.amount_paid
+        )
+        balance.status = "paid" if balance.balance <= 0 else "partial"
+        self.db.add(balance)
+
+        # Mark the schedule entry as paid when the balance is cleared
+        if balance.status == "paid":
+            from app.models.schedule import MonthlySchedule
+
+            schedule = await self.db.get(MonthlySchedule, balance.monthly_schedule_id)
+            if schedule and not schedule.is_paid:
+                schedule.is_paid = True
+                self.db.add(schedule)
+
+    async def _apply_to_charge(self, charge_id: str, amount: Decimal) -> None:
+        charge = await self.db.get(AdditionalCharge, charge_id)
+        if not charge:
+            raise NotFoundError("AdditionalCharge", charge_id)
+
+        remaining = charge.amount - amount
+        if remaining <= 0:
+            charge.is_paid = True
+        self.db.add(charge)
+
+    async def verify_payment(
+        self, payment_id: str, action: str, user_id: str
+    ) -> Payment | None:
+        payment = await self.get(payment_id)
+        if not payment or payment.status != "pending":
+            return None
+
+        if action == "approve":
+            payment.status = "verified"
+        elif action == "reject":
+            payment.status = "rejected"
+
+        await self.db.flush()
+        return payment
+
+    async def reverse(self, data: PaymentReversalCreate, user_id: str) -> PaymentReversal:
+        payment = await self.get(data.payment_id)
+        if not payment:
+            raise NotFoundError("Payment", data.payment_id)
+        if payment.status == "reversed":
+            raise BusinessRuleError("Payment already reversed")
+
+        reversal = PaymentReversal(
+            payment_id=data.payment_id,
+            reversed_by=user_id,
+            reason=data.reason,
+        )
+        self.db.add(reversal)
+        payment.status = "reversed"
+
+        stmt = select(PaymentAllocation).where(
+            PaymentAllocation.payment_id == data.payment_id
+        )
+        result = await self.db.execute(stmt)
+        allocations = result.scalars().all()
+
+        for alloc in allocations:
+            await self._reverse_allocation(alloc)
+            await self.db.delete(alloc)
+
+        await self.db.flush()
+        return reversal
+
+    async def _reverse_allocation(self, alloc: PaymentAllocation) -> None:
+        if alloc.outstanding_balance_id:
+            balance = await self.db.get(OutstandingBalance, alloc.outstanding_balance_id)
+            if balance:
+                balance.amount_paid = to_decimal(
+                    balance.amount_paid - alloc.amount_allocated
+                )
+                balance.balance = to_decimal(
+                    balance.original_amount
+                    + balance.rollover_amount
+                    - balance.amount_paid
+                )
+                balance.status = "pending" if balance.balance > 0 else "paid"
+                self.db.add(balance)
+
+        if alloc.additional_charge_id:
+            charge = await self.db.get(AdditionalCharge, alloc.additional_charge_id)
+            if charge:
+                charge.is_paid = False
+                self.db.add(charge)
+
+    async def upload_proof(self, payment_id: str, proof_url: str) -> Payment | None:
+        payment = await self.get(payment_id)
+        if not payment:
+            return None
+        payment.proof_of_payment_url = proof_url
+        await self.db.flush()
+        return payment

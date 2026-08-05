@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix: inputs rendered black/dark on machines whose OS uses a dark color
+   scheme. The app is light-themed, so force light scheme + white form
+   controls everywhere regardless of the OS/browser dark mode. */
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    background-color: #f9fafb;
+    color: #111827;
+  }
+
+  input,
+  select,
+  textarea {
+    color-scheme: light;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af !important;
+    opacity: 1;
+  }
+
+  option {
+    background-color: #ffffff;
+    color: #111827;
+  }
+}

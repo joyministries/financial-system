@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.so
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Uploaded application documents (birth certificates, transcripts, ...)
+uploads/
+
+# Local development / session artifacts (not part of the product)
+PROGRESS.txt
+financial_see.txt
+celerybeat-schedule
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo

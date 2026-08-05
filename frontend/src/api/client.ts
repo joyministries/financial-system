@@ -1,0 +1,298 @@
+import axios from 'axios';
+import type {
+  EmailSettings,
+  FeeStructure,
+  Grade,
+  GuardianInput,
+  NotificationSettings,
+  ParentRegisterPayload,
+  ParentRegisterResponse,
+  SmsSettings,
+  StudentDocument,
+} from '@/types';
+
+const API_BASE = '/api/v1';
+
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// Attach the bearer token to every request and force a clean logout on 401.
+// (Regression guard: this interceptor lives on the shared `api` instance so
+// ALL authenticated endpoints — not just uploads — carry the token.)
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Upload helper: multipart requests must NOT set Content-Type manually so the
+// browser adds the boundary.
+export const uploadApi = axios.create({ baseURL: API_BASE });
+
+uploadApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+uploadApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ── Auth ──────────────────────────────────────────────────
+export const authApi = {
+  login: (email: string, password: string) =>
+    api.post<{ access_token: string }>('/auth/login', { email, password }),
+  register: (data: { email: string; password: string; full_name: string; role: string }) =>
+    api.post('/auth/register', data),
+  registerParent: (data: ParentRegisterPayload) =>
+    api.post<ParentRegisterResponse>('/auth/register/parent', data),
+  me: () => api.get('/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword }),
+  forgotPassword: (email: string) =>
+    api.post<{ detail: string; reset_token?: string | null }>('/auth/forgot-password', { email }),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, new_password: newPassword }),
+};
+
+// ── Grades ────────────────────────────────────────────────
+export const gradesApi = {
+  list: () => api.get<Grade[]>('/grades/'),
+  get: (id: string) => api.get(`/grades/${id}`),
+  create: (data: { name: string; description?: string }) => api.post('/grades/', data),
+  update: (id: string, data: { name?: string; description?: string }) =>
+    api.put(`/grades/${id}`, data),
+  delete: (id: string) => api.delete(`/grades/${id}`),
+  archive: (id: string) => api.post(`/grades/${id}/archive`),
+  activate: (id: string) => api.post(`/grades/${id}/activate`),
+};
+
+// ── Fee Structures ────────────────────────────────────────
+export const feesApi = {
+  listByGrade: (gradeId: string, year: number) =>
+    api.get<FeeStructure[]>(`/grades/${gradeId}/fees?academic_year=${year}`),
+  /** Public fee details for the registration form (no auth required) */
+  listByGradePublic: (gradeId: string, year: number) =>
+    api.get<FeeStructure[]>(`/grades/${gradeId}/fees/public?academic_year=${year}`),
+  create: (gradeId: string, data: {
+    academic_year: number;
+    category: string;
+    annual_amount: string | number;
+    payment_plan: 'monthly' | 'yearly';
+    monthly_installment?: string | number | null;
+  }) => api.post(`/grades/${gradeId}/fees`, { ...data, grade_id: gradeId }),
+  update: (feeId: string, data: {
+    category?: string;
+    annual_amount?: string | number;
+    payment_plan?: 'monthly' | 'yearly';
+    monthly_installment?: string | number | null;
+  }) => api.put(`/grades/fees/${feeId}`, data),
+  generateSchedule: (feeId: string) => api.post(`/grades/fees/${feeId}/generate-schedule`),
+};
+
+// ── Students ──────────────────────────────────────────────
+export const studentsApi = {
+  list: (params?: { grade_id?: string; parent_id?: string }) =>
+    api.get('/students/', { params }),
+  get: (id: string) => api.get(`/students/${id}`),
+  getByNumber: (num: string) => api.get(`/students/number/${num}`),
+  registrations: (limit?: number) =>
+    api.get('/students/registrations', { params: { limit } }),
+  create: (data: {
+    student_number: string;
+    first_name: string;
+    last_name: string;
+    grade_id: string;
+    enrollment_date: string;
+    parent_1: GuardianInput;
+    parent_2?: GuardianInput;
+  }) => api.post('/students/', data),
+  update: (id: string, data: { first_name?: string; last_name?: string; grade_id?: string }) =>
+    api.put(`/students/${id}`, data),
+  deactivate: (id: string) => api.delete(`/students/${id}`),
+  registerChild: (data: {
+    first_name: string;
+    last_name: string;
+    grade_id: string;
+    relationship?: 'father' | 'mother';
+    guardian_id?: string;
+    phone?: string;
+    email?: string;
+    physical_address?: string;
+    po_box?: string;
+    other_parent?: GuardianInput;
+  }) => api.post('/students/register-child', data),
+  pending: (limit?: number) =>
+    api.get('/students/pending', { params: { limit } }),
+  approve: (id: string) => api.post(`/students/${id}/approve`),
+  reject: (id: string) => api.post(`/students/${id}/reject`),
+  setPaymentPreference: (id: string, preference: 'monthly' | 'cumulative') =>
+    api.put(`/students/${id}/payment-preference`, { payment_preference: preference }),
+  updateGuardian: (studentId: string, guardianId: string, data: {
+    first_name?: string;
+    last_name?: string;
+    full_name?: string;
+    guardian_id?: string;
+    phone?: string;
+    email?: string;
+    physical_address?: string;
+    po_box?: string;
+  }) => api.put(`/students/${studentId}/guardians/${guardianId}`, data),
+};
+
+// ── Application Documents ─────────────────────────────────
+export const documentsApi = {
+  list: (studentId: string) =>
+    api.get<StudentDocument[]>(`/documents/${studentId}`),
+  upload: (studentId: string, documentType: string, file: File) => {
+    const form = new FormData();
+    form.append('doc_type', documentType);
+    form.append('file', file);
+    return uploadApi.post<StudentDocument>(`/documents/${studentId}`, form);
+  },
+  downloadUrl: (studentId: string, documentId: string) =>
+    `${API_BASE}/documents/${studentId}/files/${documentId}`,
+  delete: (studentId: string, documentId: string) =>
+    api.delete(`/documents/${studentId}/files/${documentId}`),
+};
+
+// ── Additional Charges ────────────────────────────────────
+export const chargesApi = {
+  list: (studentId: string, year: number) =>
+    api.get(`/charges/student/${studentId}?academic_year=${year}`),
+  listUnpaid: (studentId: string, year: number) =>
+    api.get(`/charges/student/${studentId}/unpaid?academic_year=${year}`),
+  create: (data: {
+    student_id: string;
+    charge_type: string;
+    description: string;
+    amount: string | number;
+    academic_year: number;
+    month: number;
+  }) => api.post('/charges/', data),
+  createForGrade: (data: {
+    grade_id: string;
+    charge_type: string;
+    description: string;
+    amount: string | number;
+    academic_year: number;
+    month: number;
+    exclude_student_ids: string[];
+  }) => api.post('/charges/grade', data),
+  delete: (id: string) => api.delete(`/charges/${id}`),
+};
+
+// ── Payments ──────────────────────────────────────────────
+export const paymentsApi = {
+  list: (params?: { student_id?: string; status?: string; limit?: number; offset?: number }) =>
+    api.get('/payments/', { params }),
+  get: (id: string) => api.get(`/payments/${id}`),
+  create: (data: {
+    student_id: string;
+    amount: string | number;
+    payment_method: string;
+    payment_date: string;
+    reference_number?: string;
+    notes?: string;
+  }) => api.post('/payments/', data),
+  allocate: (data: {
+    payment_id: string;
+    outstanding_balance_id?: string;
+    additional_charge_id?: string;
+    amount_allocated: string | number;
+  }) => api.post('/payments/allocate', data),
+  verify: (paymentId: string, action: 'approve' | 'reject') =>
+    api.post('/payments/verify', { payment_id: paymentId, action }),
+  reverse: (paymentId: string, reason: string) =>
+    api.post('/payments/reverse', { payment_id: paymentId, reason }),
+  uploadProof: (paymentId: string, proofUrl: string) =>
+    api.post('/payments/upload-proof', { payment_id: paymentId, proof_url: proofUrl }),
+};
+
+// ── Financial ─────────────────────────────────────────────
+export const financialApi = {
+  listReceipts: (studentId?: string) =>
+    api.get('/financial/receipts', { params: { student_id: studentId } }),
+  getReceipt: (num: string) => api.get(`/financial/receipts/${num}`),
+  generateStatement: (data: { student_id: string; academic_year: number; month: number }) =>
+    api.post('/financial/statements/generate', data),
+  listStatements: (studentId: string, year: number) =>
+    api.get(`/financial/statements/${studentId}?academic_year=${year}`),
+  triggerRollover: (year: number) =>
+    api.post(`/financial/balance-engine/rollover?academic_year=${year}`),
+  getTotalDue: (studentId: string, year: number) =>
+    api.get(`/financial/balance-engine/total-due/${studentId}?academic_year=${year}`),
+  getStudentSummary: (studentId: string, year: number) =>
+    api.get(`/financial/student-summary/${studentId}?academic_year=${year}`),
+};
+
+// ── Reports ───────────────────────────────────────────────
+export const reportsApi = {
+  monthlyIncome: (year: number, month: number) =>
+    api.get(`/financial/reports/monthly-income?academic_year=${year}&month=${month}`),
+  yearlyIncome: (year: number) =>
+    api.get(`/financial/reports/yearly-income?academic_year=${year}`),
+  outstanding: (year: number) =>
+    api.get(`/financial/reports/outstanding?academic_year=${year}`),
+  paymentsReceived: (year: number, gradeId?: string, method?: string) =>
+    api.get('/financial/reports/payments-received', {
+      params: { academic_year: year, grade_id: gradeId, payment_method: method },
+    }),
+  paymentTrends: (year: number) =>
+    api.get(`/financial/reports/payment-trends?academic_year=${year}`),
+  carryForward: (year: number, month: number) =>
+    api.get(`/financial/reports/carry-forward?academic_year=${year}&month=${month}`),
+  statements: (year: number, status?: string) =>
+    api.get('/financial/reports/statements', {
+      params: { academic_year: year, status },
+    }),
+};
+
+// ── Notification settings (admin only) ─────────────────────
+export const settingsApi = {
+  getNotifications: () => api.get<NotificationSettings>('/settings/notifications'),
+  updateEmail: (data: {
+    enabled: boolean;
+    host: string;
+    port: number;
+    username: string;
+    password?: string | null;
+    from_email: string;
+    from_name: string;
+    use_tls: boolean;
+  }) => api.put<EmailSettings>('/settings/notifications/email', data),
+  updateSms: (data: {
+    enabled: boolean;
+    provider: string;
+    api_key?: string | null;
+    api_secret?: string | null;
+    sender_id: string;
+  }) => api.put<SmsSettings>('/settings/notifications/sms', data),
+};
+
+export default api;
