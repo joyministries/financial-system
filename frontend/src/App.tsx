@@ -14,6 +14,7 @@ import StudentsPage from '@/pages/students/StudentsPage';
 import PaymentsPage from '@/pages/payments/PaymentsPage';
 import ReceiptsPage from '@/pages/receipts/ReceiptsPage';
 import StatementsPage from '@/pages/statements/StatementsPage';
+import InvoicesPage from '@/pages/invoices/InvoicesPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import ChargesPage from '@/pages/charges/ChargesPage';
 import ParentDashboard from '@/pages/parent/ParentDashboard';
@@ -42,6 +43,11 @@ function AppRoutes() {
         <Route path="/parent" element={<ParentDashboard />} />
         <Route path="/receipts" element={<ReceiptsPage />} />
         <Route path="/statements" element={<StatementsPage />} />
+
+        {/* Parents + staff: invoices (read-only for parents) */}
+        <Route path="/invoices" element={
+          isFinanceUser || isParent ? <InvoicesPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
+        } />
 
         {/* Root: redirect parents to portal */}
         <Route path="/" element={

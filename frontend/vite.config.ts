@@ -20,6 +20,11 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
+      // Public pay-by-link page served by the backend at /pay/{payment_id}
+      '/pay': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
     },
   },
 })

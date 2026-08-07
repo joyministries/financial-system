@@ -12,6 +12,7 @@ from app.schemas.setting import (
     EmailSettingsIn,
     EmailSettingsOut,
     NotificationSettingsOut,
+    ReminderSettingsIn,
     SmsSettingsIn,
     SmsSettingsOut,
 )
@@ -52,6 +53,14 @@ class SettingService:
             "enabled": False,
             "provider": "",
             "sender_id": "",
+        },
+        "reminders": {
+            "enabled": False,
+            "start_date": "",
+            "interval_days": 7,
+            "count": 4,
+            "last_run_date": "",
+            "last_reminder_index": 0,
         },
     }
 
@@ -166,8 +175,12 @@ class SettingService:
         await self._store("email", new, user_id)
         out = self._masked("email", new)
         await AuditService(self.db).log(
-            "system_setting", "email", "update", user_id,
-            old_values=old_masked, new_values=out,
+            "system_setting",
+            "email",
+            "update",
+            user_id,
+            old_values=old_masked,
+            new_values=out,
         )
         return EmailSettingsOut(**out)
 
@@ -190,7 +203,73 @@ class SettingService:
         await self._store("sms", new, user_id)
         out = self._masked("sms", new)
         await AuditService(self.db).log(
-            "system_setting", "sms", "update", user_id,
-            old_values=old_masked, new_values=out,
+            "system_setting",
+            "sms",
+            "update",
+            user_id,
+            old_values=old_masked,
+            new_values=out,
         )
         return SmsSettingsOut(**out)
+
+    # ── payment-link reminders ───────────────────────────────
+    async def get_reminder_config(self) -> dict:
+        """Raw reminder schedule config merged over defaults."""
+        raw = await self._get_raw("reminders")
+        return {**self.DEFAULTS["reminders"], **raw}
+
+    async def update_reminder_config(self, data: ReminderSettingsIn, user_id: str) -> dict:
+        """Save the reminder schedule. Changing the start date (or disabling)
+        resets the run counter so the new schedule starts fresh."""
+        raw = await self._get_raw("reminders")
+        if data.enabled:
+            if not data.start_date.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="A start date is required before reminders can be enabled",
+                )
+
+        new = {
+            "enabled": data.enabled,
+            "start_date": data.start_date.strip(),
+            "interval_days": data.interval_days,
+            "count": data.count,
+            "last_run_date": raw.get("last_run_date", ""),
+            "last_reminder_index": raw.get("last_reminder_index", 0),
+        }
+        if not data.enabled or new["start_date"] != raw.get("start_date"):
+            new["last_run_date"] = ""
+            new["last_reminder_index"] = 0
+
+        old = self._masked("reminders", raw)
+        await self._store("reminders", new, user_id)
+        await AuditService(self.db).log(
+            "system_setting",
+            "reminders",
+            "update",
+            user_id,
+            old_values=old,
+            new_values=dict(new),
+        )
+        return new
+
+    async def record_reminder_run(self, reminder_index: int) -> None:
+        """Persist that reminder #reminder_index fired today (beat task)."""
+        raw = await self._get_raw("reminders")
+        from datetime import date
+
+        raw["last_run_date"] = date.today().isoformat()
+        raw["last_reminder_index"] = reminder_index
+        # _store needs a user_id for audit; the scheduler has no actor, so write
+        # the row directly without audit logging.
+        row = await self.db.get(SystemSetting, "reminders")
+        import json as _json
+
+        if row is None:
+            self.db.add(
+                SystemSetting(key="reminders", value_json=_json.dumps(raw), updated_by=None)
+            )
+        else:
+            row.value_json = _json.dumps(raw)
+            row.updated_by = None
+        await self.db.flush()

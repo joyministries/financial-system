@@ -113,13 +113,13 @@ export default function PaymentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
         <div className="flex gap-2">
-          <select value={filter} onChange={(e) => { setFilter(e.target.value as 'all' | 'pending'); setPage(1); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <select value={filter} onChange={(e) => { setFilter(e.target.value as 'all' | 'pending'); setPage(1); }} className="input">
             <option value="all">All Payments</option>
             <option value="pending">Pending Verification</option>
           </select>
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+          <button onClick={() => setShowForm(true)} className="btn btn-primary">
             <Plus className="h-4 w-4" /> Record Payment
           </button>
         </div>
@@ -128,39 +128,39 @@ export default function PaymentsPage() {
       <Modal open={showForm} onClose={closeForm} title="Record Payment">
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Student</label>
-            <select value={studentId} onChange={(e) => setStudentId(e.target.value)} required className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <label className="block text-sm font-medium text-slate-700">Student</label>
+            <select value={studentId} onChange={(e) => setStudentId(e.target.value)} required className="input mt-1">
               <option value="">Select Student</option>
               {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Amount (R)</label>
-              <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+              <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Method</label>
-              <select value={method} onChange={(e) => setMethod(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <label className="block text-sm font-medium text-slate-700">Method</label>
+              <select value={method} onChange={(e) => setMethod(e.target.value)} className="input mt-1">
                 {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Payment Date</label>
-              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-slate-700">Payment Date</label>
+              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Reference Number</label>
-              <input value={refNum} onChange={(e) => setRefNum(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-slate-700">Reference Number</label>
+              <input value={refNum} onChange={(e) => setRefNum(e.target.value)} className="input mt-1" />
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <button type="submit" disabled={submitting} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            <button type="submit" disabled={submitting} className="btn btn-primary">
               {submitting ? 'Recording...' : 'Record'}
             </button>
-            <button type="button" onClick={closeForm} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="button" onClick={closeForm} className="btn btn-secondary">Cancel</button>
           </div>
         </form>
       </Modal>
@@ -168,47 +168,46 @@ export default function PaymentsPage() {
       <Modal open={!!showReverse} onClose={() => { setShowReverse(null); setReverseReason(''); }} title="Reverse Payment">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Reason for reversal</label>
-            <textarea value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} required rows={3} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <label className="block text-sm font-medium text-slate-700">Reason for reversal</label>
+            <textarea value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} required rows={3} className="input mt-1" />
           </div>
           <div className="flex gap-2 pt-2">
-            <button onClick={handleReverse} disabled={submitting || !reverseReason.trim()} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+            <button onClick={handleReverse} disabled={submitting || !reverseReason.trim()} className="btn btn-danger">
               {submitting ? 'Reversing...' : 'Confirm Reversal'}
             </button>
-            <button onClick={() => { setShowReverse(null); setReverseReason(''); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button onClick={() => { setShowReverse(null); setReverseReason(''); }} className="btn btn-secondary">Cancel</button>
           </div>
         </div>
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Method</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-slate-200">
             {loading ? (
-              <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto" /></td></tr>
+              <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
             ) : payments.length === 0 ? (
-              <tr><td colSpan={6} className="py-8 text-center text-sm text-gray-500">No payments found.</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-500">No payments found.</td></tr>
             ) : payments.map((p) => (
-              <tr key={p.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm text-gray-900">{getStudentName(p.student_id)}</td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">R {Number(p.amount).toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{p.payment_method}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{new Date(p.payment_date).toLocaleDateString()}</td>
+              <tr key={p.id} className="hover:bg-slate-50">
+                <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(p.student_id)}</td>
+                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {Number(p.amount).toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-slate-500">{p.payment_method}</td>
+                <td className="px-6 py-4 text-sm text-slate-500">{new Date(p.payment_date).toLocaleDateString()}</td>
                 <td className="px-6 py-4">
-                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                    p.status === 'verified' ? 'bg-green-100 text-green-700' :
-                    p.status === 'reversed' ? 'bg-red-100 text-red-700' :
-                    p.status === 'rejected' ? 'bg-orange-100 text-orange-700' :
-                    'bg-yellow-100 text-yellow-700'
+                  <span className={`badge ${
+                    p.status === 'verified' ? 'badge-success' :
+                    p.status === 'reversed' ? 'badge-danger' :
+                    p.status === 'rejected' ? 'badge-danger' : 'badge-warning'
                   }`}>
                     {p.status}
                   </span>
@@ -217,12 +216,12 @@ export default function PaymentsPage() {
                   <div className="flex justify-end gap-1">
                     {p.status === 'pending' && (
                       <>
-                        <button onClick={() => handleVerify(p.id, 'approve')} className="rounded p-1 text-gray-400 hover:text-green-600" title="Approve"><Check className="h-4 w-4" /></button>
-                        <button onClick={() => handleVerify(p.id, 'reject')} className="rounded p-1 text-gray-400 hover:text-yellow-600" title="Reject"><XCircle className="h-4 w-4" /></button>
+                        <button onClick={() => handleVerify(p.id, 'approve')} className="rounded p-1 text-slate-400 hover:text-green-600" title="Approve"><Check className="h-4 w-4" /></button>
+                        <button onClick={() => handleVerify(p.id, 'reject')} className="rounded p-1 text-slate-400 hover:text-yellow-600" title="Reject"><XCircle className="h-4 w-4" /></button>
                       </>
                     )}
                     {p.status === 'verified' && (
-                      <button onClick={() => setShowReverse(p.id)} className="rounded p-1 text-gray-400 hover:text-red-600" title="Reverse"><RotateCcw className="h-4 w-4" /></button>
+                      <button onClick={() => setShowReverse(p.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Reverse"><RotateCcw className="h-4 w-4" /></button>
                     )}
                   </div>
                 </td>

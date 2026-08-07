@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -9,14 +10,17 @@ from app.core.deps import (
     require_role,
     verify_student_access,
 )
+from app.models.grade import Student
 from app.models.user import User
 from app.schemas.financial import (
+    MonthlySummaryResponse,
     ReceiptResponse,
     StatementGenerateRequest,
     StatementResponse,
     StudentSummaryResponse,
 )
 from app.services.balance import BalanceEngine
+from app.services.pdf import build_receipt_pdf, build_statement_pdf, pdf_response
 from app.services.receipt import ReceiptService
 from app.services.report import ReportService
 from app.services.statement import StatementService
@@ -61,6 +65,30 @@ async def get_receipt(
     return receipt
 
 
+@router.get("/receipts/{receipt_number}/download")
+async def download_receipt(
+    receipt_number: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    service = ReceiptService(db)
+    receipt = await service.get_by_number(receipt_number)
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    if user.role == "parent":
+        await verify_student_access(receipt.student_id, user, db)
+
+    student = await db.get(Student, receipt.student_id)
+    allocator = await db.get(User, receipt.allocated_by)
+    student_name = (
+        f"{student.first_name} {student.last_name}" if student else receipt.student_id
+    )
+    allocator_name = allocator.full_name if allocator else "Lambton School Finance"
+
+    pdf = build_receipt_pdf(receipt, student_name, allocator_name)
+    return pdf_response(pdf, f"receipt-{receipt.receipt_number}.pdf")
+
+
 @router.post("/statements/generate", response_model=StatementResponse)
 async def generate_statement(
     data: StatementGenerateRequest,
@@ -69,6 +97,45 @@ async def generate_statement(
 ):
     service = StatementService(db)
     return await service.generate(data.student_id, data.academic_year, data.month)
+
+
+@router.post("/statements/generate-all")
+async def generate_all_statements(
+    academic_year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Generate a statement for the selected month for EVERY approved student
+    (whole-school run). Existing statements are kept — only missing ones are
+    created."""
+    service = StatementService(db)
+    students = await db.execute(
+        select(Student).where(Student.registration_status == "approved")
+    )
+    generated = 0
+    skipped = 0
+    failed = 0
+    errors: list[str] = []
+    for student in students.scalars().all():
+        try:
+            if await service.get(student.id, academic_year, month):
+                skipped += 1
+                continue
+            await service.generate(student.id, academic_year, month)
+            generated += 1
+        except Exception as exc:  # noqa: BLE001 - one student must not abort the run
+            failed += 1
+            errors.append(f"{student.id}: {exc}")
+    await db.commit()
+    return {
+        "academic_year": academic_year,
+        "month": month,
+        "generated": generated,
+        "skipped": skipped,
+        "failed": failed,
+        "errors": errors[:20],
+    }
 
 
 @router.get("/student-summary/{student_id}", response_model=StudentSummaryResponse)
@@ -96,6 +163,48 @@ async def list_statements(
         await verify_student_access(student_id, user, db)
     service = StatementService(db)
     return await service.list_for_student(student_id, academic_year)
+
+
+@router.get("/statements/{student_id}/download")
+async def download_statement(
+    student_id: str,
+    academic_year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if user.role == "parent":
+        await verify_student_access(student_id, user, db)
+    service = StatementService(db)
+    statement = await service.get(student_id, academic_year, month)
+    if not statement:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Statement not found for {academic_year}-{month:02d}. Generate it first.",
+        )
+
+    student = await db.get(Student, student_id)
+    student_name = (
+        f"{student.first_name} {student.last_name}" if student else student_id
+    )
+    pdf = build_statement_pdf(statement, student_name)
+    return pdf_response(
+        pdf,
+        f"statement-{student_id[:8]}-{academic_year}-{month:02d}.pdf",
+    )
+
+
+@router.get("/reports/monthly-summary", response_model=MonthlySummaryResponse)
+async def monthly_summary_report(
+    academic_year: int,
+    month: int,
+    grade_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Monthly dashboard: income received, outstanding, students owing."""
+    service = ReportService(db)
+    return await service.monthly_summary(academic_year, month, grade_id)
 
 
 @router.get("/reports/monthly-income")

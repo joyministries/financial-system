@@ -7,6 +7,8 @@ from app.schemas.setting import (
     EmailSettingsIn,
     EmailSettingsOut,
     NotificationSettingsOut,
+    ReminderSettingsIn,
+    ReminderSettingsOut,
     SmsSettingsIn,
     SmsSettingsOut,
 )
@@ -44,3 +46,39 @@ async def update_sms_settings(
 ) -> SmsSettingsOut:
     """Save SMS provider configuration. Blank/`********` secrets keep stored ones."""
     return await SettingService(db).update_sms(payload, user.id)
+
+
+# ── automated payment-link reminders ─────────────────────────
+def _reminder_out(config: dict) -> ReminderSettingsOut:
+    from app.services.reminder import next_run_date
+
+    next_run = next_run_date(config)
+    return ReminderSettingsOut(
+        enabled=config.get("enabled", False),
+        start_date=config.get("start_date", ""),
+        interval_days=config.get("interval_days", 7),
+        count=config.get("count", 4),
+        last_run_date=config.get("last_run_date") or None,
+        next_run_date=next_run.isoformat() if next_run else None,
+    )
+
+
+@router.get("/reminders", response_model=ReminderSettingsOut)
+async def get_reminder_settings(
+    _user=Depends(admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> ReminderSettingsOut:
+    """Current automated payment-link reminder schedule (admin only)."""
+    config = await SettingService(db).get_reminder_config()
+    return _reminder_out(config)
+
+
+@router.put("/reminders", response_model=ReminderSettingsOut)
+async def update_reminder_settings(
+    payload: ReminderSettingsIn,
+    user=Depends(admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> ReminderSettingsOut:
+    """Save the reminder schedule. Admin only."""
+    config = await SettingService(db).update_reminder_config(payload, user.id)
+    return _reminder_out(config)

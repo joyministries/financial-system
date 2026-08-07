@@ -9,7 +9,7 @@ _INSECURE_DEFAULTS = {"CHANGE-ME-IN-PRODUCTION", "changeme"}
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "School Financial System"
+    APP_NAME: str = "Lambton School"
     API_V1_PREFIX: str = "/api/v1"
     DEBUG: bool = False
     # NEVER enable in a deployment reachable by anyone but the developer.
@@ -37,6 +37,25 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
 
+    # ── PayFast payment gateway ────────────────────────────────────────────
+    # Set PAYFAST_MERCHANT_ID + PAYFAST_MERCHANT_KEY from your PayFast
+    # dashboard (sandbox or live). PASSPHRASE is optional — only set it if
+    # you configured a passphrase on the PayFast dashboard; it is included in
+    # the MD5 signature when non-empty.
+    PAYFAST_MERCHANT_ID: str = ""
+    PAYFAST_MERCHANT_KEY: str = ""
+    PAYFAST_PASSPHRASE: str = ""
+    # "sandbox" (https://sandbox.payfast.co.za) or "live" (https://www.payfast.co.za)
+    PAYFAST_MODE: str = "sandbox"
+    # Browser redirect targets. If unset, they resolve against PAYFAST_BASE_URL.
+    PAYFAST_BASE_URL: str = "http://localhost:8000"
+    PAYFAST_RETURN_URL: str = ""
+    PAYFAST_CANCEL_URL: str = ""
+    PAYFAST_NOTIFY_URL: str = ""
+    # Where the browser lands after payment (success/cancel) when the
+    # PayFast return/cancel URLs are not set explicitly.
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
     def validate_secrets(self) -> None:
@@ -46,6 +65,8 @@ class Settings(BaseSettings):
             insecure.append("JWT_SECRET_KEY")
         if self.SUPERADMIN_PASSWORD in _INSECURE_DEFAULTS:
             insecure.append("SUPERADMIN_PASSWORD")
+        if self.PAYFAST_MODE not in ("sandbox", "live"):
+            raise ValueError("PAYFAST_MODE must be 'sandbox' or 'live'")
 
         if not insecure:
             return

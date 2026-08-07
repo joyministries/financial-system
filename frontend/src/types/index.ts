@@ -201,6 +201,49 @@ export interface MonthlyIncomeReport {
   payment_count: number;
 }
 
+export interface MonthlyOwingStudent {
+  student_id: string;
+  student_number: string;
+  name: string;
+  grade: string;
+  balance: number;
+}
+
+export interface MonthlySummaryReport {
+  academic_year: number;
+  month: number;
+  total_income: number;
+  payment_count: number;
+  outstanding_total: number;
+  students_owing: number;
+  students_owing_list: MonthlyOwingStudent[];
+}
+
+export interface InvoiceItem {
+  type: 'opening' | 'fee' | 'charge';
+  description: string;
+  amount: number;
+}
+
+export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'void';
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  student_id: string;
+  academic_year: number;
+  month: number;
+  issue_date: string;
+  due_date: string;
+  subtotal: number;
+  amount_paid: number;
+  balance_due: number;
+  status: InvoiceStatus;
+  items: InvoiceItem[];
+  created_by: string;
+  created_at: string;
+}
+
 export interface OutstandingReport {
   academic_year: number;
   students_with_outstanding: number;
@@ -284,4 +327,20 @@ export interface NotificationSettings {
   sms: SmsSettings;
   email_ready: boolean;
   sms_ready: boolean;
+}
+
+export interface ReminderSettings {
+  enabled: boolean;
+  start_date: string;
+  interval_days: number;
+  count: number;
+  last_run_date: string | null;
+  next_run_date: string | null;
+}
+
+export interface ReminderRunResult {
+  sent: number;
+  skipped_no_phone: number;
+  skipped_failed: number;
+  errors: string[];
 }

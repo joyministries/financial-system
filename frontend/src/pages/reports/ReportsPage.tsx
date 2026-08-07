@@ -31,14 +31,14 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Reports</h1>
 
       <div className="flex gap-2">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === t.key ? 'bg-primary-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === t.key ? 'bg-primary-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
           >
             {t.label}
           </button>
@@ -46,7 +46,7 @@ export default function ReportsPage() {
       </div>
 
       {tab === 'trends' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
           <h2 className="mb-4 text-lg font-semibold">Monthly Payment Trends ({year})</h2>
           {loading ? (
             <div className="flex h-64 items-center justify-center">
@@ -67,7 +67,7 @@ export default function ReportsPage() {
       )}
 
       {tab === 'outstanding' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
           <h2 className="mb-4 text-lg font-semibold">Outstanding Fees ({outstanding.students_with_outstanding} students)</h2>
           {outstanding.students.length > 0 && (
             <ResponsiveContainer width="100%" height={400}>
@@ -80,12 +80,12 @@ export default function ReportsPage() {
               </BarChart>
             </ResponsiveContainer>
           )}
-          {outstanding.students.length === 0 && <p className="py-8 text-center text-sm text-gray-500">No outstanding fees.</p>}
+          {outstanding.students.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No outstanding fees.</p>}
         </div>
       )}
 
       {tab === 'payments' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
           <h2 className="mb-4 text-lg font-semibold">Payments by Method — R {payments.total_received.toLocaleString()} total</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <ResponsiveContainer width="100%" height={300}>
@@ -110,8 +110,8 @@ export default function ReportsPage() {
               {Object.entries(payments.by_method).map(([method, amount], i) => (
                 <div key={method} className="flex items-center gap-3">
                   <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="flex-1 text-sm text-gray-700">{method}</span>
-                  <span className="text-sm font-medium text-gray-900">R {amount.toLocaleString()}</span>
+                  <span className="flex-1 text-sm text-slate-700">{method}</span>
+                  <span className="text-sm font-medium text-slate-900">R {amount.toLocaleString()}</span>
                 </div>
               ))}
             </div>

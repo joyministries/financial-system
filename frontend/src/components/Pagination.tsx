@@ -23,14 +23,14 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
       <button
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
-        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
 
       {pages.map((p, i) =>
         p === '...' ? (
-          <span key={`dots-${i}`} className="px-2 text-gray-400">...</span>
+          <span key={`dots-${i}`} className="px-2 text-slate-400">...</span>
         ) : (
           <button
             key={p}
@@ -38,7 +38,7 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
             className={`min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium ${
               p === page
                 ? 'bg-primary-600 text-white'
-                : 'text-gray-700 hover:bg-gray-100'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
           >
             {p}
@@ -49,7 +49,7 @@ export default function Pagination({ page, totalPages, onPageChange }: Paginatio
       <button
         onClick={() => onPageChange(page + 1)}
         disabled={page === totalPages}
-        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ChevronRight className="h-4 w-4" />
       </button>

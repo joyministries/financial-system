@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
 from app.api.v1.router import api_router
+from app.api.pay import router as pay_router
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.rate_limit import limiter
@@ -80,13 +81,24 @@ async def security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "0"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; frame-ancestors 'none'; object-src 'none'; "
-            "base-uri 'self'; form-action 'self'"
-        )
+        if request.url.path.startswith("/pay/"):
+            # The public pay page posts a signed form to PayFast, so the CSP
+            # must allow that cross-origin submission, plus the inline style
+            # block and the data: crest image that build the page.
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; "
+                "base-uri 'self'; form-action 'self' https://sandbox.payfast.co.za https://www.payfast.co.za"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; frame-ancestors 'none'; object-src 'none'; "
+                "base-uri 'self'; form-action 'self'"
+            )
     return response
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(pay_router)
 
 
 @app.get("/health")

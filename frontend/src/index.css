@@ -11,8 +11,15 @@
   }
 
   html {
-    background-color: #f9fafb;
-    color: #111827;
+    background-color: #faf9f5;
+    color: #1c1c1f;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   input,
@@ -32,5 +39,122 @@
   option {
     background-color: #ffffff;
     color: #111827;
+  }
+
+  ::selection {
+    background-color: #f2df9a;
+    color: #1c1c1f;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Component layer — one canonical definition per pattern.
+   Pages should use these classes instead of re-implementing
+   buttons, inputs, badges and tables ad-hoc.
+   ───────────────────────────────────────────────────────────── */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors
+      disabled:pointer-events-none disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
+  }
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
+  }
+  .btn-secondary {
+    @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100;
+  }
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+  }
+  .btn-success {
+    @apply bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800;
+  }
+  .btn-ghost {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* Cards */
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-soft;
+  }
+
+  /* Forms */
+  .input {
+    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
+      placeholder:text-slate-400
+      focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500
+      disabled:cursor-not-allowed disabled:bg-slate-50;
+  }
+  .label {
+    @apply block text-sm font-medium text-slate-700;
+  }
+
+  /* Badges / status pills */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset;
+  }
+  .badge-success {
+    @apply bg-emerald-50 text-emerald-700 ring-emerald-600/20;
+  }
+  .badge-warning {
+    @apply bg-amber-50 text-amber-700 ring-amber-600/20;
+  }
+  .badge-danger {
+    @apply bg-red-50 text-red-700 ring-red-600/20;
+  }
+  .badge-info {
+    @apply bg-primary-50 text-primary-700 ring-primary-600/20;
+  }
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-600 ring-slate-500/20;
+  }
+
+  /* Tables */
+  .table-wrap {
+    @apply overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-soft;
+  }
+  .th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+  .td {
+    @apply px-4 py-3 text-sm text-slate-700;
+  }
+
+  /* Page scaffolding */
+  .page-header {
+    @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
+  }
+  .page-title {
+    @apply text-xl font-bold tracking-tight text-slate-900;
+  }
+  .page-subtitle {
+    @apply mt-1 text-sm text-slate-500;
+  }
+  .section-title {
+    @apply text-sm font-semibold text-slate-900;
   }
 }

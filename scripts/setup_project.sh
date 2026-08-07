@@ -162,9 +162,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.core.security import hash_password
-from app.models.financial import FeeStructure
-from app.models.grade import Grade, Student, StudentGuardian
-from app.models.schedule import Enrollment
+from app.models.grade import Enrollment, FeeStructure, Grade, Student, StudentGuardian
 from app.models.user import User
 
 GRADE_ID = "62d863f9-49db-4857-a20d-b23004c5377f"  # "Grade 1"

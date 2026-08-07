@@ -1,3 +1,5 @@
+import secrets
+import string
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -6,6 +8,18 @@ from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+_PAY_CODE_ALPHABET = string.ascii_letters + string.digits
+
+
+def new_pay_code(length: int = 10) -> str:
+    """Short, unguessable code used in SMS pay-by-links.
+
+    SMS messages are truncated around 160 characters; the 36-character UUID
+    plus a long domain plus the reminder template text was being cut mid-way,
+    breaking the link. A 10-character code keeps the URL well under the limit.
+    """
+    return "".join(secrets.choice(_PAY_CODE_ALPHABET) for _ in range(length))
 
 
 class Payment(Base):
@@ -17,6 +31,9 @@ class Payment(Base):
     payment_method: Mapped[str] = mapped_column(String(50), nullable=False)
     payment_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     reference_number: Mapped[str | None] = mapped_column(String(100))
+    pay_code: Mapped[str | None] = mapped_column(
+        String(12), unique=True, index=True, default=new_pay_code
+    )
     proof_of_payment_url: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="pending")
     allocated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))

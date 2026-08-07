@@ -4,9 +4,12 @@ import type {
   FeeStructure,
   Grade,
   GuardianInput,
+  Invoice,
   NotificationSettings,
   ParentRegisterPayload,
   ParentRegisterResponse,
+  ReminderRunResult,
+  ReminderSettings,
   SmsSettings,
   StudentDocument,
 } from '@/types';
@@ -239,10 +242,16 @@ export const financialApi = {
   listReceipts: (studentId?: string) =>
     api.get('/financial/receipts', { params: { student_id: studentId } }),
   getReceipt: (num: string) => api.get(`/financial/receipts/${num}`),
+  receiptDownloadUrl: (receiptNumber: string) =>
+    `/financial/receipts/${encodeURIComponent(receiptNumber)}/download`,
   generateStatement: (data: { student_id: string; academic_year: number; month: number }) =>
     api.post('/financial/statements/generate', data),
+  generateAllStatements: (academic_year: number, month: number) =>
+    api.post(`/financial/statements/generate-all?academic_year=${academic_year}&month=${month}`),
   listStatements: (studentId: string, year: number) =>
     api.get(`/financial/statements/${studentId}?academic_year=${year}`),
+  statementDownloadUrl: (studentId: string, year: number, month: number) =>
+    `/financial/statements/${encodeURIComponent(studentId)}/download?academic_year=${year}&month=${month}`,
   triggerRollover: (year: number) =>
     api.post(`/financial/balance-engine/rollover?academic_year=${year}`),
   getTotalDue: (studentId: string, year: number) =>
@@ -251,8 +260,52 @@ export const financialApi = {
     api.get(`/financial/student-summary/${studentId}?academic_year=${year}`),
 };
 
+// ── Invoices ──────────────────────────────────────────────
+export const invoicesApi = {
+  list: (params?: {
+    student_id?: string;
+    academic_year?: number;
+    month?: number;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) => api.get<Invoice[]>('/invoices/', { params }),
+  get: (id: string) => api.get<Invoice>(`/invoices/${id}`),
+  generate: (data: { student_id: string; academic_year: number; month: number }) =>
+    api.post<Invoice>('/invoices/generate', data),
+  updateStatus: (id: string, status: 'paid' | 'void') =>
+    api.post<Invoice>(`/invoices/${id}/status`, { status }),
+  downloadUrl: (id: string) => `/invoices/${encodeURIComponent(id)}/download`,
+};
+
+/**
+ * Download a PDF endpoint as a real file. Fetches through the shared `api`
+ * instance so the bearer token is attached, then triggers a browser download
+ * using the filename the server sends (Content-Disposition) or a fallback.
+ */
+export async function downloadPdf(url: string, fallbackName: string) {
+  const res = await api.get(url, { responseType: 'blob' });
+  const disposition: string | undefined = res.headers['content-disposition'];
+  let filename = fallbackName;
+  const match = disposition?.match(/filename="?([^"]+)"?/i);
+  if (match?.[1]) filename = match[1];
+
+  const blobUrl = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
 // ── Reports ───────────────────────────────────────────────
 export const reportsApi = {
+  monthlySummary: (year: number, month: number, gradeId?: string) =>
+    api.get('/financial/reports/monthly-summary', {
+      params: { academic_year: year, month, grade_id: gradeId || undefined },
+    }),
   monthlyIncome: (year: number, month: number) =>
     api.get(`/financial/reports/monthly-income?academic_year=${year}&month=${month}`),
   yearlyIncome: (year: number) =>
@@ -293,6 +346,71 @@ export const settingsApi = {
     api_secret?: string | null;
     sender_id: string;
   }) => api.put<SmsSettings>('/settings/notifications/sms', data),
+  getReminders: () => api.get<ReminderSettings>('/settings/reminders'),
+  updateReminders: (data: {
+    enabled: boolean;
+    start_date: string;
+    interval_days: number;
+    count: number;
+  }) => api.put<ReminderSettings>('/settings/reminders', data),
 };
+
+// ── SMS (staff) ──────────────────────────────────────────────
+export const smsApi = {
+  send: (data: { to_phone: string; content: string; student_id?: string | null }) =>
+    api.post<SmsSendResponse>('/sms/send', data),
+  test: (to_phone: string) => api.post<SmsSendResponse>('/sms/test', { to_phone }),
+  reminders: (academic_year: number, month: number) =>
+    api.post<SmsReminderResponse>('/sms/reminders', { academic_year, month }),
+  payLinkReminders: () => api.post<ReminderRunResult>('/sms/reminders/paylink'),
+  log: (params?: { limit?: number; offset?: number; status?: string }) =>
+    api.get<SmsMessage[]>(`/sms/messages`, { params }),
+};
+
+// ── PayFast (parent) ─────────────────────────────────────────
+export const payfastApi = {
+  initiate: (data: {
+    student_id: string;
+    amount: number;
+    item_name?: string;
+    item_description?: string;
+  }) => api.post<PayFastInitiateResponse>('/payfast/initiate', data),
+};
+
+export interface PayFastInitiateResponse {
+  payment_id: string;
+  payfast_url: string;
+  payment_url: string;
+  form_fields: Record<string, string>;
+}
+
+export interface SmsSendResponse {
+  id: string;
+  status: string;
+  to_phone: string;
+  detail: string;
+}
+
+export interface SmsReminderResponse {
+  sent: number;
+  skipped_no_phone: number;
+  skipped_failed: number;
+  errors: string[];
+}
+
+export interface SmsMessage {
+  id: string;
+  student_id: string | null;
+  to_phone: string;
+  content: string;
+  template: string;
+  status: string;
+  provider: string;
+  provider_message_id: string | null;
+  provider_status: string | null;
+  cost: number | null;
+  error: string | null;
+  created_at: string;
+}
 
 export default api;

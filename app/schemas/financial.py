@@ -65,3 +65,21 @@ class StudentSummaryResponse(BaseModel):
     total_paid: Decimal
     total_outstanding: Decimal
     months: list[MonthSummary]
+
+
+class MonthlyOwingStudent(BaseModel):
+    student_id: str
+    student_number: str
+    name: str
+    grade: str | None = None
+    balance: Decimal
+
+
+class MonthlySummaryResponse(BaseModel):
+    academic_year: int
+    month: int
+    total_income: Decimal
+    payment_count: int
+    outstanding_total: Decimal
+    students_owing: int
+    students_owing_list: list[MonthlyOwingStudent]

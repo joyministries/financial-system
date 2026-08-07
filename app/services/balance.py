@@ -49,6 +49,14 @@ class BalanceEngine:
             (b.balance for b in balances if b.status != "paid"),
             Decimal("0"),
         )
+        # Unpaid additional charges are part of what the parent owes; the
+        # monthly summary counts them the same way (full amount until paid).
+        from app.services.charge import ChargeService
+
+        unpaid_charges = await ChargeService(self.db).get_unpaid(
+            student_id, academic_year
+        )
+        total += sum((c.amount for c in unpaid_charges), Decimal("0"))
         return to_decimal(total)
 
     async def process_rollover(self, academic_year: int) -> None:

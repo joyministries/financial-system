@@ -9,6 +9,7 @@ import type {
   StudentDocument,
 } from '@/types';
 import toast from 'react-hot-toast';
+import AuthLayout from '@/components/auth/AuthLayout';
 import {
   BadgeCheck,
   Eye,
@@ -57,8 +58,8 @@ const newChild = (): ChildApplication => ({
 });
 
 const inputCls =
-  'mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500';
-const labelCls = 'block text-sm font-medium text-gray-700';
+  'input mt-1';
+const labelCls = 'block text-sm font-medium text-slate-700';
 
 export default function RegisterPage() {
   // Students being applied for (one required, more optional)
@@ -258,15 +259,14 @@ export default function RegisterPage() {
   if (submitted) {
     const students = submitted.students;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
-        <div className="w-full max-w-md">
-          <div className="rounded-xl bg-white p-8 shadow-lg">
+      <AuthLayout>
+        <div className="rounded-2xl bg-white p-8 shadow-card">
             <div className="mb-6 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-green-100">
                 <BadgeCheck className="h-6 w-6 text-green-600" />
               </div>
-              <h1 className="mt-3 text-2xl font-bold text-gray-900">Application Submitted</h1>
-              <p className="mt-1 text-sm text-gray-500">
+              <h1 className="mt-3 text-2xl font-bold text-slate-900">Application Submitted</h1>
+              <p className="mt-1 text-sm text-slate-500">
                 {students.length === 1
                   ? `The school will review the registration for ${students[0].first_name} ${students[0].last_name}.`
                   : `The school will review the registrations for all ${students.length} children.`}
@@ -276,9 +276,9 @@ export default function RegisterPage() {
             {/* One card per registered child */}
             <div className="space-y-3">
               {students.map((student) => (
-                <div key={student.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div key={student.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Student ID</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Student ID</p>
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                       Pending approval
                     </span>
@@ -286,14 +286,14 @@ export default function RegisterPage() {
                   <p className="mt-1 font-mono text-2xl font-bold text-primary-600">{student.student_number}</p>
                   <dl className="mt-3 space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">Student</dt>
-                      <dd className="font-medium text-gray-900">
+                      <dt className="text-slate-500">Student</dt>
+                      <dd className="font-medium text-slate-900">
                         {student.first_name} {student.last_name}
                       </dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">Grade applying for</dt>
-                      <dd className="font-medium text-gray-900">{gradeName(student.grade_id) || 'Selected grade'}</dd>
+                      <dt className="text-slate-500">Grade applying for</dt>
+                      <dd className="font-medium text-slate-900">{gradeName(student.grade_id) || 'Selected grade'}</dd>
                     </div>
                   </dl>
                 </div>
@@ -301,18 +301,18 @@ export default function RegisterPage() {
             </div>
 
             {/* Document uploads */}
-            <div className="mt-4 rounded-lg border border-gray-200 p-4">
+            <div className="mt-4 rounded-lg border border-slate-200 p-4">
               <div className="flex items-center gap-2">
                 <FileUp className="h-4 w-4 text-primary-600" />
-                <h2 className="text-sm font-semibold text-gray-900">Supporting Documents</h2>
+                <h2 className="text-sm font-semibold text-slate-900">Supporting Documents</h2>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-slate-500">
                 Add the birth certificate, transcripts, or any other required document.
               </p>
 
               {students.length > 1 && (
                 <div className="mt-3">
-                  <label className="block text-xs font-medium text-gray-700">Child</label>
+                  <label className="block text-xs font-medium text-slate-700">Child</label>
                   <select
                     value={docStudentId}
                     onChange={(e) => setDocStudentId(e.target.value)}
@@ -332,9 +332,9 @@ export default function RegisterPage() {
                   {(uploaded[docStudentId] || []).map((doc) => (
                     <li
                       key={doc.id}
-                      className="flex items-center justify-between rounded-md bg-gray-50 px-2 py-1.5 text-xs"
+                      className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1.5 text-xs"
                     >
-                      <span className="truncate text-gray-700">{doc.original_filename}</span>
+                      <span className="truncate text-slate-700">{doc.original_filename}</span>
                       <a
                         href={documentsApi.downloadUrl(docStudentId, doc.id)}
                         target="_blank"
@@ -349,7 +349,7 @@ export default function RegisterPage() {
               )}
 
               <div className="mt-3">
-                <label className="block text-xs font-medium text-gray-700">Document type</label>
+                <label className="block text-xs font-medium text-slate-700">Document type</label>
                 <select id="post-type" className={inputCls} defaultValue="birth_certificate">
                   {DOCUMENT_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>
@@ -358,7 +358,7 @@ export default function RegisterPage() {
                   ))}
                 </select>
               </div>
-              <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600">
+              <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600">
                 <UploadCloud className="h-4 w-4" />
                 {uploading ? 'Uploading…' : 'Choose a file (PDF, PNG, JPG — max 10 MB)'}
                 <input
@@ -380,26 +380,24 @@ export default function RegisterPage() {
 
             <button
               onClick={() => navigate('/dashboard')}
-              className="mt-6 w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              className="btn btn-primary mt-6 w-full"
             >
               Go to my dashboard
             </button>
-          </div>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
-      <div className="w-full max-w-lg">
-        <div className="rounded-xl bg-white p-8 shadow-lg">
+    <AuthLayout maxW="lg">
+      <div className="rounded-2xl bg-white p-8 shadow-card">
           <div className="mb-6 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
               <GraduationCap className="h-6 w-6 text-primary-600" />
             </div>
-            <h1 className="mt-3 text-2xl font-bold text-gray-900">Parent Registration</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <h1 className="mt-3 text-2xl font-bold text-slate-900">Parent Registration</h1>
+            <p className="mt-1 text-sm text-slate-500">
               Apply for your child(ren) in one step — student IDs are generated automatically.
             </p>
           </div>
@@ -408,34 +406,34 @@ export default function RegisterPage() {
             {/* Students applying for */}
             <section>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                   1. Student(s) Applying For
                 </h2>
                 <button
                   type="button"
                   onClick={addChild}
                   disabled={children.length >= MAX_CHILDREN}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:border-primary-400 hover:text-primary-700 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-primary-400 hover:text-primary-700 disabled:opacity-40"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add another child
                 </button>
               </div>
-              <p className="-mt-2 mb-3 text-xs text-gray-500">
+              <p className="-mt-2 mb-3 text-xs text-slate-500">
                 Registering more than one child? Add them all here — no need to register again later.
               </p>
 
               <div className="space-y-4">
                 {children.map((child, idx) => (
-                  <div key={child.id} className="rounded-lg border border-gray-200 p-3">
+                  <div key={child.id} className="rounded-lg border border-slate-200 p-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-gray-600">
+                      <p className="text-xs font-semibold text-slate-600">
                         Child {idx + 1}{idx === 0 ? ' (required)' : ''}
                       </p>
                       {children.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeChild(child.id)}
-                          className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-red-500"
+                          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-500"
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Remove
                         </button>
@@ -518,11 +516,11 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            <hr className="border-gray-100" />
+            <hr className="border-slate-100" />
 
             {/* Parent account */}
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 2. Your Details (Parent Account)
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -605,12 +603,12 @@ export default function RegisterPage() {
                       required
                       minLength={8}
                       placeholder="At least 8 characters"
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="block w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -624,17 +622,17 @@ export default function RegisterPage() {
                     onChange={(e) => setConfirm(e.target.value)}
                     required
                     minLength={8}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="input mt-1"
                   />
                 </div>
               </div>
             </section>
 
-            <hr className="border-gray-100" />
+            <hr className="border-slate-100" />
 
             {/* Relationship */}
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 3. Your Relationship to the Child
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -646,7 +644,7 @@ export default function RegisterPage() {
                     className={`rounded-lg border px-3 py-2 text-sm font-medium capitalize transition ${
                       relationship === r
                         ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                        : 'border-slate-300 text-slate-600 hover:border-slate-400'
                     }`}
                   >
                     {r}
@@ -655,20 +653,20 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            <hr className="border-gray-100" />
+            <hr className="border-slate-100" />
 
             {/* Other parent (optional) */}
             <section>
               <button
                 type="button"
                 onClick={() => setShowOtherParent(!showOtherParent)}
-                className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:border-gray-300"
+                className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-gray-400" />
+                  <Users className="h-4 w-4 text-slate-400" />
                   {relationship === 'father' ? 'Mother' : 'Father'} details {showOtherParent ? '(added)' : ''}
                 </span>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-slate-400">
                   {showOtherParent ? 'Click to remove' : 'Optional — only one parent is required'}
                 </span>
               </button>
@@ -751,14 +749,14 @@ export default function RegisterPage() {
               )}
             </section>
 
-            <hr className="border-gray-100" />
+            <hr className="border-slate-100" />
 
             {/* Documents */}
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 4. Supporting Documents
               </h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-slate-500">
                 Upload the birth certificate, transcripts, or any other required documents.
                 You can also add them after submitting.
               </p>
@@ -768,7 +766,7 @@ export default function RegisterPage() {
                   {queue.map((item) => (
                     <li
                       key={item.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -782,7 +780,7 @@ export default function RegisterPage() {
                                 )
                               )
                             }
-                            className="w-44 rounded border border-gray-300 px-2 py-1 text-xs"
+                            className="w-44 rounded border border-slate-300 px-2 py-1 text-xs"
                           >
                             {DOCUMENT_TYPES.map((t) => (
                               <option key={t.value} value={t.value}>
@@ -790,7 +788,7 @@ export default function RegisterPage() {
                               </option>
                             ))}
                           </select>
-                          <span className="truncate text-xs text-gray-700">{item.file.name}</span>
+                          <span className="truncate text-xs text-slate-700">{item.file.name}</span>
                         </div>
                         {item.status === 'error' && (
                           <p className="mt-1 text-xs text-red-600">{item.error}</p>
@@ -800,7 +798,7 @@ export default function RegisterPage() {
                         <button
                           type="button"
                           onClick={() => removeQueued(item.id)}
-                          className="ml-2 shrink-0 text-gray-400 hover:text-red-500"
+                          className="ml-2 shrink-0 text-slate-400 hover:text-red-500"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -816,7 +814,7 @@ export default function RegisterPage() {
                 </ul>
               )}
 
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600">
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600">
                 <UploadCloud className="h-4 w-4" />
                 Choose files (PDF, PNG, JPG — max 10 MB each)
                 <input
@@ -835,20 +833,19 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              className="w-full btn btn-primary"
             >
               {loading ? 'Submitting application…' : 'Submit Application'}
             </button>
           </form>
 
-          <p className="mt-4 text-center text-sm text-gray-500">
+          <p className="mt-4 text-center text-sm text-slate-500">
             Already have an account?{' '}
             <Link to="/login" className="font-medium text-primary-600 hover:text-primary-700">
               Sign in
             </Link>
           </p>
         </div>
-      </div>
-    </div>
+      </AuthLayout>
   );
 }

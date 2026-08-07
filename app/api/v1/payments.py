@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -88,6 +88,7 @@ async def allocate_payment(
 @router.post("/verify")
 async def verify_payment(
     data: PaymentVerification,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
@@ -106,6 +107,19 @@ async def verify_payment(
     if data.action == "approve":
         receipt_service = ReceiptService(db)
         receipt = await receipt_service.generate(payment)
+        # Notify the parent (fire-and-forget after the response; the SMS/email
+        # providers must never block the office).
+        from app.services.email import send_payment_receipt_email_async
+        from app.services.sms import send_payment_receipt_sms_async
+
+        background_tasks.add_task(
+            send_payment_receipt_sms_async, payment.student_id, payment.amount,
+            receipt.receipt_number,
+        )
+        background_tasks.add_task(
+            send_payment_receipt_email_async, payment.student_id, payment.amount,
+            receipt.receipt_number, payment.payment_date,
+        )
         return {"detail": "Payment verified", "receipt_number": receipt.receipt_number}
 
     return {"detail": f"Payment {data.action}d"}

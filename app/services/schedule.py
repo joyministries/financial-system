@@ -105,6 +105,7 @@ class ScheduleService:
     async def get_outstanding_for_student(
         self, student_id: str, academic_year: int
     ) -> list[OutstandingBalance]:
+        await self._materialize_student(student_id, academic_year)
         stmt = (
             select(OutstandingBalance)
             .join(MonthlySchedule, MonthlySchedule.id == OutstandingBalance.monthly_schedule_id)
@@ -116,6 +117,57 @@ class ScheduleService:
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def materialize_for_all(self, academic_year: int, grade_id: str | None = None) -> None:
+        """Ensure every active student has outstanding balances for their schedules.
+
+        Idempotent: only missing balance rows are created, so re-running this
+        never duplicates or overwrites payment allocations.
+        """
+        from app.models.grade import Student
+
+        stmt = select(Student.id).where(Student.is_active == True)  # noqa: E712
+        if grade_id:
+            stmt = stmt.where(Student.grade_id == grade_id)
+        result = await self.db.execute(stmt)
+        for (student_id,) in result.all():
+            await self._materialize_student(student_id, academic_year)
+
+    async def _materialize_student(self, student_id: str, academic_year: int) -> None:
+        """Create OutstandingBalance rows for schedules that lack them.
+
+        Outstanding balances are the ledger rows payments allocate against.
+        If a grade's fee schedule was generated before a student was enrolled
+        (or the rows were never seeded), they are created here on demand with
+        the schedule's amount due and a pending status.
+        """
+        schedules = await self.get_schedules_for_student(student_id, academic_year)
+        if not schedules:
+            return
+
+        schedule_ids = [s.id for s in schedules]
+        stmt = select(OutstandingBalance.monthly_schedule_id).where(
+            OutstandingBalance.student_id == student_id,
+            OutstandingBalance.monthly_schedule_id.in_(schedule_ids),
+        )
+        result = await self.db.execute(stmt)
+        existing_ids = set(result.scalars().all())
+
+        created = False
+        for schedule in schedules:
+            if schedule.id not in existing_ids:
+                self.db.add(
+                    OutstandingBalance(
+                        student_id=student_id,
+                        monthly_schedule_id=schedule.id,
+                        original_amount=schedule.amount_due,
+                        balance=schedule.amount_due,
+                        status="pending",
+                    )
+                )
+                created = True
+        if created:
+            await self.db.flush()
 
     async def get_all_pending(self, academic_year: int) -> list[OutstandingBalance]:
         stmt = (
