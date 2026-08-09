@@ -1,0 +1,3 @@
+# Applied when Root Directory = "frontend" on the Vercel frontend project.
+node_modules
+dist

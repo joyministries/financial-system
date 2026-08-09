@@ -1,7 +1,10 @@
-# Files excluded from the backend Vercel deployment.
+# Files excluded from the BACKEND Vercel deployment.
+# This file lives at the repo root and applies when the backend project
+# has Root Directory = "." (repo root).
 .venv
-frontend
 tests
 uploads
 node_modules
 *.md
+!/README.md
+frontend
