@@ -5,4 +5,6 @@ tests
 uploads
 node_modules
 frontend
-api
+# Exclude the old serverless function directory (entrypoint is now main.py)
+# NOTE: do NOT put "api" here — that also matches app/api/ which contains the routes
+/api
