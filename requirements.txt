@@ -1,8 +1,9 @@
 # Vercel Python runtime installs from requirements.txt (pyproject.toml is ignored).
 # Mirrors pyproject runtime deps MINUS the container-only pieces:
 #   - gunicorn / uvicorn: serverless, not long-running servers
-#   - celery / redis: no worker or broker on Vercel (Vercel Cron replaces beat)
 #   - mangum: not needed — Vercel natively supports ASGI, no Lambda adapter required
+# celery + redis are included so app/tasks imports don't crash at bundle time;
+# the actual worker/beat never runs on Vercel (Vercel Cron calls HTTP endpoints instead).
 # Keep in sync with pyproject.toml [project.dependencies].
 fastapi>=0.111.0
 sqlalchemy[asyncio]>=2.0.30
@@ -16,3 +17,5 @@ python-multipart>=0.0.9
 httpx>=0.27.0
 slowapi>=0.1.9
 reportlab>=4.0.0
+celery[redis]>=5.4.0
+redis>=5.0.0
