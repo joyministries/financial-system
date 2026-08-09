@@ -1,0 +1,116 @@
+# Render Blueprint — School Financial System backend (FastAPI + Celery + Redis).
+#
+# Deploy: push this repo to GitHub, then Render → New → Blueprint → pick the repo.
+# The Blueprint creates: web API, Celery worker (with embedded beat), Redis.
+# Your Render Postgres already exists (dpg-d9s91g2jnfac73932et0) — you'll paste
+# its connection string when Render prompts for DATABASE_URL (sync: false).
+#
+# One-time values prompted during Blueprint creation:
+#   DATABASE_URL, SUPERADMIN_PASSWORD, PAYFAST_*, FRONTEND_BASE_URL
+# Set/change them any time in Dashboard → service → Environment.
+
+services:
+  # ── FastAPI web service ────────────────────────────────────────────────
+  - type: web
+    name: school-finance-api
+    runtime: docker
+    plan: starter            # disk required for uploads → free tier can't attach disks
+    region: ohio             # matches your Postgres region
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    preDeployCommand: alembic upgrade head   # migrations before each deploy
+    disk:                    # persistent storage for uploaded documents
+      name: uploads
+      mountPath: /var/lib/uploads
+      sizeGB: 1
+    envVars:
+      # Database — paste the Render Postgres connection string when prompted
+      # (internal URL, e.g. postgresql://admin:****@dpg-...-a.ohio-postgres.render.com/financial_db_r82w)
+      - key: DATABASE_URL
+        sync: false
+      # Uploaded documents live on the persistent disk
+      - key: UPLOAD_DIR
+        value: /var/lib/uploads
+      # Redis (broker + backend) — created by this Blueprint
+      - key: REDIS_URL
+        fromService:
+          name: school-finance-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: school-finance-redis
+          type: keyvalue
+          property: connectionString
+      # Auth secrets
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: SUPERADMIN_EMAIL
+        value: admin@school.com
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+      # Frontend (Vercel) origin — replace with your deployed Vercel URL
+      - key: CORS_ORIGINS
+        value: '["http://localhost:3000","http://localhost:5173","https://your-frontend.vercel.app"]'
+      # Where the browser lands after payment; also the base for /pay/ links
+      - key: FRONTEND_BASE_URL
+        sync: false
+      # PayFast
+      - key: PAYFAST_BASE_URL
+        sync: false
+      - key: PAYFAST_MERCHANT_ID
+        sync: false
+      - key: PAYFAST_MERCHANT_KEY
+        sync: false
+      - key: PAYFAST_PASSPHRASE
+        sync: false
+      - key: PAYFAST_MODE
+        value: sandbox
+
+  # ── Celery worker (embeds beat so the daily reminder scheduler runs) ───
+  # -B embeds beat; keep this service at 1 instance (documented Celery caveat).
+  - type: worker
+    name: school-finance-worker
+    runtime: docker
+    plan: starter
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    dockerCommand: celery -A app.tasks worker -B --loglevel=info
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          name: school-finance-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: school-finance-redis
+          type: keyvalue
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: SUPERADMIN_EMAIL
+        value: admin@school.com
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+      - key: PAYFAST_BASE_URL
+        sync: false
+      - key: PAYFAST_MERCHANT_ID
+        sync: false
+      - key: PAYFAST_MERCHANT_KEY
+        sync: false
+      - key: PAYFAST_PASSPHRASE
+        sync: false
+      - key: PAYFAST_MODE
+        value: sandbox
+
+  # ── Managed Redis (Key Value) ──────────────────────────────────────────
+  # Private-network only: [] blocks external access; services connect internally.
+  - type: keyvalue
+    name: school-finance-redis
+    plan: free
+    region: ohio
+    ipAllowList: []
+    persistenceMode: journal-snapshot

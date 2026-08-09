@@ -6,7 +6,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import Modal from '@/components/Modal';
 import type {
-  Student, Payment, Grade, FeeStructure, AdditionalCharge, StudentSummary, Receipt, Statement, StudentDocument, Invoice,
+  Student, Payment, Grade, FeeStructure, AdditionalCharge, StudentSummary, Receipt, Statement, StudentDocument, Invoice, RegistrationFeeResponse,
 } from '@/types';
 import toast from 'react-hot-toast';
 import {
@@ -58,6 +58,7 @@ export default function ParentDashboard() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [summaries, setSummaries] = useState<Record<string, StudentSummary>>({});
+  const [regFees, setRegFees] = useState<Record<string, RegistrationFeeResponse>>({});
   const [recentPayments, setRecentPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   // Which child card is expanded to show its monthly schedule (null = none)
@@ -97,6 +98,7 @@ export default function ParentDashboard() {
   // Pay Online modal state
   const [payChild, setPayChild] = useState<Student | null>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payItemName, setPayItemName] = useState('');
   const [paying, setPaying] = useState(false);
   const [payCopied, setPayCopied] = useState(false);
   const [payForm, setPayForm] = useState<{
@@ -144,6 +146,18 @@ export default function ParentDashboard() {
       summaryResults.forEach((r) => { if (r.summary) summaryMap[r.id] = r.summary; });
       setSummaries(summaryMap);
 
+      // Registration fee status per child (amount + paid) for the parent cards.
+      const regFeePromises = students.map(async (s: Student) => {
+        try {
+          const r = await studentsApi.registrationFee(s.id);
+          return { id: s.id, fee: r.data };
+        } catch { return { id: s.id, fee: { configured: false, amount: 0, paid: false } }; }
+      });
+      const regFeeResults = await Promise.all(regFeePromises);
+      const regFeeMap: Record<string, RegistrationFeeResponse> = {};
+      regFeeResults.forEach((r) => { regFeeMap[r.id] = r.fee; });
+      setRegFees(regFeeMap);
+
       if (students.length > 0) {
         const payRes = await paymentsApi.list({ student_id: students[0].id });
         setRecentPayments(payRes.data.slice(0, 5));
@@ -168,18 +182,22 @@ export default function ParentDashboard() {
       setPayForm(null);
       setPayChild(null);
       setPayAmount('');
+      setPayItemName('');
       loadChildren();
       window.history.replaceState({}, '', window.location.pathname);
     } else if (params.get('payfast') === 'cancelled') {
       toast('Payment cancelled — no money was taken.');
       setPayForm(null);
       setPayChild(null);
+      setPayAmount('');
+      setPayItemName('');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  const openPay = (child: Student) => {
-    setPayAmount((balances[child.id] || 0).toFixed(2));
+  const openPay = (child: Student, opts?: { amount?: number; itemName?: string }) => {
+    setPayAmount((opts?.amount ?? balances[child.id] ?? 0).toFixed(2));
+    setPayItemName(opts?.itemName ?? `School Fees — ${child.first_name} ${child.last_name}`);
     setPayChild(child);
     setPayForm(null);
   };
@@ -188,6 +206,7 @@ export default function ParentDashboard() {
     if (paying) return;
     setPayChild(null);
     setPayAmount('');
+    setPayItemName('');
     setPayForm(null);
   };
 
@@ -203,7 +222,7 @@ export default function ParentDashboard() {
       const res = await payfastApi.initiate({
         student_id: payChild.id,
         amount,
-        item_name: `School Fees — ${payChild.first_name} ${payChild.last_name}`,
+        item_name: payItemName || `School Fees — ${payChild.first_name} ${payChild.last_name}`,
       });
       setPayForm(res.data);
     } catch (err: any) {
@@ -628,6 +647,34 @@ export default function ParentDashboard() {
                   >
                     <CreditCard className="h-3.5 w-3.5" /> Pay Online
                   </button>
+                )}
+
+                {regFees[child.id]?.configured && (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-slate-700">Registration Fee</span>
+                      <span className="text-sm font-bold text-slate-900">R {money(regFees[child.id].amount)}</span>
+                    </div>
+                    <div className="mt-2">
+                      {regFees[child.id].paid ? (
+                        <span className="badge badge-success">
+                          <CheckCircle className="h-3 w-3" /> Paid
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() =>
+                            openPay(child, {
+                              amount: Number(regFees[child.id].amount),
+                              itemName: `Registration Fee — ${child.first_name} ${child.last_name}`,
+                            })
+                          }
+                          className="btn btn-primary btn-sm w-full"
+                        >
+                          <CreditCard className="h-3.5 w-3.5" /> Pay Registration Fee
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 <div className="mt-4 grid grid-cols-2 gap-2">

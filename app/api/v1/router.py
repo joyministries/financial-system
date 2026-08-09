@@ -11,6 +11,7 @@ from app.api.v1.payments import router as payments_router
 from app.api.v1.settings import router as settings_router
 from app.api.v1.sms import router as sms_router
 from app.api.v1.students import router as students_router
+from app.api.v1.system import router as system_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -24,3 +25,4 @@ api_router.include_router(invoices_router)
 api_router.include_router(documents_router)
 api_router.include_router(settings_router)
 api_router.include_router(sms_router)
+api_router.include_router(system_router)

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { studentsApi, gradesApi } from '@/api/client';
-import type { Student, Grade } from '@/types';
+import type { AdminStudentRegisterResponse, Student, Grade } from '@/types';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, UserX, Loader2 } from 'lucide-react';
+import { Plus, Pencil, UserX, UserPlus, Copy, Loader2 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
 export default function StudentsPage() {
@@ -35,6 +35,25 @@ export default function StudentsPage() {
   const [p2Email, setP2Email] = useState('');
   const [p2Address, setP2Address] = useState('');
   const [p2PoBox, setP2PoBox] = useState('');
+
+  // Admin self-service: register student + create/link parent account
+  const [showAdminRegister, setShowAdminRegister] = useState(false);
+  const [adminRegisterResult, setAdminRegisterResult] =
+    useState<AdminStudentRegisterResponse | null>(null);
+  const [arFirstName, setArFirstName] = useState('');
+  const [arLastName, setArLastName] = useState('');
+  const [arGradeId, setArGradeId] = useState('');
+  const [arParentName, setArParentName] = useState('');
+  const [arParentEmail, setArParentEmail] = useState('');
+  const [arRelationship, setArRelationship] = useState<'father' | 'mother'>('father');
+  const [arGuardianId, setArGuardianId] = useState('');
+  const [arPhone, setArPhone] = useState('');
+  const [arAddress, setArAddress] = useState('');
+  const [arPoBox, setArPoBox] = useState('');
+  const [arOtherFirst, setArOtherFirst] = useState('');
+  const [arOtherLast, setArOtherLast] = useState('');
+  const [arOtherPhone, setArOtherPhone] = useState('');
+  const [arOtherEmail, setArOtherEmail] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -105,6 +124,65 @@ export default function StudentsPage() {
     setP2Address(''); setP2PoBox('');
   };
 
+  const closeAdminRegister = () => {
+    setShowAdminRegister(false);
+    setAdminRegisterResult(null);
+    setArFirstName(''); setArLastName(''); setArGradeId('');
+    setArParentName(''); setArParentEmail(''); setArRelationship('father');
+    setArGuardianId(''); setArPhone(''); setArAddress(''); setArPoBox('');
+    setArOtherFirst(''); setArOtherLast(''); setArOtherPhone(''); setArOtherEmail('');
+  };
+
+  const handleAdminRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const { data } = await studentsApi.adminRegister({
+        first_name: arFirstName,
+        last_name: arLastName,
+        grade_id: arGradeId,
+        parent_email: arParentEmail,
+        parent_full_name: arParentName,
+        relationship: arRelationship,
+        guardian_id: arGuardianId || undefined,
+        phone: arPhone || undefined,
+        physical_address: arAddress || undefined,
+        po_box: arPoBox || undefined,
+        ...(arOtherFirst || arOtherLast ? {
+          other_parent: {
+            first_name: arOtherFirst || undefined,
+            last_name: arOtherLast || undefined,
+            phone: arOtherPhone || undefined,
+            email: arOtherEmail || undefined,
+          },
+        } : {}),
+      });
+      setAdminRegisterResult(data);
+      if (data.temporary_password) {
+        toast.success('Student registered and parent account created');
+      } else {
+        toast.success('Student registered, linked to existing parent account');
+      }
+      load();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Registration failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyCredentials = async () => {
+    if (!adminRegisterResult?.temporary_password) return;
+    const text =
+      `Email: ${adminRegisterResult.parent.email}\nPassword: ${adminRegisterResult.temporary_password}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Credentials copied');
+    } catch {
+      toast.error('Copy failed — copy manually below');
+    }
+  };
+
   const handleEdit = (s: Student) => {
     setEditingId(s.id);
     setFirstName(s.first_name);
@@ -126,9 +204,14 @@ export default function StudentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Students</h1>
-        <button onClick={() => setShowForm(true)} className="btn btn-primary">
-          <Plus className="h-4 w-4" /> Add Student
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowAdminRegister(true)} className="btn btn-outline">
+            <UserPlus className="h-4 w-4" /> Register Student + Parent
+          </button>
+          <button onClick={() => setShowForm(true)} className="btn btn-primary">
+            <Plus className="h-4 w-4" /> Add Student
+          </button>
+        </div>
       </div>
 
       <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="input">
@@ -212,6 +295,111 @@ export default function StudentsPage() {
             <button type="button" onClick={closeForm} className="btn btn-secondary">Cancel</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={showAdminRegister} onClose={closeAdminRegister} title="Register Student + Parent">
+        {adminRegisterResult ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-sm font-semibold text-emerald-800">
+                {adminRegisterResult.student.first_name} {adminRegisterResult.student.last_name} registered
+              </p>
+              <p className="mt-1 text-sm text-emerald-700">
+                Student number: <span className="font-mono font-medium">{adminRegisterResult.student.student_number}</span>
+              </p>
+              <p className="text-sm text-emerald-700">
+                Parent account: <span className="font-medium">{adminRegisterResult.parent.email}</span>
+                {!adminRegisterResult.temporary_password && (
+                  <span className="ml-2 badge badge-success">Existing account linked</span>
+                )}
+              </p>
+            </div>
+            {adminRegisterResult.temporary_password ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-800">
+                  Temporary password — shown ONCE, give it to the parent now
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 rounded bg-white border border-amber-200 px-3 py-2 font-mono text-sm text-slate-800">
+                    {adminRegisterResult.temporary_password}
+                  </code>
+                  <button onClick={copyCredentials} className="btn btn-outline" title="Copy credentials">
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-amber-700">
+                  The parent signs in with {adminRegisterResult.parent.email} and this password, then changes it in
+                  their profile.
+                </p>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                The email <span className="font-medium">{adminRegisterResult.parent.email}</span> was already a portal
+                account, so the student was linked to it — no new password was created.
+              </p>
+            )}
+            <div className="flex gap-2 pt-2">
+              <button onClick={closeAdminRegister} className="btn btn-primary">Done</button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleAdminRegister} className="space-y-4">
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+              <p className="mb-2 text-sm font-semibold text-primary-700">Child</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={arFirstName} onChange={(e) => setArFirstName(e.target.value)} required placeholder="First name" className="input" />
+                <input value={arLastName} onChange={(e) => setArLastName(e.target.value)} required placeholder="Last name" className="input" />
+              </div>
+              <select value={arGradeId} onChange={(e) => setArGradeId(e.target.value)} required className="input mt-2">
+                <option value="">Select grade</option>
+                {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+              <p className="mb-2 text-sm font-semibold text-primary-700">
+                Parent portal account <span className="font-normal text-primary-500">(email is the login)</span>
+              </p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={arParentName} onChange={(e) => setArParentName(e.target.value)} required placeholder="Parent full name" className="input" />
+                  <select value={arRelationship} onChange={(e) => setArRelationship(e.target.value as 'father' | 'mother')} className="input">
+                    <option value="father">Father</option>
+                    <option value="mother">Mother</option>
+                  </select>
+                </div>
+                <input value={arParentEmail} onChange={(e) => setArParentEmail(e.target.value)} type="email" required placeholder="Email (login)" className="input" />
+                <input value={arGuardianId} onChange={(e) => setArGuardianId(e.target.value)} placeholder="ID Number (optional)" className="input" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={arPhone} onChange={(e) => setArPhone(e.target.value)} placeholder="Phone" className="input" />
+                  <input value={arPoBox} onChange={(e) => setArPoBox(e.target.value)} placeholder="PO Box" className="input" />
+                </div>
+                <input value={arAddress} onChange={(e) => setArAddress(e.target.value)} placeholder="Physical address" className="input" />
+              </div>
+            </div>
+
+            <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <summary className="text-sm font-semibold text-slate-700">Other parent (optional)</summary>
+              <div className="mt-2 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={arOtherFirst} onChange={(e) => setArOtherFirst(e.target.value)} placeholder="First name" className="input" />
+                  <input value={arOtherLast} onChange={(e) => setArOtherLast(e.target.value)} placeholder="Last name" className="input" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={arOtherPhone} onChange={(e) => setArOtherPhone(e.target.value)} placeholder="Phone" className="input" />
+                  <input value={arOtherEmail} onChange={(e) => setArOtherEmail(e.target.value)} type="email" placeholder="Email" className="input" />
+                </div>
+              </div>
+            </details>
+
+            <div className="flex gap-2 pt-2">
+              <button type="submit" disabled={submitting} className="btn btn-primary">
+                {submitting ? 'Registering...' : 'Register'}
+              </button>
+              <button type="button" onClick={closeAdminRegister} className="btn btn-secondary">Cancel</button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">

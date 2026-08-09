@@ -1,0 +1,28 @@
+# VCS
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Local config / secrets
+.env
+.env.*
+!.env.example
+
+# Uploads & session artifacts
+uploads/
+PROGRESS.txt
+financial_see.txt
+celerybeat-schedule
+
+# Frontend (not needed in the backend image)
+frontend/
+node_modules/

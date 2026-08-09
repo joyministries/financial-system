@@ -1,0 +1,7 @@
+# Files excluded from the backend Vercel deployment.
+.venv
+frontend
+tests
+uploads
+node_modules
+*.md

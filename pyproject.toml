@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.30.0",
+    "gunicorn>=22.0.0",
     "sqlalchemy[asyncio]>=2.0.30",
     "asyncpg>=0.29.0",
     "alembic>=1.13.0",
@@ -19,6 +20,7 @@ dependencies = [
     "httpx>=0.27.0",
     "slowapi>=0.1.9",
     "reportlab>=4.0.0",
+    "mangum>=0.21.0,<0.22",
 ]
 
 [project.optional-dependencies]
@@ -52,3 +54,8 @@ strict = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.1",
+]

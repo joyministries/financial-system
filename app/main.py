@@ -7,8 +7,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 
-from app.api.v1.router import api_router
 from app.api.pay import router as pay_router
+from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.rate_limit import limiter

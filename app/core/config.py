@@ -1,6 +1,7 @@
 import logging
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,10 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "CHANGE-ME-IN-PRODUCTION"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    # Bearer token that authorizes the /api/v1/system/* cron + migrate endpoints.
+    # Empty = only Vercel Cron's `x-vercel-cron` header may trigger them.
+    CRON_SECRET: str = ""
 
     SUPERADMIN_EMAIL: str = "admin@school.com"
     SUPERADMIN_PASSWORD: str = "changeme"
@@ -57,6 +62,21 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env", "case_sensitive": True}
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _ensure_async_driver(cls, v: object) -> object:
+        """Render/Heroku hand out plain `postgres://` / `postgresql://` URLs.
+
+        SQLAlchemy async needs the `postgresql+asyncpg://` driver scheme, so
+        rewrite it here rather than forcing an extra env var on every host.
+        """
+        if not isinstance(v, str):
+            return v
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+asyncpg://" + v[len(prefix):]
+        return v
 
     def validate_secrets(self) -> None:
         """Log warnings for insecure defaults. In non-debug mode, refuse to start."""

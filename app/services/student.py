@@ -7,11 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
-from app.models.grade import Enrollment, Student, StudentGuardian
+from app.models.grade import Enrollment, FeeStructure, Student, StudentGuardian
+from app.models.schedule import MonthlySchedule, OutstandingBalance
 from app.models.user import User
 from app.schemas.student import (
+    AdminStudentRegisterCreate,
     ChildRegisterCreate,
     GuardianUpdate,
+    RegistrationFeeResponse,
     StudentCreate,
     StudentUpdate,
 )
@@ -318,6 +321,164 @@ class StudentService:
             temp_password,
         )
         return user
+
+    async def admin_register(
+        self, data: AdminStudentRegisterCreate
+    ) -> tuple[Student, User, str | None]:
+        """Admin self-service registration: create the student AND create/link
+        the parent's portal account in one action.
+
+        - The parent email is the portal login. If a user with that email
+          already exists it is linked (no duplicate account, temp password is
+          None). Otherwise a parent account is created with a random temporary
+          password which is returned ONCE in the response for the admin to hand
+          over.
+        - The student is created as APPROVED and ACTIVE — no pending approval
+          step, unlike the parent-facing register_child flow.
+        - Primary guardian = the parent account holder; the other parent's
+          details are attached when provided.
+
+        Returns (student, parent_user, temporary_password_or_None).
+        """
+        # Resolve the parent portal account first (create-or-link).
+        parent, temp_password = await self._create_or_link_parent(
+            email=str(data.parent_email),
+            full_name=data.parent_full_name,
+        )
+
+        # Generate a unique student number before inserting.
+        student_number = await self._generate_student_number()
+
+        relationship = data.relationship or "father"
+        parent_guardian = StudentGuardian(
+            guardian_type=relationship,
+            full_name=data.parent_full_name,
+            guardian_id=data.guardian_id,
+            email=str(data.parent_email),
+            phone=data.phone,
+            physical_address=data.physical_address,
+            po_box=data.po_box,
+        )
+        guardians: list[StudentGuardian] = [parent_guardian]
+        if data.other_parent:
+            other_type = "mother" if relationship == "father" else "father"
+            guardians.append(
+                StudentGuardian(
+                    guardian_type=other_type,
+                    first_name=data.other_parent.first_name,
+                    last_name=data.other_parent.last_name,
+                    full_name=data.other_parent.display_name,
+                    guardian_id=data.other_parent.guardian_id,
+                    phone=data.other_parent.phone,
+                    email=str(data.other_parent.email)
+                    if data.other_parent.email
+                    else None,
+                    physical_address=data.other_parent.physical_address,
+                    po_box=data.other_parent.po_box,
+                )
+            )
+
+        enrollment_date = data.enrollment_date or datetime.now(UTC)
+        student = Student(
+            student_number=student_number,
+            first_name=data.first_name,
+            last_name=data.last_name,
+            grade_id=data.grade_id,
+            parent_id=parent.id,
+            enrollment_date=enrollment_date,
+            registration_status="approved",
+            guardians=guardians,
+        )
+        self.db.add(student)
+        await self.db.flush()
+
+        enrollment = Enrollment(
+            student_id=student.id,
+            academic_year=enrollment_date.year,
+            grade_id=data.grade_id,
+        )
+        self.db.add(enrollment)
+        await self.db.flush()
+        return student, parent, temp_password
+
+    async def _create_or_link_parent(
+        self, email: str, full_name: str
+    ) -> tuple[User, str | None]:
+        """Return (parent_user, temporary_password). When a user with the email
+        already exists it is linked and temp_password is None; otherwise a
+        parent account is created with a random temporary password that the
+        caller must return to the admin exactly once."""
+        stmt = select(User).where(User.email == email)
+        existing = (await self.db.execute(stmt)).scalar_one_or_none()
+        if existing:
+            return existing, None
+        temp_password = secrets.token_urlsafe(12)
+        user = User(
+            email=email,
+            full_name=full_name,
+            role="parent",
+            hashed_password=hash_password(temp_password),
+        )
+        self.db.add(user)
+        await self.db.flush()
+        logger.info(
+            "Admin registration created portal account for %s (%s) — temporary password: %s",
+            full_name,
+            email,
+            temp_password,
+        )
+        return user, temp_password
+
+    async def get_registration_fee(self, student_id: str) -> RegistrationFeeResponse:
+        """Parent-facing registration fee for a child.
+
+        Looks up the ACTIVE 'Registration' fee structure for the child's grade
+        in the current academic year. paid is True only when the child has
+        outstanding balances for that fee's schedules AND every balance is
+        settled (status == paid / balance <= 0). No fee configured, no
+        schedules generated, or any unsettled balance => unpaid.
+        """
+        student = await self.get_or_raise(student_id)
+        year = datetime.now(UTC).year
+        stmt = (
+            select(FeeStructure)
+            .where(
+                FeeStructure.grade_id == student.grade_id,
+                FeeStructure.academic_year == year,
+                FeeStructure.category == "Registration",
+                FeeStructure.is_active == True,  # noqa: E712
+            )
+            .order_by(FeeStructure.created_at.desc())
+            .limit(1)
+        )
+        fee = (await self.db.execute(stmt)).scalar_one_or_none()
+        if not fee:
+            return RegistrationFeeResponse(configured=False)
+
+        sched_stmt = select(MonthlySchedule).where(
+            MonthlySchedule.fee_structure_id == fee.id
+        )
+        schedules = list((await self.db.execute(sched_stmt)).scalars().all())
+        if not schedules:
+            return RegistrationFeeResponse(
+                configured=True, amount=fee.annual_amount, paid=False
+            )
+
+        bal_stmt = select(OutstandingBalance).where(
+            OutstandingBalance.student_id == student_id,
+            OutstandingBalance.monthly_schedule_id.in_([s.id for s in schedules]),
+        )
+        balances = list((await self.db.execute(bal_stmt)).scalars().all())
+        if not balances:
+            return RegistrationFeeResponse(
+                configured=True, amount=fee.annual_amount, paid=False
+            )
+        paid = all(
+            (b.status == "paid" or b.balance <= 0) for b in balances
+        )
+        return RegistrationFeeResponse(
+            configured=True, amount=fee.annual_amount, paid=paid
+        )
 
     async def get(self, student_id: str) -> Student | None:
         return await self.db.get(Student, student_id)

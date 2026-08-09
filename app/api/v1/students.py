@@ -6,10 +6,13 @@ from app.core.deps import get_current_user, require_role, verify_student_access
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.student import (
+    AdminStudentRegisterCreate,
+    AdminStudentRegisterResponse,
     ChildRegisterCreate,
     GuardianResponse,
     GuardianUpdate,
     PaymentPreferenceUpdate,
+    RegistrationFeeResponse,
     StudentCreate,
     StudentResponse,
     StudentUpdate,
@@ -39,6 +42,51 @@ async def register_child(
         new_values={"name": name, "status": "pending"},
     )
     return student
+
+
+@router.post("/admin-register", response_model=AdminStudentRegisterResponse)
+async def admin_register_student(
+    data: AdminStudentRegisterCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Admin self-service: register a student AND create/link the parent's
+    portal account in one action. The student is created as APPROVED (no
+    pending step). When a NEW parent account is created, the response carries
+    the one-time temporary password for the admin to hand over; when an
+    existing user with that email is linked, temporary_password is None."""
+    service = StudentService(db)
+    student, parent, temp_password = await service.admin_register(data)
+    audit = AuditService(db)
+    name = f"{student.first_name} {student.last_name}"
+    await audit.log(
+        "student", student.id, "admin_register", user.id,
+        new_values={
+            "name": name,
+            "parent_email": str(data.parent_email),
+            "parent_account_created": temp_password is not None,
+        },
+    )
+    return AdminStudentRegisterResponse(
+        student=student,
+        parent=parent,
+        temporary_password=temp_password,
+    )
+
+
+@router.get("/{student_id}/registration-fee", response_model=RegistrationFeeResponse)
+async def get_registration_fee(
+    student_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Parent-facing registration fee for a child: the active 'Registration'
+    fee structure for the child's grade in the current year plus whether it
+    has been fully settled. Parents may only query their own children."""
+    if user.role == "parent":
+        await verify_student_access(student_id, user, db)
+    service = StudentService(db)
+    return await service.get_registration_fee(student_id)
 
 
 @router.get("/pending", response_model=list[StudentResponse])

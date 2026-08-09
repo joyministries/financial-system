@@ -113,6 +113,42 @@ export interface Student {
   guardians: Guardian[];
 }
 
+/** Admin self-service: register a student + create/link the parent account. */
+export interface AdminStudentRegisterPayload {
+  first_name: string;
+  last_name: string;
+  grade_id: string;
+  enrollment_date?: string;
+  parent_email: string;
+  parent_full_name: string;
+  relationship?: 'father' | 'mother';
+  guardian_id?: string;
+  phone?: string;
+  physical_address?: string;
+  po_box?: string;
+  other_parent?: GuardianInput | null;
+}
+
+export interface AdminStudentRegisterResponse {
+  student: Student;
+  parent: {
+    id: string;
+    email: string;
+    full_name: string;
+    role: string;
+    is_active: boolean;
+  };
+  /** Set only when a NEW parent account was created — display once to the admin. */
+  temporary_password: string | null;
+}
+
+/** Parent-facing registration fee for a child's grade + current year. */
+export interface RegistrationFeeResponse {
+  configured: boolean;
+  amount: number;
+  paid: boolean;
+}
+
 export interface AdditionalCharge {
   id: string;
   student_id: string;

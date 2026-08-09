@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type {
+  AdminStudentRegisterResponse,
   EmailSettings,
   FeeStructure,
   Grade,
@@ -8,13 +9,17 @@ import type {
   NotificationSettings,
   ParentRegisterPayload,
   ParentRegisterResponse,
+  RegistrationFeeResponse,
   ReminderRunResult,
   ReminderSettings,
   SmsSettings,
   StudentDocument,
 } from '@/types';
 
-const API_BASE = '/api/v1';
+// Same-origin by default (Vite dev proxy or a reverse proxy on the same host).
+// In production set VITE_API_BASE to the hosted FastAPI backend, e.g.
+//   VITE_API_BASE=https://api.yourdomain.com/api/v1
+const API_BASE = (import.meta.env.VITE_API_BASE || '/api/v1').replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -156,6 +161,26 @@ export const studentsApi = {
   reject: (id: string) => api.post(`/students/${id}/reject`),
   setPaymentPreference: (id: string, preference: 'monthly' | 'cumulative') =>
     api.put(`/students/${id}/payment-preference`, { payment_preference: preference }),
+  /** Admin self-service: register a student + create/link the parent account
+   * in one call. Response includes the one-time temporary_password when a NEW
+   * parent account was created. */
+  adminRegister: (data: {
+    first_name: string;
+    last_name: string;
+    grade_id: string;
+    enrollment_date?: string;
+    parent_email: string;
+    parent_full_name: string;
+    relationship?: 'father' | 'mother';
+    guardian_id?: string;
+    phone?: string;
+    physical_address?: string;
+    po_box?: string;
+    other_parent?: GuardianInput;
+  }) => api.post<AdminStudentRegisterResponse>('/students/admin-register', data),
+  /** Parent-facing registration fee for a child (amount + paid status). */
+  registrationFee: (id: string) =>
+    api.get<RegistrationFeeResponse>(`/students/${id}/registration-fee`),
   updateGuardian: (studentId: string, guardianId: string, data: {
     first_name?: string;
     last_name?: string;

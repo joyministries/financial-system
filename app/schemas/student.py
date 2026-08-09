@@ -4,6 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.schemas.common import (
+    SafeFullName,
     SafeFullNameOptional,
     SafeName,
     SafeNameOptional,
@@ -94,6 +95,44 @@ class ChildRegisterCreate(BaseModel):
     other_parent: GuardianCreate | None = None
 
 
+class AdminStudentRegisterCreate(BaseModel):
+    """Admin registers a student AND creates/links the parent portal account
+    in one action. The parent email is the portal login: if a user with that
+    email exists it is linked; otherwise a parent account is created and the
+    temporary password is returned ONCE in the response for the admin to hand
+    over. The student is created as APPROVED (no pending approval step)."""
+
+    first_name: SafeName
+    last_name: SafeName
+    grade_id: str
+    enrollment_date: datetime | None = None  # defaults to now when omitted
+
+    # Parent account + primary guardian (email is required = the login)
+    parent_email: EmailStr
+    parent_full_name: SafeFullName
+    relationship: str = Field(default="father", pattern="^(father|mother)$")
+    guardian_id: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    physical_address: str | None = Field(default=None, max_length=255)
+    po_box: str | None = Field(default=None, max_length=100)
+
+    # Other parent (optional secondary guardian)
+    other_parent: GuardianCreate | None = None
+
+
+class RegistrationFeeResponse(BaseModel):
+    """Parent-facing registration fee for a child's grade + current year.
+
+    configured: a Registration fee structure exists for the child's grade/year
+    amount:     the fee amount (annual_amount)
+    paid:       every outstanding balance for the fee's schedules is settled
+    """
+
+    configured: bool = False
+    amount: Decimal = Decimal("0.00")
+    paid: bool = False
+
+
 class GuardianUpdate(BaseModel):
     """Parent-editable guardian contact details (settings)."""
 
@@ -136,6 +175,28 @@ class StudentResponse(BaseModel):
     guardians: list[GuardianResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class AdminParentResponse(BaseModel):
+    """Lightweight parent account info returned to the admin. Defined here
+    (not in user.py) to avoid a circular import — user.py already imports
+    from student.py."""
+
+    id: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class AdminStudentRegisterResponse(BaseModel):
+    student: StudentResponse
+    parent: AdminParentResponse
+    # Set only when a NEW parent account was created; None when an existing
+    # user was linked. Returned exactly once — display it to the admin.
+    temporary_password: str | None = None
 
 
 class MonthlyScheduleResponse(BaseModel):
