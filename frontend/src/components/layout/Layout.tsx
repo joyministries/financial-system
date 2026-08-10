@@ -21,6 +21,7 @@ import {
 import { useState } from 'react';
 import clsx from 'clsx';
 import BrandMark from '@/components/Brand';
+import NotificationsBell from '@/components/notifications/NotificationsBell';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, roles: ['admin', 'finance'] },
@@ -168,17 +169,22 @@ export default function Layout() {
             <Menu className="h-5 w-5" />
           </button>
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">{activeName}</h2>
-          <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
-            <CalendarDays className="h-4 w-4 text-slate-400" />
-            <span className="font-medium text-slate-600">
-              {new Date().toLocaleDateString(undefined, {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </span>
-          </div>
+          {!isParent && (
+            <div className="ml-auto flex items-center gap-3">
+              <NotificationsBell />
+              <div className="hidden items-center gap-2 text-sm text-slate-500 sm:flex">
+                <CalendarDays className="h-4 w-4 text-slate-400" />
+                <span className="font-medium text-slate-600">
+                  {new Date().toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
+            </div>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">

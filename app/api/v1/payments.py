@@ -142,6 +142,25 @@ async def reverse_payment(
         new_values={"reason": data.reason},
     )
 
+    # Notify the office (staff-wide): a payment was reversed.
+    from app.models.grade import Student
+    from app.services.notification import NotificationService
+
+    payment = await service.get(data.payment_id)
+    student = await db.get(Student, payment.student_id) if payment else None
+    student_name = f"{student.first_name} {student.last_name}" if student else "a student"
+    notification = NotificationService(db)
+    await notification.notify_staff(
+        title="Payment reversed",
+        message=(
+            f"{user.full_name} reversed a payment of R{payment.amount:,.2f} "
+            f"for {student_name}. Reason: {data.reason}"
+        ),
+        category="payment_reversed",
+        entity_type="student",
+        entity_id=payment.student_id if payment else None,
+    )
+
     return {"detail": "Payment reversed", "reversal_id": reversal.id}
 
 

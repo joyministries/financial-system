@@ -41,6 +41,22 @@ async def register_child(
         "student", student.id, "parent_register", user.id,
         new_values={"name": name, "status": "pending"},
     )
+
+    # Notify the office: a new student application from an existing parent.
+    from app.services.notification import NotificationService
+
+    grade_name = student.grade.name if student.grade else "Unknown grade"
+    notification = NotificationService(db)
+    await notification.notify_staff(
+        title="New student application",
+        message=(
+            f"{user.full_name} applied for {name} ({grade_name}). "
+            "Application pending approval."
+        ),
+        category="student_applied",
+        entity_type="student",
+        entity_id=student.id,
+    )
     return student
 
 

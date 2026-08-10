@@ -102,6 +102,25 @@ async def register_parent(
             "student", student.id, "parent_register", user.id,
             new_values={"name": name, "status": "pending"},
         )
+
+    # Notify the office: a new parent account + pending application(s).
+    from app.services.notification import NotificationService
+
+    student_names = ", ".join(
+        f"{s.first_name} {s.last_name}" for s in students
+    ) or "a child"
+    notification = NotificationService(db)
+    await notification.notify_staff(
+        title="New parent registration",
+        message=(
+            f"{user.full_name} ({user.email}) registered and applied for "
+            f"{student_names}. Application pending approval."
+        ),
+        category="parent_registered",
+        entity_type="student",
+        entity_id=students[0].id if students else None,
+    )
+
     token = create_access_token(subject=user.id)
     return {"user": user, "students": students, "access_token": token}
 

@@ -380,3 +380,32 @@ export interface ReminderRunResult {
   skipped_failed: number;
   errors: string[];
 }
+
+// ── In-app notifications (staff) ─────────────────────────────
+export type NotificationCategory =
+  | 'payment_received'
+  | 'parent_registered'
+  | 'student_applied'
+  | 'payment_reversed'
+  | 'system';
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  entity_type: string | null;
+  entity_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  items: AppNotification[];
+  total: number;
+  unread: number;
+}
+
+export interface UnreadCountResponse {
+  count: number;
+}

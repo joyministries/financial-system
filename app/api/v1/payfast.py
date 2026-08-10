@@ -157,6 +157,30 @@ async def payfast_itn(
                                         "amount_gross": gross})
             logger.info("PayFast payment %s verified (receipt %s)", payment.id,
                         receipt.receipt_number)
+
+            # Notify the office: a parent has paid via PayFast.
+            from app.models.grade import Student
+            from app.models.user import User
+            from app.services.notification import NotificationService
+
+            parent = await db.get(User, payment.allocated_by) if payment.allocated_by else None
+            student = await db.get(Student, payment.student_id)
+            parent_name = parent.full_name if parent else "A parent"
+            student_name = (
+                f"{student.first_name} {student.last_name}" if student else "a student"
+            )
+            notification = NotificationService(db)
+            await notification.notify_staff(
+                title="Payment received via PayFast",
+                message=(
+                    f"{parent_name} paid R{payment.amount:,.2f} for {student_name} "
+                    f"(ref {receipt.receipt_number})."
+                ),
+                category="payment_received",
+                entity_type="student",
+                entity_id=payment.student_id,
+            )
+
             # Notify the parent (background, after response): SMS + email receipt.
             from app.services.email import send_payment_receipt_email_async
             from app.services.sms import send_payment_receipt_sms_async

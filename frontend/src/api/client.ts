@@ -1,11 +1,13 @@
 import axios from 'axios';
 import type {
   AdminStudentRegisterResponse,
+  AppNotification,
   EmailSettings,
   FeeStructure,
   Grade,
   GuardianInput,
   Invoice,
+  NotificationListResponse,
   NotificationSettings,
   ParentRegisterPayload,
   ParentRegisterResponse,
@@ -14,6 +16,7 @@ import type {
   ReminderSettings,
   SmsSettings,
   StudentDocument,
+  UnreadCountResponse,
 } from '@/types';
 
 // Same-origin by default (Vite dev proxy or a reverse proxy on the same host).
@@ -390,6 +393,15 @@ export const smsApi = {
   payLinkReminders: () => api.post<ReminderRunResult>('/sms/reminders/paylink'),
   log: (params?: { limit?: number; offset?: number; status?: string }) =>
     api.get<SmsMessage[]>(`/sms/messages`, { params }),
+};
+
+// ── In-app notifications (staff) ─────────────────────────────
+export const notificationsApi = {
+  list: (params?: { unread_only?: boolean; limit?: number; offset?: number }) =>
+    api.get<NotificationListResponse>('/notifications/', { params }),
+  unreadCount: () => api.get<UnreadCountResponse>('/notifications/unread-count'),
+  markRead: (id: string) => api.post<AppNotification>(`/notifications/${id}/read`),
+  markAllRead: () => api.post<UnreadCountResponse>('/notifications/read-all'),
 };
 
 // ── PayFast (parent) ─────────────────────────────────────────
