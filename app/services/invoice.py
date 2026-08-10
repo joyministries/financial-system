@@ -161,24 +161,32 @@ class InvoiceService:
         """
         from app.services.sms import SmsService
 
-        stmt = select(Student).where(Student.registration_status == "approved")
-        if grade_id:
-            stmt = stmt.where(Student.grade_id == grade_id)
-        students = (await self.db.execute(stmt)).scalars().all()
+        def _students_stmt():
+            stmt = select(Student).where(Student.registration_status == "approved")
+            if grade_id:
+                stmt = stmt.where(Student.grade_id == grade_id)
+            return stmt
+
+        students = (await self.db.execute(_students_stmt())).scalars().all()
 
         generated = 0
         skipped = 0
         failed = 0
         errors: list[str] = []
         sms_service = SmsService(self.db)
+        failed_ids: set[str] = set()
 
-        for student in students:
+        index = 0
+        while index < len(students):
+            student = students[index]
             try:
                 if await self.get_for_period(student.id, academic_year, month):
                     skipped += 1
+                    index += 1
                     continue
                 invoice = await self.generate(student.id, academic_year, month, created_by)
                 generated += 1
+                index += 1
                 if notify_parents:
                     try:
                         await sms_service.send_invoice_ready(
@@ -192,7 +200,21 @@ class InvoiceService:
                         errors.append(f"SMS {student.id}: {exc}")
             except Exception as exc:  # noqa: BLE001 - one student must not abort the run
                 failed += 1
+                failed_ids.add(student.id)
                 errors.append(f"{student.id}: {exc}")
+                # The failed flush left the session in a pending-rollback state
+                # AND rollback expires every loaded instance. Reload the list
+                # so remaining students process safely; already-committed or
+                # already-existing invoices are skipped via get_for_period, and
+                # permanently-failing students are excluded, so restarting from
+                # the top never loops forever or duplicates work.
+                await self.db.rollback()
+                students = (
+                    await self.db.execute(
+                        _students_stmt().where(Student.id.notin_(failed_ids))
+                    )
+                ).scalars().all()
+                index = 0
 
             if commit_every and generated % commit_every == 0:
                 await self.db.commit()
