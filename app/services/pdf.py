@@ -42,10 +42,15 @@ if not _CREST.exists():  # fall back to the full-resolution crest if available
     _CREST = Path(__file__).resolve().parent.parent / "static" / "crest.png"
 
 _CONTACT_LINES = [
-    "PO Box 4056, Germiston South, 1411  |  18 Neels Road, Lambton Gardens, Germiston, 1428",
-    "Tel: 011 824 0735  |  EMIS Number: 700 400 316",
-    "info@lambtonschool.co.za  |  www.lambtonschool.co.za",
+    "PO Box 4056, Germiston South, 1411",
+    "18 Neels Road, Lambton Gardens, Germiston, 1428",
+    "Tel: 011 824 0735    EMIS Number: 700 400 316",
+    "info@lambtonschool.co.za    www.lambtonschool.co.za",
 ]
+
+_ICON_PHONE = Path(__file__).resolve().parent.parent / "static" / "icon_phone.png"
+_ICON_WEB   = Path(__file__).resolve().parent.parent / "static" / "icon_web.png"
+_ICON_EMAIL = Path(__file__).resolve().parent.parent / "static" / "icon_email.png"
 _MOTTO = (
     "Train up a child in the way they shall go, and when they are older, "
     "they shall not depart from it - Proverbs 22:6"
@@ -159,59 +164,102 @@ class _Document:
 
     # layout metrics (mm)
     _MARGIN = 16 * mm
-    _HEADER_H = 46 * mm
+    _HEADER_H = 56 * mm   # increased to accommodate crest + text side-by-side
     _FOOTER_H = 16 * mm
 
     def _on_page(self, canvas, doc) -> None:  # pragma: no cover - reportlab callback
         canvas.saveState()
         top = A4[1]
 
-        # ── crest (gold school emblem) ──
-        crest_h = 22 * mm
+        # ── Header layout ──────────────────────────────────────────────────
+        # Crest on the LEFT (square, 36mm), school name + contacts on the RIGHT
+        # of the crest, all vertically centred in a 42mm header band.
+        # This mirrors the Word letterhead: logo beside text, never overlapping.
+
+        header_top    = top - 8 * mm          # top of header band
+        header_bottom = top - 42 * mm         # bottom of header band
+        crest_size    = 34 * mm               # crest square size
+        crest_x       = self._MARGIN
+        crest_y       = header_bottom + (header_bottom - (header_top - crest_size)) / 2
+        # vertically centre the crest in the band
+        crest_y = header_bottom + ((header_top - header_bottom) - crest_size) / 2
+
+        # Draw crest
         if _CREST.exists():
             try:
                 canvas.drawImage(
                     str(_CREST),
-                    self._MARGIN,
-                    top - 9 * mm - crest_h,
-                    height=crest_h,
-                    width=crest_h,
+                    crest_x,
+                    crest_y,
+                    width=crest_size,
+                    height=crest_size,
                     mask="auto",
                     preserveAspectRatio=True,
                 )
-            except Exception:  # noqa: BLE001 - never break the PDF over artwork
+            except Exception:  # noqa: BLE001
                 pass
 
-        # ── school name ──
-        canvas.setFont(_BRAND_BOLD, 17)
-        canvas.setFillColor(_INK)
-        name_w = stringWidth(_SCHOOL_NAME_CAPS, _BRAND_BOLD, 17)
-        canvas.drawString(self._MARGIN, top - 15 * mm, _SCHOOL_NAME_CAPS)
-        # gold underline under the name
+        # Text block starts to the right of the crest with a gap
+        text_x = crest_x + crest_size + 6 * mm
+
+        # School name (large, bold, gold)
+        canvas.setFont(_BRAND_BOLD, 15)
+        canvas.setFillColor(_GOLD_DARK)
+        canvas.drawString(text_x, header_top - 7 * mm, _SCHOOL_NAME_CAPS)
+
+        # Gold underline beneath the name
+        name_w = stringWidth(_SCHOOL_NAME_CAPS, _BRAND_BOLD, 15)
         canvas.setStrokeColor(_GOLD)
         canvas.setLineWidth(1.2)
-        canvas.line(self._MARGIN, top - 18.5 * mm, self._MARGIN + name_w, top - 18.5 * mm)
+        canvas.line(text_x, header_top - 9.5 * mm, text_x + name_w, header_top - 9.5 * mm)
 
-        # ── contact block ──
-        canvas.setFont(_BRAND_FONT, 7.5)
+        # Address lines
+        canvas.setFont(_BRAND_FONT, 7.8)
         canvas.setFillColor(_INK_SOFT)
-        canvas.drawString(self._MARGIN, top - 24 * mm, _CONTACT_LINES[0])
-        canvas.drawString(self._MARGIN, top - 27.5 * mm, _CONTACT_LINES[1])
-        canvas.drawString(self._MARGIN, top - 31 * mm, _CONTACT_LINES[2])
+        canvas.drawString(text_x, header_top - 14 * mm, _CONTACT_LINES[0])
+        canvas.drawString(text_x, header_top - 18 * mm, _CONTACT_LINES[1])
+
+        # Phone / EMIS line with icon
+        icon_size = 3.8 * mm
+        icon_y_offset = -1 * mm          # nudge icon down to align with text baseline
+        line_y = header_top - 22.5 * mm
+        if _ICON_PHONE.exists():
+            try:
+                canvas.drawImage(
+                    str(_ICON_PHONE), text_x, line_y + icon_y_offset,
+                    width=icon_size, height=icon_size, mask="auto", preserveAspectRatio=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        canvas.setFont(_BRAND_FONT, 7.8)
+        canvas.setFillColor(_INK_SOFT)
+        canvas.drawString(text_x + icon_size + 1.5 * mm, line_y, _CONTACT_LINES[2])
+
+        # Email / website line with email icon
+        line_y2 = header_top - 27.5 * mm
+        if _ICON_EMAIL.exists():
+            try:
+                canvas.drawImage(
+                    str(_ICON_EMAIL), text_x, line_y2 + icon_y_offset,
+                    width=icon_size, height=icon_size, mask="auto", preserveAspectRatio=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        canvas.drawString(text_x + icon_size + 1.5 * mm, line_y2, _CONTACT_LINES[3])
 
         # ── hairline separating letterhead from content ──
         canvas.setStrokeColor(_LINE)
         canvas.setLineWidth(0.6)
-        canvas.line(self._MARGIN, top - 34 * mm, A4[0] - self._MARGIN, top - 34 * mm)
+        canvas.line(self._MARGIN, top - 44 * mm, A4[0] - self._MARGIN, top - 44 * mm)
         # thin gold accent under the hairline
         canvas.setStrokeColor(_GOLD)
         canvas.setLineWidth(2.2)
-        canvas.line(self._MARGIN, top - 35.2 * mm, A4[0] - self._MARGIN, top - 35.2 * mm)
+        canvas.line(self._MARGIN, top - 45.2 * mm, A4[0] - self._MARGIN, top - 45.2 * mm)
 
-        # ── document type (top-right of content area) ──
+        # ── document type (top-right corner) ──
         canvas.setFont(_BRAND_BOLD, 8.5)
         canvas.setFillColor(_GOLD_DARK)
-        canvas.drawRightString(A4[0] - self._MARGIN, top - 40.5 * mm, self.doc_type)
+        canvas.drawRightString(A4[0] - self._MARGIN, top - 49 * mm, self.doc_type)
 
         # ── footer: motto + generated/page ──
         canvas.setFont(_BRAND_FONT, 7.5)
