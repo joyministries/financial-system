@@ -123,15 +123,89 @@ class ScheduleService:
 
         Idempotent: only missing balance rows are created, so re-running this
         never duplicates or overwrites payment allocations.
-        """
-        from app.models.grade import Student
 
-        stmt = select(Student.id).where(Student.is_active == True)  # noqa: E712
+        Set-based bulk insert (single round-trip) instead of a per-student
+        loop — the loop approach performed ~2 queries per student and blew
+        the serverless timeout once the student base grew (e.g. 2k students
+        => 4k+ sequential queries on every dashboard load).
+        """
+        from sqlalchemy import text
+
         if grade_id:
-            stmt = stmt.where(Student.grade_id == grade_id)
-        result = await self.db.execute(stmt)
-        for (student_id,) in result.all():
-            await self._materialize_student(student_id, academic_year)
+            sql = text(
+                """
+                INSERT INTO outstanding_balances
+                    (id, student_id, monthly_schedule_id, original_amount,
+                     rollover_amount, amount_paid, balance, status, created_at, updated_at)
+                SELECT
+                    gen_random_uuid()::text,
+                    s.id,
+                    ms.id,
+                    ms.amount_due,
+                    0,
+                    0,
+                    ms.amount_due,
+                    'pending',
+                    now(),
+                    now()
+                FROM students s
+                JOIN fee_structures fs
+                  ON fs.grade_id = s.grade_id
+                 AND fs.academic_year = :academic_year
+                 AND fs.is_active = true
+                JOIN monthly_schedules ms
+                  ON ms.fee_structure_id = fs.id
+                 AND ms.academic_year = :academic_year
+                WHERE s.is_active = true
+                  AND s.registration_status = 'approved'
+                  AND s.grade_id = :grade_id
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM outstanding_balances ob
+                      WHERE ob.student_id = s.id
+                        AND ob.monthly_schedule_id = ms.id
+                  )
+                """
+            )
+            params = {"academic_year": academic_year, "grade_id": grade_id}
+        else:
+            sql = text(
+                """
+                INSERT INTO outstanding_balances
+                    (id, student_id, monthly_schedule_id, original_amount,
+                     rollover_amount, amount_paid, balance, status, created_at, updated_at)
+                SELECT
+                    gen_random_uuid()::text,
+                    s.id,
+                    ms.id,
+                    ms.amount_due,
+                    0,
+                    0,
+                    ms.amount_due,
+                    'pending',
+                    now(),
+                    now()
+                FROM students s
+                JOIN fee_structures fs
+                  ON fs.grade_id = s.grade_id
+                 AND fs.academic_year = :academic_year
+                 AND fs.is_active = true
+                JOIN monthly_schedules ms
+                  ON ms.fee_structure_id = fs.id
+                 AND ms.academic_year = :academic_year
+                WHERE s.is_active = true
+                  AND s.registration_status = 'approved'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM outstanding_balances ob
+                      WHERE ob.student_id = s.id
+                        AND ob.monthly_schedule_id = ms.id
+                  )
+                """
+            )
+            params = {"academic_year": academic_year}
+        await self.db.execute(sql, params)
+        await self.db.flush()
 
     async def _materialize_student(self, student_id: str, academic_year: int) -> None:
         """Create OutstandingBalance rows for schedules that lack them.
