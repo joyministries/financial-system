@@ -38,12 +38,17 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "Lambton Christian School: Dear {parent}, please pay R{amount} for "
         "{student}'s school fees: {link}"
     ),
+    "invoice_ready": (
+        "Lambton Christian School: Dear {parent}, {student}'s {month}/{year} "
+        "invoice for R{amount} is ready. Please make payment by the due date."
+    ),
     "test": "Lambton Christian School: This is a test SMS. If you received this, SMS is working.",
 }
 
 MSG_PAYMENT_RECEIVED = _DEFAULT_TEMPLATES["payment_receipt"]
 MSG_BALANCE_REMINDER = _DEFAULT_TEMPLATES["balance_reminder"]
 MSG_PAYMENT_LINK = _DEFAULT_TEMPLATES["payment_link"]
+MSG_INVOICE_READY = _DEFAULT_TEMPLATES["invoice_ready"]
 MSG_TEST = _DEFAULT_TEMPLATES["test"]
 
 
@@ -314,6 +319,40 @@ class SmsService:
             content,
             student_id=student.id,
             template="payment_link",
+            created_by=created_by,
+        )
+
+    async def send_invoice_ready(
+        self,
+        student: Student,
+        amount: Decimal,
+        month: int,
+        year: int,
+        created_by: str | None = None,
+    ) -> SmsMessage | None:
+        """Notify the billing parent that the monthly invoice is ready."""
+        phone = await self.get_student_phone(student)
+        if not phone:
+            logger.info("No guardian phone for student %s — skipping invoice SMS", student.id)
+            return None
+        parent_name = await self.parent_first_name(student)
+        template = await self.get_template("invoice_ready")
+        content, _missing = self.render_template(
+            "invoice_ready",
+            {
+                "parent": parent_name,
+                "student": student.first_name,
+                "amount": f"{amount:,.2f}",
+                "month": f"{month:02d}",
+                "year": year,
+            },
+            fallback=template.body if template else None,
+        )
+        return await self.send(
+            phone,
+            content,
+            student_id=student.id,
+            template="invoice_ready",
             created_by=created_by,
         )
 

@@ -269,8 +269,8 @@ export const paymentsApi = {
 
 // ── Financial ─────────────────────────────────────────────
 export const financialApi = {
-  listReceipts: (studentId?: string) =>
-    api.get('/financial/receipts', { params: { student_id: studentId } }),
+  listReceipts: (params?: { student_id?: string; grade_id?: string }) =>
+    api.get('/financial/receipts', { params: { student_id: params?.student_id, grade_id: params?.grade_id } }),
   getReceipt: (num: string) => api.get(`/financial/receipts/${num}`),
   receiptDownloadUrl: (receiptNumber: string) =>
     `/financial/receipts/${encodeURIComponent(receiptNumber)}/download`,
@@ -303,6 +303,27 @@ export const invoicesApi = {
   get: (id: string) => api.get<Invoice>(`/invoices/${id}`),
   generate: (data: { student_id: string; academic_year: number; month: number }) =>
     api.post<Invoice>('/invoices/generate', data),
+  generateAll: (data: {
+    academic_year: number;
+    month: number;
+    grade_id?: string;
+    notify_parents?: boolean;
+  }) => api.post<{
+    academic_year: number;
+    month: number;
+    grade_id?: string | null;
+    generated: number;
+    skipped: number;
+    failed: number;
+    errors: string[];
+  }>('/invoices/generate-all', null, {
+    params: {
+      academic_year: data.academic_year,
+      month: data.month,
+      grade_id: data.grade_id || undefined,
+      notify_parents: data.notify_parents ?? true,
+    },
+  }),
   updateStatus: (id: string, status: 'paid' | 'void') =>
     api.post<Invoice>(`/invoices/${id}/status`, { status }),
   downloadUrl: (id: string) => `/invoices/${encodeURIComponent(id)}/download`,

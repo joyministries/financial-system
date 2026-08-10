@@ -11,6 +11,7 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 export default function ChargesPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
+  const [filterGradeId, setFilterGradeId] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [charges, setCharges] = useState<AdditionalCharge[]>([]);
@@ -39,10 +40,12 @@ export default function ChargesPage() {
     }
   }, [selectedStudent, year]);
 
+  // Students in a grade (grade-first dropdowns: pick a grade, then a student in it).
+  const studentsInGrade = (grade: string) =>
+    grade ? students.filter((s) => s.grade_id === grade) : [];
+
   // Students in the selected grade (used for bulk charge + opt-out checkboxes)
-  const gradeStudents = gradeId
-    ? students.filter((s) => s.grade_id === gradeId)
-    : [];
+  const gradeStudents = gradeId ? studentsInGrade(gradeId) : [];
 
   const toggleOptOut = (id: string) => {
     setOptOutIds((prev) => {
@@ -121,9 +124,17 @@ export default function ChargesPage() {
       </div>
 
       <div className="flex gap-4">
-        <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} className="input">
+        <select
+          value={filterGradeId}
+          onChange={(e) => { setFilterGradeId(e.target.value); setSelectedStudent(''); }}
+          className="input"
+        >
+          <option value="">All Grades</option>
+          {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} className="input min-w-64">
           <option value="">Select Student</option>
-          {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
+          {studentsInGrade(filterGradeId).map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
         </select>
         <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value))} className="w-32 input" />
       </div>
@@ -179,12 +190,26 @@ export default function ChargesPage() {
               )}
             </div>
           ) : (
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Student</label>
-              <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} required className="input mt-1">
-                <option value="">Select Student</option>
-                {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
-              </select>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Grade</label>
+                <select
+                  value={gradeId}
+                  onChange={(e) => { setGradeId(e.target.value); setSelectedStudent(''); }}
+                  className="input mt-1"
+                >
+                  <option value="">Select Grade</option>
+                  {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Student</label>
+                <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} required className="input mt-1">
+                  <option value="">Select Student</option>
+                  {studentsInGrade(gradeId).map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
+                </select>
+                {!gradeId && <p className="mt-1 text-xs text-slate-500">Pick a grade first to see its students.</p>}
+              </div>
             </div>
           )}
 

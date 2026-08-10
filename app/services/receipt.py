@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError
 from app.models.financial import Receipt
+from app.models.grade import Student
 from app.models.payment import Payment
 
 
@@ -56,6 +57,7 @@ class ReceiptService:
     async def list_all(
         self,
         student_ids: list[str] | None = None,
+        grade_id: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         payment_method: str | None = None,
@@ -68,6 +70,10 @@ class ReceiptService:
             if not student_ids:
                 return []
             stmt = stmt.where(Receipt.student_id.in_(student_ids))
+        if grade_id:
+            stmt = stmt.join(Student, Student.id == Receipt.student_id).where(
+                Student.grade_id == grade_id
+            )
         if payment_method:
             stmt = stmt.where(Receipt.payment_method == payment_method)
         if start_date:

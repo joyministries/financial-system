@@ -32,6 +32,7 @@ router = APIRouter(prefix="/financial", tags=["Financial"])
 @router.get("/receipts", response_model=list[ReceiptResponse])
 async def list_receipts(
     student_id: str | None = None,
+    grade_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -47,7 +48,7 @@ async def list_receipts(
         return await service.list_all(student_ids=child_ids)
     if student_id:
         return await service.list_for_student(student_id)
-    return await service.list_all()
+    return await service.list_all(grade_id=grade_id)
 
 
 @router.get("/receipts/{receipt_number}", response_model=ReceiptResponse)

@@ -139,6 +139,67 @@ class InvoiceService:
         await self.db.flush()
         return invoice
 
+    async def generate_all(
+        self,
+        academic_year: int,
+        month: int,
+        created_by: str,
+        grade_id: str | None = None,
+        notify_parents: bool = True,
+    ) -> dict:
+        """Generate invoices for every approved student (optionally one grade).
+
+        Existing invoices are skipped (never duplicated). When `notify_parents`
+        is set, each newly created invoice triggers an SMS to the student's
+        billing parent. Returns {"generated", "skipped", "failed", "errors"}.
+        """
+        from app.services.sms import SmsService
+
+        stmt = select(Student).where(Student.registration_status == "approved")
+        if grade_id:
+            stmt = stmt.where(Student.grade_id == grade_id)
+        students = (await self.db.execute(stmt)).scalars().all()
+
+        generated = 0
+        skipped = 0
+        failed = 0
+        errors: list[str] = []
+        sms_service = SmsService(self.db)
+
+        for student in students:
+            try:
+                if await self.get_for_period(student.id, academic_year, month):
+                    skipped += 1
+                    continue
+                invoice = await self.generate(student.id, academic_year, month, created_by)
+                generated += 1
+                if notify_parents:
+                    try:
+                        await sms_service.send_invoice_ready(
+                            student,
+                            invoice.balance_due,
+                            invoice.month,
+                            invoice.academic_year,
+                            created_by=created_by,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - SMS must not fail the run
+                        errors.append(f"SMS {student.id}: {exc}")
+            except Exception as exc:  # noqa: BLE001 - one student must not abort the run
+                failed += 1
+                errors.append(f"{student.id}: {exc}")
+
+        await self.db.flush()
+        return {
+            "academic_year": academic_year,
+            "month": month,
+            "grade_id": grade_id,
+            "generated": generated,
+            "skipped": skipped,
+            "failed": failed,
+            "errors": errors[:20],
+        }
+
+
     # ── Internals ───────────────────────────────────────────
 
     async def _opening_balance(

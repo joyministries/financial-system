@@ -344,7 +344,7 @@ export default function ParentDashboard() {
     try {
       const [summaryRes, receiptsRes, statementsRes, feesRes, chargesRes, invoicesRes] = await Promise.all([
         financialApi.getStudentSummary(child.id, currentYear),
-        financialApi.listReceipts(child.id),
+        financialApi.listReceipts({ student_id: child.id }),
         financialApi.listStatements(child.id, currentYear),
         feesApi.listByGrade(child.grade_id, currentYear),
         chargesApi.list(child.id, currentYear),

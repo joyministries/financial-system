@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { financialApi, studentsApi, downloadPdf } from '@/api/client';
-import type { Receipt, Student } from '@/types';
+import { financialApi, studentsApi, gradesApi, downloadPdf } from '@/api/client';
+import type { Receipt, Student, Grade } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download } from 'lucide-react';
@@ -10,6 +10,8 @@ export default function ReceiptsPage() {
   const isParent = user?.role === 'parent';
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -18,14 +20,23 @@ export default function ReceiptsPage() {
     // Parents only ever see their own children (the backend enforces this too).
     Promise.all([
       studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => setStudents(r.data)),
+      gradesApi.list().then((r) => setGrades(r.data)),
       financialApi.listReceipts().then((r) => setReceipts(r.data)),
     ]).finally(() => setLoading(false));
   }, []);
 
-  const handleFilter = (studentId: string) => {
+  const filteredStudents = selectedGrade
+    ? students.filter((s) => s.grade_id === selectedGrade)
+    : students;
+
+  const handleFilter = (studentId: string, gradeId: string) => {
     setSelectedStudent(studentId);
+    setSelectedGrade(gradeId);
     setLoading(true);
-    financialApi.listReceipts(studentId || undefined).then((r) => setReceipts(r.data)).finally(() => setLoading(false));
+    financialApi
+      .listReceipts({ student_id: studentId || undefined, grade_id: !studentId ? gradeId || undefined : undefined })
+      .then((r) => setReceipts(r.data))
+      .finally(() => setLoading(false));
   };
 
   const getStudentName = (id: string) => {
@@ -48,14 +59,33 @@ export default function ReceiptsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Receipts' : 'Receipts'}</h1>
-        {isParent ? (
-          <select value={selectedStudent} onChange={(e) => handleFilter(e.target.value)} className="input">
+        {!isParent && (
+          <div className="flex gap-2">
+            <select
+              value={selectedGrade}
+              onChange={(e) => handleFilter('', e.target.value)}
+              className="input"
+            >
+              <option value="">All Grades</option>
+              {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <select
+              value={selectedStudent}
+              onChange={(e) => handleFilter(e.target.value, selectedGrade)}
+              className="input min-w-56"
+            >
+              <option value="">All Students</option>
+              {filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
+            </select>
+          </div>
+        )}
+        {isParent && (
+          <select
+            value={selectedStudent}
+            onChange={(e) => handleFilter(e.target.value, '')}
+            className="input"
+          >
             <option value="">All My Children</option>
-            {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
-          </select>
-        ) : (
-          <select value={selectedStudent} onChange={(e) => handleFilter(e.target.value)} className="input">
-            <option value="">All Students</option>
             {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
           </select>
         )}

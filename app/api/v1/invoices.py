@@ -31,6 +31,28 @@ async def generate_invoice(
     return await service.generate(data.student_id, data.academic_year, data.month, user.id)
 
 
+@router.post("/generate-all")
+async def generate_all_invoices(
+    academic_year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    grade_id: str | None = Query(default=None),
+    notify_parents: bool = Query(default=True),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Generate invoices for every approved student (or one grade).
+
+    Existing invoices are skipped. Each newly created invoice triggers an SMS
+    to the billing parent unless `notify_parents=false`.
+    """
+    service = InvoiceService(db)
+    result = await service.generate_all(
+        academic_year, month, user.id, grade_id=grade_id, notify_parents=notify_parents
+    )
+    await db.commit()
+    return result
+
+
 @router.get("/", response_model=list[InvoiceResponse])
 async def list_invoices(
     student_id: str | None = None,
