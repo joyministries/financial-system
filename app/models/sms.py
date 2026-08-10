@@ -2,10 +2,38 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+class SmsTemplate(Base):
+    """Editable SMS message templates.
+
+    Each template has a stable `key` (the code path that uses it) and a
+    `body` with `{placeholder}` tokens that are substituted at send time
+    (e.g. `{parent}`, `{student}`, `{amount}`, `{balance}`, `{link}`).
+    Admins curate these from Settings -> SMS -> Message Templates; the
+    built-in defaults in `app/services/sms.py` are the fallback when a
+    template row does not exist.
+    """
+
+    __tablename__ = "sms_templates"
+
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
 
 
 class SmsMessage(Base):

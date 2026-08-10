@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { authApi, settingsApi, smsApi } from '@/api/client';
 import type { SmsMessage } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { EmailSettings, NotificationSettings, ReminderSettings, SmsSettings } from '@/types';
+import type {
+  EmailSettings,
+  NotificationSettings,
+  ReminderSettings,
+  SmsSettings,
+  SmsTemplate,
+} from '@/types';
 import toast from 'react-hot-toast';
 import {
   AlertCircle,
@@ -13,6 +19,7 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  Pencil,
   Send,
   Users,
   Save,
@@ -95,8 +102,48 @@ export default function SettingsPage() {
   const [savingReminders, setSavingReminders] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
 
+  const [templates, setTemplates] = useState<SmsTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<SmsTemplate | null>(null);
+  const [templateBody, setTemplateBody] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
   const smsReady =
     !!sms?.enabled && !!sms?.provider && (sms.api_key_set || sms.api_secret_set);
+
+  const loadTemplates = () => {
+    setLoadingTemplates(true);
+    smsApi
+      .templates()
+      .then((res) => setTemplates(res.data))
+      .catch(() => toast.error('Failed to load message templates'))
+      .finally(() => setLoadingTemplates(false));
+  };
+
+  const openTemplateEditor = (t: SmsTemplate) => {
+    setEditingTemplate(t);
+    setTemplateBody(t.body);
+  };
+
+  const saveTemplate = async () => {
+    if (!editingTemplate) return;
+    if (!templateBody.trim()) return toast.error('Template content cannot be empty');
+    setSavingTemplate(true);
+    try {
+      await smsApi.updateTemplate(editingTemplate.key, {
+        name: editingTemplate.name,
+        body: templateBody,
+        is_active: editingTemplate.is_active,
+      });
+      toast.success('Message template saved — new sends use it');
+      setEditingTemplate(null);
+      loadTemplates();
+    } catch {
+      toast.error('Failed to save message template');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -114,6 +161,7 @@ export default function SettingsPage() {
       .getReminders()
       .then((res) => setReminders(res.data))
       .catch(() => toast.error('Failed to load reminder settings'));
+    loadTemplates();
   }, [isAdmin]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -494,6 +542,84 @@ export default function SettingsPage() {
             )}
 
             <SmsTools ready={smsReady} />
+          </div>
+
+          {/* ── Message Templates ────────────────────────────── */}
+          <div className="max-w-lg rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary-600" />
+              <h3 className="text-base font-semibold text-slate-900">Message Templates</h3>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Curate the SMS messages sent to parents. Edits apply to every future send —
+              reminders, payment links and receipt notifications.
+            </p>
+
+            {loadingTemplates ? (
+              <div className="mt-4 flex justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              </div>
+            ) : (
+              <ul className="mt-4 divide-y divide-slate-100">
+                {templates.map((t) => (
+                  <li key={t.key} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900">{t.name}</p>
+                      <p className="truncate text-xs text-slate-500">{t.body}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {!t.is_active && <span className="badge badge-warning">Disabled</span>}
+                      <button
+                        type="button"
+                        onClick={() => openTemplateEditor(t)}
+                        className="rounded p-1.5 text-slate-400 hover:text-primary-600 hover:bg-slate-100"
+                        title={`Edit ${t.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+                {templates.length === 0 && (
+                  <li className="py-6 text-center text-sm text-slate-400">
+                    No message templates yet.
+                  </li>
+                )}
+              </ul>
+            )}
+
+            {editingTemplate && (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{editingTemplate.name}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Use placeholders in {'{braces}'}: {'{parent}'}, {'{student}'}, {'{amount}'},
+                  {'{balance}'}, {'{link}'}, {'{month}'}, {'{year}'}, {'{receipt}'}
+                </p>
+                <textarea
+                  value={templateBody}
+                  onChange={(e) => setTemplateBody(e.target.value)}
+                  rows={4}
+                  className="input mt-2"
+                />
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={saveTemplate}
+                    disabled={savingTemplate}
+                    className="btn btn-primary"
+                  >
+                    {savingTemplate ? 'Saving…' : 'Save Template'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTemplate(null)}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Payment Link Reminders ───────────────────────── */}

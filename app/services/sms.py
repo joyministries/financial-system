@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.grade import Student, StudentGuardian
-from app.models.sms import SmsMessage
+from app.models.sms import SmsMessage, SmsTemplate
 from app.services.setting import SettingService
 
 logger = logging.getLogger(__name__)
@@ -21,20 +21,30 @@ SMS_PORTAL_TIMEOUT = 15.0
 # Guardian roles that identify the billing parent for a child.
 _PRIMARY_GUARDIAN_TYPES = ("primary", "father", "mother")
 
-MSG_PAYMENT_RECEIVED = (
-    "Lambton Christian School: Dear {parent}, we have received your payment of "
-    "R{amount} for {student}. Receipt {receipt}. Thank you."
-)
-MSG_BALANCE_REMINDER = (
-    "Lambton Christian School: {student}'s outstanding balance is R{balance} "
-    "as of {month}/{year}. Please settle the balance to keep the account "
-    "in good standing. Contact the office with any queries."
-)
-MSG_PAYMENT_LINK = (
-    "Lambton Christian School: Dear {parent}, please pay R{amount} for "
-    "{student}'s school fees: {link}"
-)
-MSG_TEST = "Lambton Christian School: This is a test SMS. If you received this, SMS is working."
+# Built-in default templates (fallback when no sms_templates row exists).
+# Admins curate these via Settings -> SMS -> Message Templates; the rows in
+# `sms_templates` always win over these constants.
+_DEFAULT_TEMPLATES: dict[str, str] = {
+    "payment_receipt": (
+        "Lambton Christian School: Dear {parent}, we have received your payment of "
+        "R{amount} for {student}. Receipt {receipt}. Thank you."
+    ),
+    "balance_reminder": (
+        "Lambton Christian School: {student}'s outstanding balance is R{balance} "
+        "as of {month}/{year}. Please settle the balance to keep the account "
+        "in good standing. Contact the office with any queries."
+    ),
+    "payment_link": (
+        "Lambton Christian School: Dear {parent}, please pay R{amount} for "
+        "{student}'s school fees: {link}"
+    ),
+    "test": "Lambton Christian School: This is a test SMS. If you received this, SMS is working.",
+}
+
+MSG_PAYMENT_RECEIVED = _DEFAULT_TEMPLATES["payment_receipt"]
+MSG_BALANCE_REMINDER = _DEFAULT_TEMPLATES["balance_reminder"]
+MSG_PAYMENT_LINK = _DEFAULT_TEMPLATES["payment_link"]
+MSG_TEST = _DEFAULT_TEMPLATES["test"]
 
 
 class SmsNotConfiguredError(Exception):
@@ -237,18 +247,17 @@ class SmsService:
             logger.info("No guardian phone for student %s — skipping receipt SMS", student.id)
             return None
         # Greet the parent by their account first name when we have one.
-        parent_name = "Parent"
-        if student.parent_id:
-            from app.models.user import User
-
-            parent_user = await self.db.get(User, student.parent_id)
-            if parent_user and parent_user.full_name:
-                parent_name = parent_user.full_name.split(" ", 1)[0]
-        content = MSG_PAYMENT_RECEIVED.format(
-            amount=f"{amount:,.2f}",
-            parent=parent_name,
-            student=student.first_name,
-            receipt=receipt_number,
+        parent_name = await self.parent_first_name(student)
+        template = await self.get_template("payment_receipt")
+        content, _missing = self.render_template(
+            "payment_receipt",
+            {
+                "amount": f"{amount:,.2f}",
+                "parent": parent_name,
+                "student": student.first_name,
+                "receipt": receipt_number,
+            },
+            fallback=template.body if template else None,
         )
         return await self.send(
             phone,
@@ -264,11 +273,16 @@ class SmsService:
         phone = await self.get_student_phone(student)
         if not phone:
             return None
-        content = MSG_BALANCE_REMINDER.format(
-            student=student.first_name,
-            balance=f"{balance:,.2f}",
-            month=f"{month:02d}",
-            year=year,
+        template = await self.get_template("balance_reminder")
+        content, _missing = self.render_template(
+            "balance_reminder",
+            {
+                "student": student.first_name,
+                "balance": f"{balance:,.2f}",
+                "month": f"{month:02d}",
+                "year": year,
+            },
+            fallback=template.body if template else None,
         )
         return await self.send(phone, content, student_id=student.id, template="balance_reminder")
 
@@ -283,18 +297,17 @@ class SmsService:
         phone = await self.get_student_phone(student)
         if not phone:
             return None
-        parent_name = "Parent"
-        if student.parent_id:
-            from app.models.user import User
-
-            parent_user = await self.db.get(User, student.parent_id)
-            if parent_user and parent_user.full_name:
-                parent_name = parent_user.full_name.split(" ", 1)[0]
-        content = MSG_PAYMENT_LINK.format(
-            parent=parent_name,
-            amount=f"{amount:,.2f}",
-            student=student.first_name,
-            link=link,
+        parent_name = await self.parent_first_name(student)
+        template = await self.get_template("payment_link")
+        content, _missing = self.render_template(
+            "payment_link",
+            {
+                "parent": parent_name,
+                "amount": f"{amount:,.2f}",
+                "student": student.first_name,
+                "link": link,
+            },
+            fallback=template.body if template else None,
         )
         return await self.send(
             phone,
@@ -306,6 +319,98 @@ class SmsService:
 
     async def send_test(self, to_phone: str, created_by: str | None = None) -> SmsMessage:
         return await self.send(to_phone, MSG_TEST, template="test", created_by=created_by)
+
+    # ── templates ────────────────────────────────────────────
+    async def get_template(self, key: str) -> SmsTemplate | None:
+        """Latest curated template for `key`, or None (use built-in fallback)."""
+        result = await self.db.execute(
+            select(SmsTemplate).where(SmsTemplate.key == key)
+        )
+        return result.scalars().first()
+
+    async def list_templates(self) -> list[SmsTemplate]:
+        result = await self.db.execute(
+            select(SmsTemplate).order_by(SmsTemplate.key)
+        )
+        return list(result.scalars().all())
+
+    async def upsert_template(
+        self,
+        key: str,
+        body: str,
+        name: str | None = None,
+        is_active: bool = True,
+        updated_by: str | None = None,
+    ) -> SmsTemplate:
+        """Create or update a curated template row. `body` is the authoritative
+        content — when an admin edits a template, the row overrides the
+        built-in constant for every future send."""
+        template = await self.get_template(key)
+        if template is None:
+            template = SmsTemplate(key=key, name=name or key, body=body, is_active=is_active)
+            self.db.add(template)
+        else:
+            template.body = body
+            if name:
+                template.name = name
+            template.is_active = is_active
+        if updated_by:
+            template.updated_by = updated_by
+        await self.db.flush()
+        return template
+
+    def render_template(
+        self, key: str, values: dict[str, str | None], fallback: str | None = None
+    ) -> tuple[str, list[str]]:
+        """Render a template body with `values`, returning (content, missing_keys).
+
+        Missing placeholders are left as literal `{token}` so the problem is
+        visible in the preview and the SMS log — never silently dropped.
+        """
+        body = fallback or _DEFAULT_TEMPLATES.get(key, fallback or key)
+        missing: list[str] = []
+        # Pydantic values may include None — coerce to "" for .format().
+        rendered = body
+        try:
+            rendered = body.format(
+                **{k: ("" if v is None else str(v)) for k, v in values.items()}
+            )
+        except KeyError as exc:
+            missing.append(str(exc))
+            # Fill the ones we have, leave the rest untouched.
+            rendered = body
+            for k, v in values.items():
+                if v is not None:
+                    rendered = rendered.replace("{" + k + "}", str(v))
+        # Any remaining {token} braces are reported as missing.
+        import re as _re
+
+        for token in _re.findall(r"\{([a-zA-Z0-9_]+)\}", rendered):
+            if token not in values:
+                missing.append(token)
+        return rendered, sorted(set(missing))
+
+    async def parent_first_name(self, student: Student) -> str:
+        """First name of the linked parent account, else the primary guardian."""
+        if student.parent_id:
+            from app.models.user import User
+
+            parent_user = await self.db.get(User, student.parent_id)
+            if parent_user and parent_user.full_name:
+                return parent_user.full_name.split(" ", 1)[0]
+        guardians = (
+            student.guardians
+            if getattr(student, "guardians", None)
+            else await self._load_guardians(student.id)
+        )
+        for guardian in sorted(
+            guardians,
+            key=lambda g: (g.guardian_type in _PRIMARY_GUARDIAN_TYPES, g.guardian_type),
+            reverse=True,
+        ):
+            if guardian.full_name:
+                return guardian.full_name.split(" ", 1)[0]
+        return "Parent"
 
     # ── log ───────────────────────────────────────────────────
     async def list_log(

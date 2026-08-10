@@ -15,6 +15,8 @@ import type {
   ReminderRunResult,
   ReminderSettings,
   SmsSettings,
+  SmsTemplate,
+  SmsTemplateRenderResult,
   StudentDocument,
   UnreadCountResponse,
 } from '@/types';
@@ -393,6 +395,13 @@ export const smsApi = {
   payLinkReminders: () => api.post<ReminderRunResult>('/sms/reminders/paylink'),
   log: (params?: { limit?: number; offset?: number; status?: string }) =>
     api.get<SmsMessage[]>(`/sms/messages`, { params }),
+  templates: () => api.get<SmsTemplate[]>('/sms/templates'),
+  updateTemplate: (key: string, data: { name?: string; body: string; is_active: boolean }) =>
+    api.put<SmsTemplate>(`/sms/templates/${key}`, data),
+  renderTemplate: (key: string, values: Record<string, string>) =>
+    api.post<SmsTemplateRenderResult>(`/sms/templates/${key}/render`, { values }),
+  sendToStudent: (data: { student_id: string; template_key?: string; content?: string }) =>
+    api.post<SmsSendResponse>('/sms/send-to-student', data),
 };
 
 // ── In-app notifications (staff) ─────────────────────────────

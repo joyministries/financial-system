@@ -71,7 +71,7 @@ export default function ChargesPage() {
           month,
           exclude_student_ids: Array.from(optOutIds),
         });
-        toast.success(`Charge applied to ${res.data.length} student${res.data.length === 1 ? '' : 's'}`);
+        toast.success(`Additional charge applied to ${res.data.length} student${res.data.length === 1 ? '' : 's'}`);
       } else {
         if (!selectedStudent) return toast.error('Select a student');
         await chargesApi.create({
@@ -82,7 +82,7 @@ export default function ChargesPage() {
           academic_year: year,
           month,
         });
-        toast.success('Charge added');
+        toast.success('Additional charge added');
       }
       closeForm();
       if (selectedStudent) chargesApi.list(selectedStudent, year).then((r) => setCharges(r.data));
@@ -105,9 +105,9 @@ export default function ChargesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this charge?')) return;
+    if (!confirm('Delete this additional charge?')) return;
     await chargesApi.delete(id);
-    toast.success('Charge deleted');
+    toast.success('Additional charge deleted');
     if (selectedStudent) chargesApi.list(selectedStudent, year).then((r) => setCharges(r.data));
   };
 
@@ -116,7 +116,7 @@ export default function ChargesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Additional Charges</h1>
         <button onClick={() => setShowForm(true)} className="btn btn-primary">
-          <Plus className="h-4 w-4" /> Add Charge
+          <Plus className="h-4 w-4" /> Add Additional Charge
         </button>
       </div>
 
@@ -128,7 +128,7 @@ export default function ChargesPage() {
         <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value))} className="w-32 input" />
       </div>
 
-      <Modal open={showForm} onClose={closeForm} title="New Charge">
+      <Modal open={showForm} onClose={closeForm} title="New Additional Charge">
         <form onSubmit={handleCreate} className="space-y-4">
           {/* Scope */}
           <div>
@@ -256,7 +256,7 @@ export default function ChargesPage() {
                 ))}
               </tbody>
             </table>
-            {charges.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No charges.' : 'Select a student.'}</p>}
+            {charges.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No additional charges.' : 'Select a student.'}</p>}
           </>
         )}
       </div>

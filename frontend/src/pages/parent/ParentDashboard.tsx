@@ -33,7 +33,7 @@ const monthStatusStyle: Record<string, string> = {
 };
 
 const monthStatusLabel: Record<string, string> = {
-  paid: 'Paid', partial: 'Partial', pending: 'Unpaid', none: 'No charge',
+  paid: 'Paid', partial: 'Partial', pending: 'Unpaid', none: 'No additional charge',
 };
 
 interface BreakdownData {
@@ -628,7 +628,7 @@ export default function ParentDashboard() {
                       <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-green-500" /> Paid</span>
                       <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-yellow-400" /> Partial</span>
                       <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-red-400" /> Unpaid</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-200" /> No charge</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-200" /> No additional charge</span>
                     </div>
                   </div>
                 )}
@@ -791,7 +791,7 @@ export default function ParentDashboard() {
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Charge</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Additional Charge</th>
                             <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
                             <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Amount</th>
                             <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Status</th>

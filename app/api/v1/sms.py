@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +16,11 @@ from app.schemas.sms import (
     SmsReminderResponse,
     SmsSendRequest,
     SmsSendResponse,
+    SmsStudentSendRequest,
+    SmsTemplateOut,
+    SmsTemplateRenderRequest,
+    SmsTemplateRenderResponse,
+    SmsTemplateUpdate,
     SmsTestRequest,
 )
 from app.services.reminder import send_payment_link_reminders
@@ -176,3 +182,128 @@ async def list_sms_log(
 ) -> list[SmsMessageOut]:
     """SMS send log, newest first."""
     return await SmsService(db).list_log(limit=limit, offset=offset, status=status)
+
+
+# ── curated templates ────────────────────────────────────────
+@router.get("/templates", response_model=list[SmsTemplateOut])
+async def list_sms_templates(
+    _user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> list[SmsTemplateOut]:
+    """List editable message templates (admin-curated SMS content)."""
+    return await SmsService(db).list_templates()
+
+
+@router.put("/templates/{key}", response_model=SmsTemplateOut)
+async def update_sms_template(
+    key: str,
+    payload: SmsTemplateUpdate,
+    user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsTemplateOut:
+    """Create or update a message template. The saved body is used for every
+    future send with that template key (overriding the built-in fallback)."""
+    service = SmsService(db)
+    template = await service.upsert_template(
+        key=key,
+        body=payload.body,
+        name=payload.name,
+        is_active=payload.is_active,
+        updated_by=user.id,
+    )
+    await db.commit()
+    return template
+
+
+@router.post("/templates/{key}/render", response_model=SmsTemplateRenderResponse)
+async def render_sms_template(
+    key: str,
+    payload: SmsTemplateRenderRequest,
+    _user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsTemplateRenderResponse:
+    """Preview a template with sample/real values — never sends."""
+    service = SmsService(db)
+    template = await service.get_template(key)
+    content, missing = service.render_template(
+        key, payload.values, fallback=template.body if template else None
+    )
+    return SmsTemplateRenderResponse(key=key, content=content, missing=missing)
+
+
+# ── single parent ────────────────────────────────────────────
+@router.post("/send-to-student", response_model=SmsSendResponse)
+async def send_sms_to_student(
+    payload: SmsStudentSendRequest,
+    user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsSendResponse:
+    """Send one SMS to a single student's billing parent.
+
+    Resolves the parent's mobile from the student's guardians, renders the
+    chosen curated template (or uses `content` verbatim), and logs the send.
+    `content` wins over `template_key` when both are supplied.
+    """
+    student = await db.get(Student, payload.student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    service = SmsService(db)
+    if payload.content:
+        content = payload.content
+        template_key = "manual"
+    elif payload.template_key:
+        template_key = payload.template_key
+        template = await service.get_template(template_key)
+        values: dict[str, str | None] = {
+            "parent": await service.parent_first_name(student),
+            "student": student.first_name,
+        }
+        # Fill in balance context if the template uses it.
+        if "{balance}" in (template.body if template else "") or "{month}" in (
+            template.body if template else ""
+        ):
+            from app.services.reminder import outstanding_total
+
+            values["balance"] = f"{await outstanding_total(db, student.id):,.2f}"
+            values["month"] = f"{datetime.now(UTC).month:02d}"
+            values["year"] = str(datetime.now(UTC).year)
+        if "{amount}" in (template.body if template else ""):
+            from app.services.reminder import outstanding_total
+
+            values["amount"] = f"{await outstanding_total(db, student.id):,.2f}"
+        content, missing = service.render_template(
+            template_key, values, fallback=template.body if template else None
+        )
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Template {template_key!r} has unfilled placeholders: {', '.join(missing)}",
+            )
+    else:
+        raise HTTPException(status_code=422, detail="Provide template_key or content")
+
+    phone = await service.get_student_phone(student)
+    if not phone:
+        raise HTTPException(status_code=422, detail="Student has no guardian mobile number")
+
+    try:
+        message = await service.send(
+            phone,
+            content,
+            student_id=student.id,
+            template=template_key,
+            created_by=user.id,
+        )
+    except (SmsNotConfiguredError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        await db.commit()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await db.commit()
+    return SmsSendResponse(
+        id=message.id,
+        status=message.status,
+        to_phone=message.to_phone,
+        detail="SMS sent" if message.status == "sent" else "SMS provider rejected the message",
+    )

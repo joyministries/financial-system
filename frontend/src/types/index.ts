@@ -381,6 +381,20 @@ export interface ReminderRunResult {
   errors: string[];
 }
 
+export interface SmsTemplate {
+  key: string;
+  name: string;
+  body: string;
+  is_active: boolean;
+  updated_at: string;
+}
+
+export interface SmsTemplateRenderResult {
+  key: string;
+  content: string;
+  missing: string[];
+}
+
 // ── In-app notifications (staff) ─────────────────────────────
 export type NotificationCategory =
   | 'payment_received'

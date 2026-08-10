@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { studentsApi, gradesApi } from '@/api/client';
-import type { AdminStudentRegisterResponse, Student, Grade } from '@/types';
+import { studentsApi, gradesApi, smsApi } from '@/api/client';
+import type { AdminStudentRegisterResponse, Student, Grade, SmsTemplate } from '@/types';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, UserX, UserPlus, Copy, Loader2 } from 'lucide-react';
+import { Plus, Pencil, UserX, UserPlus, Copy, Loader2, MessageSquare, Send } from 'lucide-react';
 import Modal from '@/components/Modal';
 
 export default function StudentsPage() {
@@ -198,6 +198,75 @@ export default function StudentsPage() {
       toast.success('Student deactivated');
       load();
     } catch { toast.error('Failed to deactivate'); }
+  };
+
+  // ── SMS to a single parent ─────────────────────────────────
+  const [smsTarget, setSmsTarget] = useState<Student | null>(null);
+  const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
+  const [smsTemplateKey, setSmsTemplateKey] = useState('');
+  const [smsContent, setSmsContent] = useState('');
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [smsSending, setSmsSending] = useState(false);
+
+  const openSmsModal = async (s: Student) => {
+    setSmsTarget(s);
+    setSmsTemplateKey('');
+    setSmsContent('');
+    setSmsLoading(true);
+    try {
+      const res = await smsApi.templates();
+      setSmsTemplates(res.data.filter((t) => t.is_active));
+    } catch {
+      toast.error('Failed to load message templates');
+    } finally {
+      setSmsLoading(false);
+    }
+  };
+
+  const selectSmsTemplate = async (key: string) => {
+    setSmsTemplateKey(key);
+    if (!smsTarget || !key) {
+      setSmsContent('');
+      return;
+    }
+    setSmsLoading(true);
+    try {
+      const values: Record<string, string> = {
+        parent: smsTarget.guardians?.[0]?.full_name?.split(' ')[0] || 'Parent',
+        student: smsTarget.first_name,
+        amount: '{amount}',
+        balance: '{balance}',
+        month: String(new Date().getMonth() + 1),
+        year: String(new Date().getFullYear()),
+        receipt: 'RCP-XXXX',
+        link: 'https://…/pay/XXXX',
+      };
+      const res = await smsApi.renderTemplate(key, values);
+      setSmsContent(res.data.content);
+    } catch {
+      toast.error('Could not preview template');
+    } finally {
+      setSmsLoading(false);
+    }
+  };
+
+  const sendSmsToParent = async () => {
+    if (!smsTarget) return;
+    if (!smsContent.trim()) return toast.error('Message content is empty');
+    setSmsSending(true);
+    try {
+      await smsApi.sendToStudent({
+        student_id: smsTarget.id,
+        template_key: smsTemplateKey || undefined,
+        content: smsContent.trim(),
+      });
+      toast.success(`SMS sent to ${smsTarget.first_name}'s parent`);
+      setSmsTarget(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'SMS send failed');
+    } finally {
+      setSmsSending(false);
+    }
   };
 
   return (
@@ -442,6 +511,7 @@ export default function StudentsPage() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-1">
+                    <button onClick={() => openSmsModal(s)} className="rounded p-1 text-slate-400 hover:text-green-600" title="Send SMS to parent"><MessageSquare className="h-4 w-4" /></button>
                     <button onClick={() => handleEdit(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="Edit"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => handleDeactivate(s.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Deactivate"><UserX className="h-4 w-4" /></button>
                   </div>
@@ -451,6 +521,78 @@ export default function StudentsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── SMS to parent modal ─────────────────────────────── */}
+      <Modal
+        open={!!smsTarget}
+        onClose={() => setSmsTarget(null)}
+        title={`Send SMS — ${smsTarget ? `${smsTarget.first_name} ${smsTarget.last_name}` : ''}`}
+        subtitle={
+          smsTarget?.guardians?.[0]?.phone
+            ? `Parent: ${smsTarget.guardians[0].full_name} · ${smsTarget.guardians[0].phone}`
+            : 'This student has no guardian mobile number on file.'
+        }
+      >
+        {smsTarget && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Message template</label>
+              <select
+                value={smsTemplateKey}
+                onChange={(e) => selectSmsTemplate(e.target.value)}
+                className="input mt-1"
+                disabled={smsLoading}
+              >
+                <option value="">Custom message (no template)</option>
+                {smsTemplates.map((t) => (
+                  <option key={t.key} value={t.key}>{t.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Pick a template to pre-fill the message, then edit the text below before sending.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Message</label>
+              {smsLoading ? (
+                <div className="mt-2 flex h-24 items-center justify-center rounded-lg border border-slate-200">
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                </div>
+              ) : (
+                <textarea
+                  value={smsContent}
+                  onChange={(e) => setSmsContent(e.target.value)}
+                  rows={4}
+                  maxLength={1600}
+                  placeholder="Type your message to this parent…"
+                  className="input mt-1"
+                />
+              )}
+              <p className="mt-1 text-right text-xs text-slate-400">{smsContent.length}/1600</p>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={sendSmsToParent}
+                disabled={smsSending || smsLoading || !smsContent.trim()}
+                className="btn btn-primary"
+              >
+                <Send className="h-4 w-4" />
+                {smsSending ? 'Sending…' : 'Send SMS'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSmsTarget(null)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
