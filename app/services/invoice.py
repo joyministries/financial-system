@@ -146,12 +146,18 @@ class InvoiceService:
         created_by: str,
         grade_id: str | None = None,
         notify_parents: bool = True,
+        commit_every: int = 100,
     ) -> dict:
         """Generate invoices for every approved student (optionally one grade).
 
         Existing invoices are skipped (never duplicated). When `notify_parents`
         is set, each newly created invoice triggers an SMS to the student's
-        billing parent. Returns {"generated", "skipped", "failed", "errors"}.
+        billing parent.
+
+        Progress is committed in batches of `commit_every` so a long whole-school
+        run survives serverless timeouts: already-committed students are skipped
+        if the run is interrupted and re-invoked. Returns
+        {"generated", "skipped", "failed", "errors"}.
         """
         from app.services.sms import SmsService
 
@@ -188,7 +194,10 @@ class InvoiceService:
                 failed += 1
                 errors.append(f"{student.id}: {exc}")
 
-        await self.db.flush()
+            if commit_every and generated % commit_every == 0:
+                await self.db.commit()
+
+        await self.db.commit()
         return {
             "academic_year": academic_year,
             "month": month,

@@ -124,7 +124,11 @@ export default function InvoicesPage() {
     } catch (e: unknown) {
       const detail =
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Bulk generation failed');
+      toast.error(
+        detail ||
+          'Bulk generation may have timed out. Invoices already created are never duplicated — run again to continue where it stopped.',
+      );
+      await loadInvoices();
     } finally {
       setBulking(false);
     }
