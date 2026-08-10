@@ -316,6 +316,7 @@ export const invoicesApi = {
     skipped: number;
     failed: number;
     errors: string[];
+    complete: boolean;
   }>('/invoices/generate-all', null, {
     params: {
       academic_year: data.academic_year,

@@ -1,3 +1,4 @@
+import time
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -147,6 +148,7 @@ class InvoiceService:
         grade_id: str | None = None,
         notify_parents: bool = True,
         commit_every: int = 100,
+        time_budget: float = 45.0,
     ) -> dict:
         """Generate invoices for every approved student (optionally one grade).
 
@@ -156,8 +158,13 @@ class InvoiceService:
 
         Progress is committed in batches of `commit_every` so a long whole-school
         run survives serverless timeouts: already-committed students are skipped
-        if the run is interrupted and re-invoked. Returns
-        {"generated", "skipped", "failed", "errors"}.
+        if the run is interrupted and re-invoked.
+
+        The loop also self-limits to `time_budget` seconds of wall-clock time.
+        When the budget is exhausted the current batch is committed and the
+        result reports ``complete=False`` so the caller can immediately re-invoke
+        to resume. Returns
+        {"generated", "skipped", "failed", "errors", "complete"}.
         """
         from app.services.sms import SmsService
 
@@ -175,9 +182,12 @@ class InvoiceService:
         errors: list[str] = []
         sms_service = SmsService(self.db)
         failed_ids: set[str] = set()
+        start = time.monotonic()
 
         index = 0
         while index < len(students):
+            if index > 0 and time.monotonic() - start > time_budget:
+                break
             student = students[index]
             try:
                 if await self.get_for_period(student.id, academic_year, month):
@@ -215,6 +225,7 @@ class InvoiceService:
                     )
                 ).scalars().all()
                 index = 0
+                start = time.monotonic()
 
             if commit_every and generated % commit_every == 0:
                 await self.db.commit()
@@ -228,6 +239,7 @@ class InvoiceService:
             "skipped": skipped,
             "failed": failed,
             "errors": errors[:20],
+            "complete": index >= len(students),
         }
 
 

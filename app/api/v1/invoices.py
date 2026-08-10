@@ -44,6 +44,11 @@ async def generate_all_invoices(
 
     Existing invoices are skipped. Each newly created invoice triggers an SMS
     to the billing parent unless `notify_parents=false`.
+
+    The run self-limits to fit the serverless timeout and commits progress in
+    batches. When the response has ``complete=false`` the caller should re-invoke
+    the same endpoint (same params) to resume; already-generated invoices are
+    skipped, so re-invocation never duplicates work.
     """
     service = InvoiceService(db)
     result = await service.generate_all(

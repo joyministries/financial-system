@@ -107,16 +107,34 @@ export default function InvoicesPage() {
   const handleBulkGenerate = async () => {
     if (bulkScope === 'grade' && !bulkGradeId) return toast.error('Select a grade');
     setBulking(true);
+    let generated = 0;
+    let skipped = 0;
+    let failed = 0;
+    let errors: string[] = [];
     try {
-      const res = await invoicesApi.generateAll({
-        academic_year: bulkYear,
-        month: bulkMonth,
-        grade_id: bulkScope === 'grade' ? bulkGradeId : undefined,
-        notify_parents: bulkNotify,
-      });
+      // The endpoint self-limits to fit the serverless timeout and reports
+      // complete=false when it still has students left. Re-invoking with the
+      // same params resumes because already-generated invoices are skipped, so
+      // loop until the whole school / grade is done.
+      for (let attempt = 1; attempt <= 30; attempt++) {
+        const res = await invoicesApi.generateAll({
+          academic_year: bulkYear,
+          month: bulkMonth,
+          grade_id: bulkScope === 'grade' ? bulkGradeId : undefined,
+          notify_parents: bulkNotify,
+        });
+        generated += res.data.generated;
+        skipped += res.data.skipped;
+        failed += res.data.failed;
+        errors = errors.concat(res.data.errors);
+        if (res.data.complete) break;
+        await new Promise((r) => setTimeout(r, 800));
+      }
       toast.success(
-        `${res.data.generated} invoice${res.data.generated === 1 ? '' : 's'} generated, ${res.data.skipped} already existed`,
+        `${generated} invoice${generated === 1 ? '' : 's'} generated, ${skipped} already existed` +
+          (failed ? `, ${failed} failed` : ''),
       );
+      if (errors.length) console.warn('Bulk generation errors:', errors);
       setFilterYear(bulkYear);
       setFilterMonth(bulkMonth);
       setFilterStatus('');
