@@ -17,12 +17,12 @@ from app.services.setting import SettingService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-admin_only = require_role("admin")
+super_admin_only = require_role("super_admin")
 
 
 @router.get("/notifications", response_model=NotificationSettingsOut)
 async def get_notification_settings(
-    _user=Depends(admin_only),
+    _user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> NotificationSettingsOut:
     """Current email/SMS channel configuration (secrets masked). Admin only."""
@@ -32,7 +32,7 @@ async def get_notification_settings(
 @router.put("/notifications/email", response_model=EmailSettingsOut)
 async def update_email_settings(
     payload: EmailSettingsIn,
-    user=Depends(admin_only),
+    user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> EmailSettingsOut:
     """Save SMTP configuration. Blank/`********` password keeps the stored one."""
@@ -42,7 +42,7 @@ async def update_email_settings(
 @router.put("/notifications/sms", response_model=SmsSettingsOut)
 async def update_sms_settings(
     payload: SmsSettingsIn,
-    user=Depends(admin_only),
+    user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> SmsSettingsOut:
     """Save SMS provider configuration. Blank/`********` secrets keep stored ones."""
@@ -66,7 +66,7 @@ def _reminder_out(config: dict) -> ReminderSettingsOut:
 
 @router.get("/reminders", response_model=ReminderSettingsOut)
 async def get_reminder_settings(
-    _user=Depends(admin_only),
+    _user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> ReminderSettingsOut:
     """Current automated payment-link reminder schedule (admin only)."""
@@ -77,7 +77,7 @@ async def get_reminder_settings(
 @router.put("/reminders", response_model=ReminderSettingsOut)
 async def update_reminder_settings(
     payload: ReminderSettingsIn,
-    user=Depends(admin_only),
+    user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> ReminderSettingsOut:
     """Save the reminder schedule. Admin only."""
@@ -95,7 +95,7 @@ class BaseUrlIn(BaseModel):
 
 @router.get("/base-urls")
 async def get_base_urls(
-    _user=Depends(admin_only),
+    _user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     svc = SettingService(db)
@@ -108,7 +108,7 @@ async def get_base_urls(
 @router.put("/base-urls/frontend")
 async def set_frontend_base_url(
     payload: BaseUrlIn,
-    user=Depends(admin_only),
+    user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     svc = SettingService(db)
@@ -120,7 +120,7 @@ async def set_frontend_base_url(
 @router.put("/base-urls/payfast")
 async def set_payfast_base_url(
     payload: BaseUrlIn,
-    user=Depends(admin_only),
+    user=Depends(super_admin_only),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     svc = SettingService(db)

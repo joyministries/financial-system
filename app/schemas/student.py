@@ -140,6 +140,7 @@ class GuardianUpdate(BaseModel):
     last_name: SafeNameOptional = None
     full_name: SafeFullNameOptional = None
     guardian_id: str | None = Field(default=None, max_length=100)
+    guardian_type: str | None = Field(default=None, pattern="^(father|mother|primary|secondary)$")
     phone: str | None = Field(default=None, max_length=50)
     email: EmailStr | None = None
     physical_address: str | None = Field(default=None, max_length=255)
@@ -152,6 +153,8 @@ class StudentUpdate(BaseModel):
     grade_id: str | None = None
     is_active: bool | None = None
     payment_preference: str | None = Field(default=None, pattern="^(monthly|cumulative)$")
+    enrollment_date: datetime | None = None
+    guardians: list[GuardianUpdate] = []
 
 
 class PaymentPreferenceUpdate(BaseModel):

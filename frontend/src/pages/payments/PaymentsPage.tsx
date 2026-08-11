@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
-import { paymentsApi, studentsApi } from '@/api/client';
+import { paymentsApi } from '@/api/client';
 import { getStudentNames } from '@/lib/studentNames';
-import type { Payment, Student } from '@/types';
+import type { Payment } from '@/types';
 import toast from 'react-hot-toast';
-import { Plus, Check, XCircle, RotateCcw, Loader2 } from 'lucide-react';
+import { Plus, Check, XCircle, RotateCcw, Loader2, Search } from 'lucide-react';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
+import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const METHODS = ['Bank Transfer', 'EFT', 'Cash', 'Card', 'Mobile Payment'];
 const PAGE_SIZE = 20;
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending'>('all');
   const [monthFilter, setMonthFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showReverse, setShowReverse] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
@@ -35,11 +36,13 @@ export default function PaymentsPage() {
     setLoading(true);
     const params: Record<string, string | number> = {
       ...(filter === 'pending' ? { status: 'pending' } : {}),
+      ...(search.trim() ? { search: search.trim() } : {}),
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     };
     const countParams: Record<string, string | number> = {
       ...(filter === 'pending' ? { status: 'pending' } : {}),
+      ...(search.trim() ? { search: search.trim() } : {}),
     };
     if (monthFilter) {
       const [year, month] = monthFilter.split('-').map(Number);
@@ -57,12 +60,15 @@ export default function PaymentsPage() {
       .catch(() => {});
   };
 
-  useEffect(() => { studentsApi.list().then((r) => setStudents(r.data)); }, []);
   useEffect(() => { getStudentNames().then(setNameMap); }, []);
-  useEffect(() => { load(); }, [filter, monthFilter, page]);
+  useEffect(() => { load(); }, [filter, monthFilter, search, page]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!studentId) {
+      toast.error('Please select a student');
+      return;
+    }
     setSubmitting(true);
     try {
       await paymentsApi.create({
@@ -120,8 +126,7 @@ export default function PaymentsPage() {
   const getStudentName = (id: string) => {
     const entry = nameMap.get(id);
     if (entry) return entry.name;
-    const s = students.find((st) => st.id === id);
-    return s ? `${s.first_name} ${s.last_name}` : id;
+    return id;
   };
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -130,7 +135,17 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search student name or number…"
+              className="input pl-9"
+            />
+          </div>
           <select value={filter} onChange={(e) => { setFilter(e.target.value as 'all' | 'pending'); setPage(1); }} className="input">
             <option value="all">All Payments</option>
             <option value="pending">Pending Verification</option>
@@ -152,10 +167,9 @@ export default function PaymentsPage() {
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700">Student</label>
-            <select value={studentId} onChange={(e) => setStudentId(e.target.value)} required className="input mt-1">
-              <option value="">Select Student</option>
-              {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
-            </select>
+            <div className="mt-1">
+              <StudentSearchSelect value={studentId} onChange={setStudentId} placeholder="Search by name or number…" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

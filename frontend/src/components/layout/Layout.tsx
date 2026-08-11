@@ -12,11 +12,12 @@ import {
   Menu,
   X,
   CreditCard,
-  DollarSign,
+  Coins,
   Settings,
   UserPlus,
   FilePlus2,
   CalendarDays,
+  UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -29,13 +30,13 @@ const navigation = [
   { name: 'Grades', href: '/grades', icon: GraduationCap, roles: ['admin', 'finance'] },
   { name: 'Fees', href: '/fees', icon: CreditCard, roles: ['admin', 'finance'] },
   { name: 'Students', href: '/students', icon: Users, roles: ['admin', 'finance'] },
-  { name: 'Additional Charges', href: '/charges', icon: DollarSign, roles: ['admin', 'finance'] },
+  { name: 'Additional Charges', href: '/charges', icon: Coins, roles: ['admin', 'finance'] },
   { name: 'Payments', href: '/payments', icon: Wallet, roles: ['admin', 'finance'] },
   { name: 'Receipts', href: '/receipts', icon: Receipt, roles: ['admin', 'finance', 'parent'] },
   { name: 'Statements', href: '/statements', icon: FileText, roles: ['admin', 'finance', 'parent'] },
   { name: 'Invoices', href: '/invoices', icon: FilePlus2, roles: ['admin', 'finance', 'parent'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'finance'] },
-  { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
+  { name: 'Settings', href: '/settings', icon: Settings, roles: ['super_admin'] },
 ];
 
 const parentNavigation = [
@@ -43,7 +44,10 @@ const parentNavigation = [
   { name: 'Invoices', href: '/invoices', icon: FilePlus2 },
   { name: 'Receipts', href: '/receipts', icon: Receipt },
   { name: 'Statements', href: '/statements', icon: FileText },
+  { name: 'Profile', href: '/profile', icon: UserRound },
 ];
+
+const profileNavItem = { name: 'Profile', href: '/profile', icon: UserRound };
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -53,11 +57,11 @@ export default function Layout() {
   const isParent = user?.role === 'parent';
   const items = isParent
     ? parentNavigation
-    : navigation.filter(
+    : [...navigation.filter(
         (item) =>
           item.roles.includes(user?.role || '') ||
           (user?.role === 'super_admin' && item.roles.includes('admin'))
-      );
+      ), profileNavItem];
 
   const activeName =
     items.find(

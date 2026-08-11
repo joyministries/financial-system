@@ -26,6 +26,16 @@ export default function StudentsPage() {
   const [lastName, setLastName] = useState('');
   const [gradeId, setGradeId] = useState('');
   const [enrollDate, setEnrollDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentPref, setPaymentPref] = useState<'monthly' | 'cumulative'>('monthly');
+  const [editGuardians, setEditGuardians] = useState<{
+    id: string;
+    guardian_type: string;
+    full_name: string;
+    phone: string;
+    email: string;
+    physical_address: string;
+    po_box: string;
+  }[]>([]);
 
   // Two parents: primary compulsory, secondary optional
   const [p1First, setP1First] = useState('');
@@ -99,7 +109,22 @@ export default function StudentsPage() {
     setSubmitting(true);
     try {
       if (editingId) {
-        await studentsApi.update(editingId, { first_name: firstName, last_name: lastName, grade_id: gradeId });
+        await studentsApi.update(editingId, {
+          first_name: firstName,
+          last_name: lastName,
+          grade_id: gradeId,
+          enrollment_date: new Date(enrollDate).toISOString(),
+          payment_preference: paymentPref,
+          guardians: editGuardians.map((g) => ({
+            guardian_id: g.id,
+            guardian_type: g.guardian_type as 'father' | 'mother' | 'primary' | 'secondary',
+            full_name: g.full_name || undefined,
+            phone: g.phone || undefined,
+            email: g.email || undefined,
+            physical_address: g.physical_address || undefined,
+            po_box: g.po_box || undefined,
+          })),
+        });
         toast.success('Student updated');
       } else {
         await studentsApi.create({
@@ -145,6 +170,7 @@ export default function StudentsPage() {
     setEditingId(null);
     setStudentNum(''); setFirstName(''); setLastName('');
     setGradeId(''); setEnrollDate(new Date().toISOString().split('T')[0]);
+    setPaymentPref('monthly'); setEditGuardians([]);
     setP1First(''); setP1Last(''); setP1Id(''); setP1Phone(''); setP1Email('');
     setP1Address(''); setP1PoBox('');
     setP2First(''); setP2Last(''); setP2Id(''); setP2Phone(''); setP2Email('');
@@ -215,6 +241,17 @@ export default function StudentsPage() {
     setFirstName(s.first_name);
     setLastName(s.last_name);
     setGradeId(s.grade_id);
+    setEnrollDate(s.enrollment_date ? s.enrollment_date.slice(0, 10) : new Date().toISOString().split('T')[0]);
+    setPaymentPref(s.payment_preference === 'cumulative' ? 'cumulative' : 'monthly');
+    setEditGuardians((s.guardians || []).map((g) => ({
+      id: g.id,
+      guardian_type: g.guardian_type,
+      full_name: g.full_name || '',
+      phone: g.phone || '',
+      email: g.email || '',
+      physical_address: g.physical_address || '',
+      po_box: g.po_box || '',
+    })));
     setShowForm(true);
   };
 
@@ -359,6 +396,79 @@ export default function StudentsPage() {
 
       <Modal open={showForm} onClose={closeForm} title={editingId ? 'Edit Student' : 'New Student'}>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {editingId && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Student Number</label>
+                <input value={studentNum || (students.find((s) => s.id === editingId)?.student_number || '')} disabled className="input mt-1 font-mono" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Enrollment Date</label>
+                  <input type="date" value={enrollDate} onChange={(e) => setEnrollDate(e.target.value)} className="input mt-1" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Payment Preference</label>
+                  <select value={paymentPref} onChange={(e) => setPaymentPref(e.target.value as 'monthly' | 'cumulative')} className="input mt-1">
+                    <option value="monthly">Monthly installments</option>
+                    <option value="cumulative">Cumulative</option>
+                  </select>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-3 text-sm font-semibold text-slate-700">Parents / Guardians</p>
+                <div className="space-y-4">
+                  {editGuardians.length === 0 && (
+                    <p className="text-sm text-slate-500">No guardians on file.</p>
+                  )}
+                  {editGuardians.map((g, idx) => (
+                    <div key={g.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {g.guardian_type === 'father' ? 'Father' : g.guardian_type === 'mother' ? 'Mother' : g.guardian_type === 'primary' ? 'Primary Guardian' : 'Secondary Guardian'}
+                      </p>
+                      <div className="space-y-2">
+                        <input
+                          value={g.full_name}
+                          onChange={(e) => setEditGuardians((prev) => prev.map((x, i) => (i === idx ? { ...x, full_name: e.target.value } : x)))}
+                          placeholder="Full name"
+                          className="input"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            value={g.phone}
+                            onChange={(e) => setEditGuardians((prev) => prev.map((x, i) => (i === idx ? { ...x, phone: e.target.value } : x)))}
+                            placeholder="Phone"
+                            className="input"
+                          />
+                          <input
+                            value={g.email}
+                            onChange={(e) => setEditGuardians((prev) => prev.map((x, i) => (i === idx ? { ...x, email: e.target.value } : x)))}
+                            type="email"
+                            placeholder="Email"
+                            className="input"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            value={g.physical_address}
+                            onChange={(e) => setEditGuardians((prev) => prev.map((x, i) => (i === idx ? { ...x, physical_address: e.target.value } : x)))}
+                            placeholder="Physical address"
+                            className="input"
+                          />
+                          <input
+                            value={g.po_box}
+                            onChange={(e) => setEditGuardians((prev) => prev.map((x, i) => (i === idx ? { ...x, po_box: e.target.value } : x)))}
+                            placeholder="PO Box"
+                            className="input"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
           {!editingId && (
             <>
               <div>

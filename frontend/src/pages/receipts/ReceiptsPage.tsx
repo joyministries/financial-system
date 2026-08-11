@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download } from 'lucide-react';
 import Pagination from '@/components/Pagination';
+import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const PAGE_SIZE = 50;
 
@@ -33,10 +34,6 @@ export default function ReceiptsPage() {
       getStudentNames().then(setNameMap),
     ]).finally(() => setLoading(false));
   }, []);
-
-  const filteredStudents = selectedGrade
-    ? students.filter((s) => s.grade_id === selectedGrade)
-    : students;
 
   const handleFilter = (studentId: string, gradeId: string) => {
     setSelectedStudent(studentId);
@@ -81,25 +78,19 @@ export default function ReceiptsPage() {
               <option value="">All Grades</option>
               {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
-            <select
+            <StudentSearchSelect
               value={selectedStudent}
-              onChange={(e) => handleFilter(e.target.value, selectedGrade)}
-              className="input min-w-56"
-            >
-              <option value="">All Students</option>
-              {filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
-            </select>
+              onChange={(id) => handleFilter(id, selectedGrade)}
+              placeholder="Search student…"
+            />
           </div>
         )}
         {isParent && (
-          <select
+          <StudentSearchSelect
             value={selectedStudent}
-            onChange={(e) => handleFilter(e.target.value, '')}
-            className="input"
-          >
-            <option value="">All My Children</option>
-            {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
-          </select>
+            onChange={(id) => handleFilter(id, '')}
+            placeholder="Search my children…"
+          />
         )}
       </div>
 

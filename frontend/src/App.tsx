@@ -18,6 +18,7 @@ import InvoicesPage from '@/pages/invoices/InvoicesPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import ChargesPage from '@/pages/charges/ChargesPage';
 import ParentDashboard from '@/pages/parent/ParentDashboard';
+import ProfilePage from '@/pages/profile/ProfilePage';
 import SettingsPage from '@/pages/settings/SettingsPage';
 import RegistrationsPage from '@/pages/registrations/RegistrationsPage';
 import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
@@ -45,6 +46,7 @@ function AppRoutes() {
       >
         {/* Parent-only routes */}
         <Route path="/parent" element={<ParentDashboard />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/receipts" element={<ReceiptsPage />} />
         <Route path="/statements" element={<StatementsPage />} />
 
@@ -81,7 +83,7 @@ function AppRoutes() {
           isFinanceUser ? <ReportsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
         } />
         <Route path="/settings" element={
-          isFinanceUser ? <SettingsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
+          user?.role === 'super_admin' ? <SettingsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
         } />
       </Route>
     </Routes>

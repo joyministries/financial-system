@@ -39,6 +39,7 @@ async def record_payment(
 async def list_payments(
     student_id: str | None = None,
     status: str | None = None,
+    search: str | None = None,
     month: int | None = Query(default=None, ge=1, le=12),
     year: int | None = Query(default=None, ge=2000, le=2100),
     limit: int = Query(default=50, ge=1, le=200),
@@ -58,21 +59,26 @@ async def list_payments(
                 student_id, limit=limit, offset=offset, month=month, year=year
             )
         return await service.list_for_students(
-            child_ids, limit=limit, offset=offset, month=month, year=year
+            child_ids, limit=limit, offset=offset, month=month, year=year, search=search
         )
     if student_id:
         return await service.list_for_student(
             student_id, limit=limit, offset=offset, month=month, year=year
         )
     if status == "pending":
-        return await service.list_pending(limit=limit, offset=offset, month=month, year=year)
-    return await service.list_all(limit=limit, offset=offset, month=month, year=year)
+        return await service.list_pending(
+            limit=limit, offset=offset, month=month, year=year, search=search
+        )
+    return await service.list_all(
+        limit=limit, offset=offset, month=month, year=year, search=search
+    )
 
 
 @router.get("/count", response_model=CountResponse)
 async def count_payments(
     student_id: str | None = None,
     status: str | None = None,
+    search: str | None = None,
     month: int | None = Query(default=None, ge=1, le=12),
     year: int | None = Query(default=None, ge=2000, le=2100),
     db: AsyncSession = Depends(get_db),
@@ -91,15 +97,19 @@ async def count_payments(
                 total=await service.count_for_student(student_id, month=month, year=year)
             )
         return CountResponse(
-            total=await service.count_for_students(child_ids, month=month, year=year)
+            total=await service.count_for_students(
+                child_ids, month=month, year=year, search=search
+            )
         )
     if student_id:
         return CountResponse(
             total=await service.count_for_student(student_id, month=month, year=year)
         )
     if status == "pending":
-        return CountResponse(total=await service.count_pending(month=month, year=year))
-    return CountResponse(total=await service.count_all(month=month, year=year))
+        return CountResponse(
+            total=await service.count_pending(month=month, year=year, search=search)
+        )
+    return CountResponse(total=await service.count_all(month=month, year=year, search=search))
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)

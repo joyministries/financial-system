@@ -26,7 +26,9 @@ class Settings(BaseSettings):
 
     JWT_SECRET_KEY: str = "CHANGE-ME-IN-PRODUCTION"
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # Fallback default; auth endpoints explicitly issue 30-minute tokens for
+    # normal users and 2-hour tokens for admins (see app/api/v1/auth.py).
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Bearer token that authorizes the /api/v1/system/* cron + migrate endpoints.
     # Empty = only Vercel Cron's `x-vercel-cron` header may trigger them.

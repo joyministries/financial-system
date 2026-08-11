@@ -94,8 +94,14 @@ async def download_receipt(
 async def generate_statement(
     data: StatementGenerateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role("admin", "finance")),
+    user: User = Depends(get_current_user),
 ):
+    """Generate a statement for one student.
+
+    Admins/finance can generate for any student; a parent can only generate
+    for their own children (verified against the parent's account)."""
+    if user.role not in ("admin", "finance", "super_admin"):
+        await verify_student_access(data.student_id, user, db)
     service = StatementService(db)
     return await service.generate(data.student_id, data.academic_year, data.month)
 

@@ -92,6 +92,8 @@ export const authApi = {
   registerParent: (data: ParentRegisterPayload) =>
     api.post<ParentRegisterResponse>('/auth/register/parent', data),
   me: () => api.get('/auth/me'),
+  updateMe: (data: { full_name?: string; email?: string; phone?: string }) =>
+    api.put('/auth/me', data),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword }),
   forgotPassword: (email: string) =>
@@ -156,8 +158,22 @@ export const studentsApi = {
     parent_1: GuardianInput;
     parent_2?: GuardianInput;
   }) => api.post('/students/', data),
-  update: (id: string, data: { first_name?: string; last_name?: string; grade_id?: string }) =>
-    api.put(`/students/${id}`, data),
+  update: (id: string, data: {
+    first_name?: string;
+    last_name?: string;
+    grade_id?: string;
+    enrollment_date?: string;
+    payment_preference?: 'monthly' | 'cumulative';
+    guardians?: {
+      guardian_id?: string;
+      guardian_type?: 'father' | 'mother' | 'primary' | 'secondary';
+      full_name?: string;
+      phone?: string;
+      email?: string;
+      physical_address?: string;
+      po_box?: string;
+    }[];
+  }) => api.put(`/students/${id}`, data),
   deactivate: (id: string) => api.delete(`/students/${id}`),
   registerChild: (data: {
     first_name: string;

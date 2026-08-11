@@ -25,10 +25,27 @@ class UserResponse(BaseModel):
     id: str
     email: str
     full_name: str
+    phone: str | None = None
     role: str
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    """Self-service profile update. Any authenticated user can update their
+    own name, email and phone. Email must stay unique across the platform."""
+
+    full_name: SafeFullName | None = None
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=50)
+
+    @field_validator("email")
+    @classmethod
+    def _email_norm(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return _normalize_email(v)
 
 
 class ParentRegisterCreate(BaseModel):

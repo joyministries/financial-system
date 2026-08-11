@@ -24,6 +24,7 @@ from app.schemas.user import (
     Token,
     UserCreate,
     UserResponse,
+    UserUpdate,
 )
 from app.services.audit import AuditService
 from app.services.student import StudentService
@@ -33,6 +34,18 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
 
 RESET_TOKEN_TTL_HOURS = 1
+
+# Session length per role:
+# - admins (admin, super_admin): 2 hours
+# - normal users (parent, finance): 30 minutes
+ADMIN_SESSION_MINUTES = 120
+NORMAL_SESSION_MINUTES = 30
+
+
+def _token_expiry(role: str) -> timedelta:
+    if role in ("admin", "super_admin"):
+        return timedelta(minutes=ADMIN_SESSION_MINUTES)
+    return timedelta(minutes=NORMAL_SESSION_MINUTES)
 
 
 @router.post("/register", response_model=UserResponse)
@@ -124,7 +137,7 @@ async def register_parent(
         entity_id=students[0].id if students else None,
     )
 
-    token = create_access_token(subject=user.id)
+    token = create_access_token(subject=user.id, expires_delta=_token_expiry("parent"))
     return {"user": user, "students": students, "access_token": token}
 
 
@@ -146,7 +159,7 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Account deactivated")
 
-    token = create_access_token(subject=user.id)
+    token = create_access_token(subject=user.id, expires_delta=_token_expiry(user.role))
 
     audit = AuditService(db)
     await audit.log("user", user.id, "login", user.id, new_values={"email": user.email})
@@ -155,6 +168,57 @@ async def login(
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(user: User = Depends(get_current_user)):
+    return user
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_me(
+    data: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Self-service profile update: name, email, phone.
+
+    Email must stay unique. For parent accounts the new phone/email is also
+    mirrored onto the parent's guardian records so the office's contact
+    details stay in sync with what the parent entered in their profile.
+    """
+    old_email = user.email
+
+    if data.email is not None and data.email != user.email:
+        stmt = select(User).where(User.email == data.email)
+        if (await db.execute(stmt)).scalar_one_or_none():
+            raise ConflictError("Email already registered")
+        user.email = data.email
+    if data.full_name is not None:
+        user.full_name = data.full_name
+    if data.phone is not None:
+        user.phone = data.phone
+    await db.flush()
+
+    # Mirror contact details onto the parent's guardian records.
+    if user.role == "parent":
+        from app.models.grade import Student, StudentGuardian
+
+        child_stmt = select(Student.id).where(Student.parent_id == user.id)
+        child_ids = list((await db.execute(child_stmt)).scalars().all())
+        if child_ids:
+            gstmt = select(StudentGuardian).where(
+                StudentGuardian.student_id.in_(child_ids),
+                StudentGuardian.email == old_email,
+            )
+            guardians = list((await db.execute(gstmt)).scalars().all())
+            for g in guardians:
+                g.email = user.email
+                if data.phone is not None:
+                    g.phone = user.phone
+            await db.flush()
+
+    audit = AuditService(db)
+    await audit.log(
+        "user", user.id, "profile_update", user.id,
+        new_values={"email": user.email, "phone": user.phone, "full_name": user.full_name},
+    )
     return user
 
 

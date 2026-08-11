@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
+import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const CHARGE_TYPES = ['Excursions', 'School Trips', 'Concerts', 'Uniform', 'Books', 'Sports Fees', 'Registration Fees'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -138,10 +139,11 @@ export default function ChargesPage() {
           <option value="">All Grades</option>
           {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} className="input min-w-64">
-          <option value="">Select Student</option>
-          {studentsInGrade(filterGradeId).map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
-        </select>
+        <StudentSearchSelect
+          value={selectedStudent}
+          onChange={setSelectedStudent}
+          placeholder="Search student by name or number…"
+        />
         <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value))} className="w-32 input" />
       </div>
 
@@ -210,10 +212,11 @@ export default function ChargesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Student</label>
-                <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} required className="input mt-1">
-                  <option value="">Select Student</option>
-                  {studentsInGrade(gradeId).map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
-                </select>
+                <StudentSearchSelect
+                  value={selectedStudent}
+                  onChange={setSelectedStudent}
+                  placeholder="Search student by name or number…"
+                />
                 {!gradeId && <p className="mt-1 text-xs text-slate-500">Pick a grade first to see its students.</p>}
               </div>
             </div>

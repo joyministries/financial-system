@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { Download, FilePlus2, Layers, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import Pagination from '@/components/Pagination';
+import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -86,10 +87,6 @@ export default function InvoicesPage() {
     const s = students.find((s) => s.id === id);
     return s ? `${s.first_name} ${s.last_name} (${s.student_number})` : id;
   };
-
-  const filteredStudents = filterGradeId
-    ? students.filter((s) => s.grade_id === filterGradeId)
-    : students;
 
   const handleGenerate = async () => {
     if (!genStudent) return toast.error('Select a student');
@@ -197,12 +194,11 @@ export default function InvoicesPage() {
               {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           )}
-          <select value={filterStudent} onChange={(e) => { setFilterStudent(e.target.value); setPage(1); }} className="input">
-            <option value="">{isParent ? 'All My Children' : 'All Students'}</option>
-            {filteredStudents.map((s) => (
-              <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
-            ))}
-          </select>
+          <StudentSearchSelect
+            value={filterStudent}
+            onChange={(id) => { setFilterStudent(id); setPage(1); }}
+            placeholder={isParent ? 'Search my children…' : 'Search student…'}
+          />
           <select value={filterYear === '' ? '' : filterYear} onChange={(e) => { setFilterYear(e.target.value === '' ? '' : parseInt(e.target.value)); setPage(1); }} className="input">
             <option value="">All Years</option>
             {[yearNow - 1, yearNow, yearNow + 1].map((y) => (
@@ -320,12 +316,11 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">Student</label>
-                <select value={genStudent} onChange={(e) => setGenStudent(e.target.value)} className="input min-w-64">
-                  <option value="">Select student</option>
-                  {filteredStudents.map((s) => (
-                    <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>
-                  ))}
-                </select>
+                <StudentSearchSelect
+                  value={genStudent}
+                  onChange={setGenStudent}
+                  placeholder="Search student by name or number…"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">Year</label>

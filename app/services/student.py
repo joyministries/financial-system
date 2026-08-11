@@ -626,8 +626,26 @@ class StudentService:
         student = await self.get(student_id)
         if not student:
             return None
-        for key, value in data.model_dump(exclude_unset=True).items():
+        payload = data.model_dump(exclude_unset=True)
+        guardians_data = payload.pop("guardians", None)
+        for key, value in payload.items():
             setattr(student, key, value)
+        # Update guardian records in the same call (admin edit form sends both).
+        if guardians_data:
+            for gdata in guardians_data:
+                gid = gdata.get("guardian_id")
+                if not gid:
+                    continue
+                guardian = next((g for g in student.guardians if g.id == gid), None)
+                if not guardian:
+                    continue
+                for key, value in gdata.items():
+                    if key == "guardian_id" or value is None:
+                        continue
+                    setattr(guardian, key, value)
+                # Keep the denormalized full_name in sync when split names are edited.
+                if guardian.first_name and guardian.last_name:
+                    guardian.full_name = f"{guardian.first_name} {guardian.last_name}".strip()
         await self.db.flush()
         return student
 

@@ -1,10 +1,11 @@
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.money import to_decimal
+from app.models.grade import Student
 from app.models.payment import Payment, PaymentAllocation, PaymentReversal
 from app.models.schedule import AdditionalCharge, OutstandingBalance
 from app.schemas.payment import PaymentAllocationCreate, PaymentCreate, PaymentReversalCreate
@@ -42,6 +43,19 @@ class PaymentService:
             conds.append(extract("year", Payment.payment_date) == year)
         return conds
 
+    def _search_join(self, stmt, search: str | None = None):
+        """Join to Student and filter by name/number when a search term is given."""
+        if not search:
+            return stmt
+        term = f"%{search.strip()}%"
+        return stmt.join(Student, Payment.student_id == Student.id).where(
+            or_(
+                Student.first_name.ilike(term),
+                Student.last_name.ilike(term),
+                Student.student_number.ilike(term),
+            )
+        )
+
     async def list_for_student(
         self,
         student_id: str,
@@ -67,14 +81,13 @@ class PaymentService:
         offset: int = 0,
         month: int | None = None,
         year: int | None = None,
+        search: str | None = None,
     ) -> list[Payment]:
-        stmt = (
-            select(Payment)
-            .where(Payment.student_id.in_(student_ids), *self._month_filter(month, year))
-            .order_by(Payment.payment_date.desc())
-            .limit(limit)
-            .offset(offset)
+        stmt = select(Payment).where(
+            Payment.student_id.in_(student_ids), *self._month_filter(month, year)
         )
+        stmt = self._search_join(stmt, search)
+        stmt = stmt.order_by(Payment.payment_date.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -84,14 +97,13 @@ class PaymentService:
         offset: int = 0,
         month: int | None = None,
         year: int | None = None,
+        search: str | None = None,
     ) -> list[Payment]:
-        stmt = (
-            select(Payment)
-            .where(Payment.status == "pending", *self._month_filter(month, year))
-            .order_by(Payment.payment_date)
-            .limit(limit)
-            .offset(offset)
+        stmt = select(Payment).where(
+            Payment.status == "pending", *self._month_filter(month, year)
         )
+        stmt = self._search_join(stmt, search)
+        stmt = stmt.order_by(Payment.payment_date).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -101,14 +113,11 @@ class PaymentService:
         offset: int = 0,
         month: int | None = None,
         year: int | None = None,
+        search: str | None = None,
     ) -> list[Payment]:
-        stmt = (
-            select(Payment)
-            .where(*self._month_filter(month, year))
-            .order_by(Payment.payment_date.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(Payment).where(*self._month_filter(month, year))
+        stmt = self._search_join(stmt, search)
+        stmt = stmt.order_by(Payment.payment_date.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -121,25 +130,34 @@ class PaymentService:
         return int((await self.db.execute(stmt)).scalar_one())
 
     async def count_for_students(
-        self, student_ids: list[str], month: int | None = None, year: int | None = None
+        self,
+        student_ids: list[str],
+        month: int | None = None,
+        year: int | None = None,
+        search: str | None = None,
     ) -> int:
         stmt = select(func.count()).select_from(Payment).where(
             Payment.student_id.in_(student_ids), *self._month_filter(month, year)
         )
+        stmt = self._search_join(stmt, search)
         return int((await self.db.execute(stmt)).scalar_one())
 
     async def count_pending(
-        self, month: int | None = None, year: int | None = None
+        self, month: int | None = None, year: int | None = None, search: str | None = None
     ) -> int:
         stmt = select(func.count()).select_from(Payment).where(
             Payment.status == "pending", *self._month_filter(month, year)
         )
+        stmt = self._search_join(stmt, search)
         return int((await self.db.execute(stmt)).scalar_one())
 
-    async def count_all(self, month: int | None = None, year: int | None = None) -> int:
+    async def count_all(
+        self, month: int | None = None, year: int | None = None, search: str | None = None
+    ) -> int:
         stmt = select(func.count()).select_from(Payment).where(
             *self._month_filter(month, year)
         )
+        stmt = self._search_join(stmt, search)
         return int((await self.db.execute(stmt)).scalar_one())
 
     async def allocate(self, data: PaymentAllocationCreate) -> PaymentAllocation:
