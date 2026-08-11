@@ -14,6 +14,7 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending'>('all');
+  const [monthFilter, setMonthFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showReverse, setShowReverse] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
@@ -32,11 +33,16 @@ export default function PaymentsPage() {
 
   const load = () => {
     setLoading(true);
-    const params = {
+    const params: Record<string, string | number> = {
       ...(filter === 'pending' ? { status: 'pending' } : {}),
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     };
+    if (monthFilter) {
+      const [year, month] = monthFilter.split('-').map(Number);
+      params.year = year;
+      params.month = month;
+    }
     paymentsApi.list(params)
       .then((r) => {
         setPayments(r.data);
@@ -48,7 +54,7 @@ export default function PaymentsPage() {
 
   useEffect(() => { studentsApi.list().then((r) => setStudents(r.data)); }, []);
   useEffect(() => { getStudentNames().then(setNameMap); }, []);
-  useEffect(() => { load(); }, [filter, page]);
+  useEffect(() => { load(); }, [filter, monthFilter, page]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +130,13 @@ export default function PaymentsPage() {
             <option value="all">All Payments</option>
             <option value="pending">Pending Verification</option>
           </select>
+          <input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => { setMonthFilter(e.target.value); setPage(1); }}
+            className="input"
+            title="Filter by month"
+          />
           <button onClick={() => setShowForm(true)} className="btn btn-primary">
             <Plus className="h-4 w-4" /> Record Payment
           </button>

@@ -60,6 +60,7 @@ export default function ParentDashboard() {
   const [summaries, setSummaries] = useState<Record<string, StudentSummary>>({});
   const [regFees, setRegFees] = useState<Record<string, RegistrationFeeResponse>>({});
   const [recentPayments, setRecentPayments] = useState<Payment[]>([]);
+  const [paymentMonth, setPaymentMonth] = useState('');
   const [loading, setLoading] = useState(true);
   // Which child card is expanded to show its monthly schedule (null = none)
   const [expandedChild, setExpandedChild] = useState<string | null>(null);
@@ -168,6 +169,25 @@ export default function ParentDashboard() {
       setLoading(false);
     }
   };
+
+  // Payments list with optional month filter (empty = all children, all months).
+  const loadPayments = async () => {
+    if (children.length === 0) { setRecentPayments([]); return; }
+    const params: Record<string, string | number> = {};
+    if (paymentMonth) {
+      const [year, month] = paymentMonth.split('-').map(Number);
+      params.year = year;
+      params.month = month;
+    }
+    try {
+      const res = await paymentsApi.list(params);
+      setRecentPayments(res.data.slice(0, 50));
+    } catch {
+      setRecentPayments([]);
+    }
+  };
+
+  useEffect(() => { loadPayments(); }, [paymentMonth, children]);
 
   useEffect(() => {
     gradesApi.list().then((r) => setGrades(r.data));
@@ -699,7 +719,16 @@ export default function ParentDashboard() {
 
       {recentPayments.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-3">Recent Payments</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Payments</h2>
+            <input
+              type="month"
+              value={paymentMonth}
+              onChange={(e) => setPaymentMonth(e.target.value)}
+              className="input w-44"
+              title="Filter by month"
+            />
+          </div>
           <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">

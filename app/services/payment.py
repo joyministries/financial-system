@@ -31,12 +31,28 @@ class PaymentService:
         result = await self.db.execute(select(Payment).where(Payment.pay_code == pay_code))
         return result.scalar_one_or_none()
 
+    def _month_filter(self, month: int | None = None, year: int | None = None):
+        """Optional calendar-month/year filter for payment_date columns."""
+        from sqlalchemy import extract
+
+        conds = []
+        if month is not None:
+            conds.append(extract("month", Payment.payment_date) == month)
+        if year is not None:
+            conds.append(extract("year", Payment.payment_date) == year)
+        return conds
+
     async def list_for_student(
-        self, student_id: str, limit: int = 50, offset: int = 0
+        self,
+        student_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        month: int | None = None,
+        year: int | None = None,
     ) -> list[Payment]:
         stmt = (
             select(Payment)
-            .where(Payment.student_id == student_id)
+            .where(Payment.student_id == student_id, *self._month_filter(month, year))
             .order_by(Payment.payment_date.desc())
             .limit(limit)
             .offset(offset)
@@ -45,11 +61,16 @@ class PaymentService:
         return list(result.scalars().all())
 
     async def list_for_students(
-        self, student_ids: list[str], limit: int = 50, offset: int = 0
+        self,
+        student_ids: list[str],
+        limit: int = 50,
+        offset: int = 0,
+        month: int | None = None,
+        year: int | None = None,
     ) -> list[Payment]:
         stmt = (
             select(Payment)
-            .where(Payment.student_id.in_(student_ids))
+            .where(Payment.student_id.in_(student_ids), *self._month_filter(month, year))
             .order_by(Payment.payment_date.desc())
             .limit(limit)
             .offset(offset)
@@ -57,10 +78,16 @@ class PaymentService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_pending(self, limit: int = 50, offset: int = 0) -> list[Payment]:
+    async def list_pending(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        month: int | None = None,
+        year: int | None = None,
+    ) -> list[Payment]:
         stmt = (
             select(Payment)
-            .where(Payment.status == "pending")
+            .where(Payment.status == "pending", *self._month_filter(month, year))
             .order_by(Payment.payment_date)
             .limit(limit)
             .offset(offset)
@@ -68,8 +95,20 @@ class PaymentService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_all(self, limit: int = 50, offset: int = 0) -> list[Payment]:
-        stmt = select(Payment).order_by(Payment.payment_date.desc()).limit(limit).offset(offset)
+    async def list_all(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        month: int | None = None,
+        year: int | None = None,
+    ) -> list[Payment]:
+        stmt = (
+            select(Payment)
+            .where(*self._month_filter(month, year))
+            .order_by(Payment.payment_date.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
