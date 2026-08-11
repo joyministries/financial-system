@@ -255,7 +255,7 @@ export default function ChargesPage() {
         </form>
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         {loading ? (
           <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
         ) : (
@@ -291,13 +291,13 @@ export default function ChargesPage() {
               </tbody>
             </table>
             {charges.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No additional charges.' : 'Select a student.'}</p>}
-            {charges.length > PAGE_SIZE && (
-              <Pagination
-                page={page}
-                totalPages={Math.ceil(charges.length / PAGE_SIZE)}
-                onPageChange={setPage}
-              />
-            )}
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(charges.length / PAGE_SIZE))}
+              total={charges.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </>
         )}
       </div>

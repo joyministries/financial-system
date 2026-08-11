@@ -650,7 +650,7 @@ export default function StudentsPage() {
         )}
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
@@ -658,15 +658,16 @@ export default function StudentsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grade</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Parents</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Phone</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {loading ? (
-              <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
+              <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
             ) : students.length === 0 ? (
-              <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-500">No students found.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-500">No students found.</td></tr>
             ) : students.map((s) => (
               <tr key={s.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4 text-sm font-mono text-slate-700">{s.student_number}</td>
@@ -682,12 +683,16 @@ export default function StudentsPage() {
                             {isMother ? 'Mother:' : 'Father:'}
                           </span>
                           <span>{g.full_name}</span>
-                          {g.phone && <span className="font-mono text-xs text-slate-400">{g.phone}</span>}
                         </div>
                       );
                     })}
                     {(!s.guardians || s.guardians.length === 0) && <span className="text-slate-400">-</span>}
                   </div>
+                </td>
+                <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                  {s.guardians?.length
+                    ? s.guardians.map((g) => <div key={g.id}>{g.phone || '-'}</div>)
+                    : <span className="text-slate-400">-</span>}
                 </td>
                 <td className="px-6 py-4">
                   <span className={`badge ${s.is_active ? 'badge-success' : 'badge-danger'}`}>
@@ -709,6 +714,8 @@ export default function StudentsPage() {
         <Pagination
           page={page}
           totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+          total={totalCount}
+          pageSize={PAGE_SIZE}
           onPageChange={setPage}
         />
       </div>

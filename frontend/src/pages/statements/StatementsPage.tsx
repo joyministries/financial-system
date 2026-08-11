@@ -276,7 +276,7 @@ export default function StatementsPage() {
       )}
 
       {selectedStatement && (
-        <div className="overflow-hidden rounded-xl bg-white shadow-sm border border-slate-200">
+        <div className="overflow-x-auto rounded-xl bg-white shadow-sm border border-slate-200">
           {/* Bank-style statement header */}
           <div className="bg-[#131d3c] px-6 py-5">
             <div className="flex items-start justify-between gap-4">
@@ -379,7 +379,7 @@ export default function StatementsPage() {
         </div>
       )}
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         {loading ? (
           <div className="flex h-32 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
@@ -420,7 +420,7 @@ export default function StatementsPage() {
       </div>
 
       {!isParent && (
-        <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+        <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({year})</h2>
@@ -498,6 +498,8 @@ export default function StatementsPage() {
                   <Pagination
                     page={page}
                     totalPages={Math.ceil(schoolReport.students.length / PAGE_SIZE)}
+                    total={schoolReport.students.length}
+                    pageSize={PAGE_SIZE}
                     onPageChange={setPage}
                   />
                 </div>

@@ -729,7 +729,7 @@ export default function ParentDashboard() {
               title="Filter by month"
             />
           </div>
-          <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+          <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
@@ -783,7 +783,7 @@ export default function ParentDashboard() {
                   {breakdown.fees.length === 0 ? (
                     <p className="text-sm text-slate-400">No fee structures set for this grade yet.</p>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>
@@ -816,7 +816,7 @@ export default function ParentDashboard() {
                   {breakdown.charges.length === 0 ? (
                     <p className="text-sm text-slate-400">No additional charges for {currentYear}.</p>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>
@@ -910,7 +910,7 @@ export default function ParentDashboard() {
                       <p className="text-lg font-bold text-red-600">R {money(finData.summary?.total_outstanding || 0)}</p>
                     </div>
                   </div>
-                  <div className="overflow-hidden rounded-lg border border-slate-200">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <table className="min-w-full divide-y divide-slate-200">
                       <thead className="bg-slate-50">
                         <tr>
@@ -954,7 +954,7 @@ export default function ParentDashboard() {
                       automatically, ready to download.
                     </p>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>

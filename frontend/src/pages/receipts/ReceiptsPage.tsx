@@ -100,7 +100,7 @@ export default function ReceiptsPage() {
         </p>
       )}
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         {loading ? (
           <div className="flex h-32 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
@@ -136,13 +136,13 @@ export default function ReceiptsPage() {
           </tbody>
         </table>
         {receipts.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No receipts found.</p>}
-        {receipts.length > PAGE_SIZE && (
-          <Pagination
-            page={page}
-            totalPages={Math.ceil(receipts.length / PAGE_SIZE)}
-            onPageChange={setPage}
-          />
-        )}
+        <Pagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(receipts.length / PAGE_SIZE))}
+          total={receipts.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
           </>
         )}
       </div>

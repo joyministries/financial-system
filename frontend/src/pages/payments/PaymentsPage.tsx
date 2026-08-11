@@ -133,17 +133,17 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search student name or number…"
-              className="input pl-9"
+              placeholder="Search student…"
+              className="input pl-9 w-52"
             />
           </div>
           <select value={filter} onChange={(e) => { setFilter(e.target.value as 'all' | 'pending'); setPage(1); }} className="input">
@@ -157,7 +157,7 @@ export default function PaymentsPage() {
             className="input"
             title="Filter by month"
           />
-          <button onClick={() => setShowForm(true)} className="btn btn-primary">
+          <button onClick={() => setShowForm(true)} className="btn btn-primary whitespace-nowrap">
             <Plus className="h-4 w-4" /> Record Payment
           </button>
         </div>
@@ -217,7 +217,7 @@ export default function PaymentsPage() {
         </div>
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-hidden">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
@@ -266,7 +266,7 @@ export default function PaymentsPage() {
             ))}
           </tbody>
         </table>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        <Pagination page={page} totalPages={totalPages} total={totalCount} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
     </div>
   );

@@ -4,6 +4,9 @@ import type { Student, Grade } from '@/types';
 import toast from 'react-hot-toast';
 import { Loader2, UserCheck, Phone, Mail, Check, X, Clock3, UserPlus } from 'lucide-react';
 import clsx from 'clsx';
+import Pagination from '@/components/Pagination';
+
+const PAGE_SIZE = 20;
 
 const isFather = (t: string) => t === 'father' || t === 'primary';
 const isMother = (t: string) => t === 'mother' || t === 'secondary';
@@ -25,12 +28,13 @@ export default function RegistrationsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
     Promise.all([
-      studentsApi.registrations(50).then((r) => setStudents(r.data)),
-      studentsApi.pending(50).then((r) => setPending(r.data)),
+      studentsApi.registrations(200).then((r) => setStudents(r.data)),
+      studentsApi.pending(200).then((r) => setPending(r.data)),
     ])
       .catch(() => toast.error('Failed to load registrations'))
       .finally(() => setLoading(false));
@@ -171,7 +175,7 @@ export default function RegistrationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {students.map((s) => {
+                {students.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((s) => {
                   const p1 = s.guardians?.find((g) => isFather(g.guardian_type));
                   const p2 = s.guardians?.find((g) => isMother(g.guardian_type));
                   return (
@@ -185,10 +189,18 @@ export default function RegistrationsPage() {
                       </td>
                       <td className="td text-slate-500">{gradeName(s.grade_id)}</td>
                       <td className="td">
-                        <span className="inline-flex items-center gap-1">
-                          <UserCheck className="h-4 w-4 text-green-500" /> {p1?.full_name || '-'}
-                        </span>
-                        {p1?.guardian_id && <span className="ml-2 text-xs text-slate-400">ID: {p1.guardian_id}</span>}
+                        {p1 ? (
+                          <div>
+                            <p className="flex items-center gap-1.5 font-medium text-slate-900">
+                              <UserCheck className="h-4 w-4 shrink-0 text-green-500" /> {p1.full_name}
+                            </p>
+                            {p1.guardian_id && (
+                              <p className="mt-0.5 truncate font-mono text-xs text-slate-400" title={p1.guardian_id}>
+                                ID: {p1.guardian_id}
+                              </p>
+                            )}
+                          </div>
+                        ) : <span className="text-slate-400">-</span>}
                       </td>
                       <td className="td">
                         <div className="space-y-0.5 text-xs text-slate-500">
@@ -196,14 +208,14 @@ export default function RegistrationsPage() {
                           {p1?.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {p1.email}</span>}
                         </div>
                       </td>
-                      <td className="td text-slate-700">
+                      <td className="td">
                         {p2 ? (
-                          <>
-                            <span className="inline-flex items-center gap-1">
-                              <UserCheck className="h-4 w-4 text-blue-500" /> {p2.full_name}
-                            </span>
-                            {p2.phone && <span className="ml-2 text-xs text-slate-400">{p2.phone}</span>}
-                          </>
+                          <div>
+                            <p className="flex items-center gap-1.5 font-medium text-slate-900">
+                              <UserCheck className="h-4 w-4 shrink-0 text-blue-500" /> {p2.full_name}
+                            </p>
+                            {p2.phone && <p className="mt-0.5 text-xs text-slate-500">{p2.phone}</p>}
+                          </div>
                         ) : <span className="text-slate-400">-</span>}
                       </td>
                     </tr>
@@ -212,6 +224,13 @@ export default function RegistrationsPage() {
               </tbody>
             </table>
             {students.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No registrations yet.</p>}
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(students.length / PAGE_SIZE))}
+              total={students.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </>
         )}
       </div>
