@@ -9,6 +9,7 @@ from app.core.deps import (
     verify_student_access,
 )
 from app.models.user import User
+from app.schemas.common import CountResponse
 from app.schemas.payment import (
     PaymentAllocationCreate,
     PaymentAllocationResponse,
@@ -66,6 +67,39 @@ async def list_payments(
     if status == "pending":
         return await service.list_pending(limit=limit, offset=offset, month=month, year=year)
     return await service.list_all(limit=limit, offset=offset, month=month, year=year)
+
+
+@router.get("/count", response_model=CountResponse)
+async def count_payments(
+    student_id: str | None = None,
+    status: str | None = None,
+    month: int | None = Query(default=None, ge=1, le=12),
+    year: int | None = Query(default=None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Total matching payments for pagination (mirrors GET /payments filters)."""
+    service = PaymentService(db)
+    if user.role == "parent":
+        child_ids = await get_parent_student_ids(user, db)
+        if not child_ids:
+            return CountResponse(total=0)
+        if student_id:
+            if student_id not in child_ids:
+                raise HTTPException(status_code=403, detail="Access denied")
+            return CountResponse(
+                total=await service.count_for_student(student_id, month=month, year=year)
+            )
+        return CountResponse(
+            total=await service.count_for_students(child_ids, month=month, year=year)
+        )
+    if student_id:
+        return CountResponse(
+            total=await service.count_for_student(student_id, month=month, year=year)
+        )
+    if status == "pending":
+        return CountResponse(total=await service.count_pending(month=month, year=year))
+    return CountResponse(total=await service.count_all(month=month, year=year))
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)

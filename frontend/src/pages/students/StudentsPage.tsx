@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { studentsApi, gradesApi, smsApi } from '@/api/client';
-import type { AdminStudentRegisterResponse, Student, Grade, SmsTemplate } from '@/types';
+import { studentsApi, gradesApi, smsApi, paymentsApi, financialApi } from '@/api/client';
+import type { AdminStudentRegisterResponse, Student, Grade, SmsTemplate, Payment, Statement } from '@/types';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, UserX, UserPlus, Copy, Loader2, MessageSquare, Send } from 'lucide-react';
+import { Plus, Pencil, UserX, UserPlus, Copy, Loader2, MessageSquare, Send, Eye, Search } from 'lucide-react';
 import Modal from '@/components/Modal';
+import Pagination from '@/components/Pagination';
+
+const PAGE_SIZE = 50;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [filterGrade, setFilterGrade] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,15 +64,35 @@ export default function StudentsPage() {
 
   const load = () => {
     setLoading(true);
-    const params = filterGrade ? { grade_id: filterGrade } : undefined;
+    const params = {
+      ...(filterGrade ? { grade_id: filterGrade } : {}),
+      ...(search ? { search } : {}),
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    };
     studentsApi.list(params)
       .then((r) => setStudents(r.data))
       .catch(() => toast.error('Failed to load students'))
       .finally(() => setLoading(false));
   };
 
+  const loadCount = () => {
+    studentsApi.count({
+      ...(filterGrade ? { grade_id: filterGrade } : {}),
+      ...(search ? { search } : {}),
+    })
+      .then((r) => setTotalCount(r.data.total))
+      .catch(() => setTotalCount(0));
+  };
+
   useEffect(() => { gradesApi.list().then((r) => setGrades(r.data)); }, []);
-  useEffect(() => { load(); }, [filterGrade]);
+  useEffect(() => { load(); loadCount(); }, [filterGrade, search, page]);
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput.trim());
+    setPage(1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,6 +218,30 @@ export default function StudentsPage() {
     setShowForm(true);
   };
 
+  // ── View student (full profile + financial snapshot) ──────
+  const [viewing, setViewing] = useState<Student | null>(null);
+  const [viewPayments, setViewPayments] = useState<Payment[]>([]);
+  const [viewStatements, setViewStatements] = useState<Statement[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+
+  const openView = async (s: Student) => {
+    setViewing(s);
+    setViewPayments([]);
+    setViewStatements([]);
+    setViewLoading(true);
+    try {
+      const year = new Date().getFullYear();
+      const [payRes, stmtRes] = await Promise.all([
+        paymentsApi.list({ student_id: s.id, limit: 6 }).catch(() => ({ data: [] as Payment[] })),
+        financialApi.listStatements(s.id, year).catch(() => ({ data: [] as Statement[] })),
+      ]);
+      setViewPayments(payRes.data);
+      setViewStatements(stmtRes.data);
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
   const handleDeactivate = async (id: string) => {
     if (!confirm('Deactivate this student?')) return;
     try {
@@ -283,10 +334,28 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} className="input">
-        <option value="">All Grades</option>
-        {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-      </select>
+      <form onSubmit={submitSearch} className="flex flex-wrap items-center gap-4">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by name or student number…"
+            className="input pl-9"
+          />
+        </div>
+        <select value={filterGrade} onChange={(e) => { setFilterGrade(e.target.value); setPage(1); }} className="input w-44">
+          <option value="">All Grades</option>
+          {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <button type="submit" className="btn btn-primary">Search</button>
+        {!loading && (
+          <span className="text-sm text-slate-500">
+            {totalCount.toLocaleString()} student{totalCount === 1 ? '' : 's'}
+            {search ? ` matching “${search}”` : ''}
+          </span>
+        )}
+      </form>
 
       <Modal open={showForm} onClose={closeForm} title={editingId ? 'Edit Student' : 'New Student'}>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -495,12 +564,18 @@ export default function StudentsPage() {
                 <td className="px-6 py-4 text-sm text-slate-500">{grades.find((g) => g.id === s.grade_id)?.name || s.grade_id}</td>
                 <td className="px-6 py-4">
                   <div className="text-sm text-slate-700">
-                    {s.guardians?.map((g) => (
-                      <div key={g.id} className="flex items-center gap-1">
-                        <span className="text-slate-400">{g.guardian_type === 'mother' || g.guardian_type === 'secondary' ? 'Mo' : 'Fa'}</span>
-                        <span>{g.full_name}</span>
-                      </div>
-                    ))}
+                    {s.guardians?.map((g) => {
+                      const isMother = g.guardian_type === 'mother' || g.guardian_type === 'secondary';
+                      return (
+                        <div key={g.id} className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            {isMother ? 'Mother:' : 'Father:'}
+                          </span>
+                          <span>{g.full_name}</span>
+                          {g.phone && <span className="font-mono text-xs text-slate-400">{g.phone}</span>}
+                        </div>
+                      );
+                    })}
                     {(!s.guardians || s.guardians.length === 0) && <span className="text-slate-400">-</span>}
                   </div>
                 </td>
@@ -511,6 +586,7 @@ export default function StudentsPage() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-1">
+                    <button onClick={() => openView(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="View full profile"><Eye className="h-4 w-4" /></button>
                     <button onClick={() => openSmsModal(s)} className="rounded p-1 text-slate-400 hover:text-green-600" title="Send SMS to parent"><MessageSquare className="h-4 w-4" /></button>
                     <button onClick={() => handleEdit(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="Edit"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => handleDeactivate(s.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Deactivate"><UserX className="h-4 w-4" /></button>
@@ -520,7 +596,110 @@ export default function StudentsPage() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+          onPageChange={setPage}
+        />
       </div>
+
+      {/* ── View student modal ─────────────────────────────── */}
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `${viewing.first_name} ${viewing.last_name}` : ''}
+        subtitle={viewing ? `${viewing.student_number} · ${grades.find((g) => g.id === viewing.grade_id)?.name || '—'}` : ''}
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+              <Info label="First name" value={viewing.first_name} />
+              <Info label="Last name" value={viewing.last_name} />
+              <Info label="Student number" value={viewing.student_number} />
+              <Info label="Grade" value={grades.find((g) => g.id === viewing.grade_id)?.name || viewing.grade_id} />
+              <Info label="Enrollment date" value={new Date(viewing.enrollment_date).toLocaleDateString()} />
+              <Info label="Payment preference" value={viewing.payment_preference === 'monthly' ? 'Monthly' : 'Full year'} />
+              <Info label="Status" value={viewing.is_active ? 'Active' : 'Inactive'} />
+              <Info label="Registration" value={viewing.registration_status} />
+              <Info label="Portal account" value={viewing.parent_id ? 'Linked' : 'None'} />
+            </div>
+
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Parents / Guardians</h4>
+              <div className="mt-2 space-y-2">
+                {viewing.guardians?.length ? viewing.guardians.map((g) => (
+                  <div key={g.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                    <p className="font-medium text-slate-900">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {g.guardian_type === 'mother' || g.guardian_type === 'secondary' ? 'Mother · ' : 'Father · '}
+                      </span>
+                      {g.full_name}
+                    </p>
+                    <div className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
+                      {g.phone && <span>Phone: <span className="font-mono">{g.phone}</span></span>}
+                      {g.email && <span>Email: {g.email}</span>}
+                      {g.guardian_id && <span>ID: {g.guardian_id}</span>}
+                      {g.physical_address && <span>Address: {g.physical_address}</span>}
+                      {g.po_box && <span>PO Box: {g.po_box}</span>}
+                      {!g.phone && !g.email && !g.guardian_id && !g.physical_address && !g.po_box && (
+                        <span className="text-slate-400">No contact details on file.</span>
+                      )}
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-sm text-slate-400">No guardian records.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900">Recent payments</h4>
+                {viewLoading ? (
+                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+                ) : viewPayments.length ? (
+                  <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                    {viewPayments.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <div>
+                          <p className="font-medium text-slate-800">R {p.amount.toLocaleString()}</p>
+                          <p className="text-xs text-slate-400">
+                            {new Date(p.payment_date).toLocaleDateString()} · {p.payment_method}
+                          </p>
+                        </div>
+                        <span className={`badge ${p.status === 'verified' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-danger'}`}>
+                          {p.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">No payments recorded.</p>
+                )}
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900">Statements ({new Date().getFullYear()})</h4>
+                {viewLoading ? (
+                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+                ) : viewStatements.length ? (
+                  <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                    {viewStatements.slice(0, 4).map((st) => (
+                      <li key={st.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="text-slate-700">Month {st.month}</span>
+                        <span className={`font-medium ${Number(st.closing_balance) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          R {Number(st.closing_balance).toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">No statements generated yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* ── SMS to parent modal ─────────────────────────────── */}
       <Modal
@@ -593,6 +772,15 @@ export default function StudentsPage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+      <dd className="mt-0.5 font-medium text-slate-900">{value || '—'}</dd>
     </div>
   );
 }

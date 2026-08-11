@@ -13,7 +13,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: SafeFullName
-    role: str = Field(default="parent", pattern="^(admin|finance|parent)$")
+    role: str = Field(default="parent", pattern="^(admin|finance|parent|super_admin)$")
 
     @field_validator("email")
     @classmethod

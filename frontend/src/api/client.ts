@@ -137,8 +137,10 @@ export const feesApi = {
 
 // ── Students ──────────────────────────────────────────────
 export const studentsApi = {
-  list: (params?: { grade_id?: string; parent_id?: string }) =>
+  list: (params?: { grade_id?: string; parent_id?: string; search?: string; limit?: number; offset?: number }) =>
     api.get('/students/', { params }),
+  count: (params?: { grade_id?: string; parent_id?: string; search?: string }) =>
+    api.get<{ total: number }>('/students/count', { params }),
   names: () =>
     api.get<{ id: string; student_number: string; first_name: string; last_name: string; grade_id: string }[]>('/students/names'),
   get: (id: string) => api.get(`/students/${id}`),
@@ -251,8 +253,10 @@ export const chargesApi = {
 
 // ── Payments ──────────────────────────────────────────────
 export const paymentsApi = {
-  list: (params?: { student_id?: string; status?: string; limit?: number; offset?: number }) =>
+  list: (params?: { student_id?: string; status?: string; month?: number; year?: number; limit?: number; offset?: number }) =>
     api.get('/payments/', { params }),
+  count: (params?: { student_id?: string; status?: string; month?: number; year?: number }) =>
+    api.get<{ total: number }>('/payments/count', { params }),
   get: (id: string) => api.get(`/payments/${id}`),
   create: (data: {
     student_id: string;

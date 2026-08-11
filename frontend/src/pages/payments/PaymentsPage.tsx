@@ -38,18 +38,23 @@ export default function PaymentsPage() {
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     };
+    const countParams: Record<string, string | number> = {
+      ...(filter === 'pending' ? { status: 'pending' } : {}),
+    };
     if (monthFilter) {
       const [year, month] = monthFilter.split('-').map(Number);
       params.year = year;
       params.month = month;
+      countParams.year = year;
+      countParams.month = month;
     }
     paymentsApi.list(params)
-      .then((r) => {
-        setPayments(r.data);
-        setTotalCount(r.data.length === PAGE_SIZE ? page * PAGE_SIZE + 1 : (page - 1) * PAGE_SIZE + r.data.length);
-      })
+      .then((r) => setPayments(r.data))
       .catch(() => toast.error('Failed to load payments'))
       .finally(() => setLoading(false));
+    paymentsApi.count(countParams)
+      .then((r) => setTotalCount(r.data.total))
+      .catch(() => {});
   };
 
   useEffect(() => { studentsApi.list().then((r) => setStudents(r.data)); }, []);

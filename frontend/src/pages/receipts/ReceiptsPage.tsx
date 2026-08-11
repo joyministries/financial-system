@@ -5,6 +5,9 @@ import type { Receipt, Student, Grade } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download } from 'lucide-react';
+import Pagination from '@/components/Pagination';
+
+const PAGE_SIZE = 50;
 
 export default function ReceiptsPage() {
   const { user } = useAuth();
@@ -16,6 +19,9 @@ export default function ReceiptsPage() {
   const [selectedStudent, setSelectedStudent] = useState('');
   const [loading, setLoading] = useState(true);
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
+  const [page, setPage] = useState(1);
+
+  const pagedReceipts = receipts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => {
     setLoading(true);
@@ -35,6 +41,7 @@ export default function ReceiptsPage() {
   const handleFilter = (studentId: string, gradeId: string) => {
     setSelectedStudent(studentId);
     setSelectedGrade(gradeId);
+    setPage(1);
     setLoading(true);
     financialApi
       .listReceipts({ student_id: studentId || undefined, grade_id: !studentId ? gradeId || undefined : undefined })
@@ -121,7 +128,7 @@ export default function ReceiptsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {receipts.map((r) => (
+            {pagedReceipts.map((r) => (
               <tr key={r.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{r.receipt_number}</td>
                 <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(r.student_id)}</td>
@@ -138,6 +145,13 @@ export default function ReceiptsPage() {
           </tbody>
         </table>
         {receipts.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No receipts found.</p>}
+        {receipts.length > PAGE_SIZE && (
+          <Pagination
+            page={page}
+            totalPages={Math.ceil(receipts.length / PAGE_SIZE)}
+            onPageChange={setPage}
+          />
+        )}
           </>
         )}
       </div>

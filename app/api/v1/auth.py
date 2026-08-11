@@ -41,9 +41,12 @@ async def register(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Authenticated registration. Only admins can create admin/finance accounts."""
-    if data.role in ("admin", "finance") and current_user.role != "admin":
+    """Authenticated registration. Only admins can create admin/finance accounts;
+    only a super admin can create another super admin."""
+    if data.role in ("admin", "finance") and current_user.role not in ("admin", "super_admin"):
         raise BusinessRuleError("Only admins can create admin or finance accounts")
+    if data.role == "super_admin" and current_user.role != "super_admin":
+        raise BusinessRuleError("Only a super admin can create another super admin")
 
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)

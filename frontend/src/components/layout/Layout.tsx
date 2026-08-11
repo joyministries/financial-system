@@ -53,7 +53,11 @@ export default function Layout() {
   const isParent = user?.role === 'parent';
   const items = isParent
     ? parentNavigation
-    : navigation.filter((item) => item.roles.includes(user?.role || ''));
+    : navigation.filter(
+        (item) =>
+          item.roles.includes(user?.role || '') ||
+          (user?.role === 'super_admin' && item.roles.includes('admin'))
+      );
 
   const activeName =
     items.find(

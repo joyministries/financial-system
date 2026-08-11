@@ -26,7 +26,9 @@ async def get_current_user(
 
 def require_role(*roles: str):
     async def _check(user: User = Depends(get_current_user)) -> User:
-        if user.role not in roles:
+        # super_admin is a superset of admin: it satisfies any admin-level gate.
+        allowed = user.role == "super_admin" or user.role in roles
+        if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions",

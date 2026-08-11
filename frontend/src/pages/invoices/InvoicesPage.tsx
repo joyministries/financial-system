@@ -6,9 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download, FilePlus2, Layers, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
+import Pagination from '@/components/Pagination';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PAGE_SIZE = 50;
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -31,6 +33,7 @@ export default function InvoicesPage() {
   const [filterMonth, setFilterMonth] = useState<number | ''>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStudent, setFilterStudent] = useState('');
+  const [page, setPage] = useState(1);
 
   const [genStudent, setGenStudent] = useState('');
   const [genYear, setGenYear] = useState(yearNow);
@@ -67,6 +70,8 @@ export default function InvoicesPage() {
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
+
+  const pagedInvoices = invoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
@@ -185,27 +190,27 @@ export default function InvoicesPage() {
           {!isParent && (
             <select
               value={filterGradeId}
-              onChange={(e) => { setFilterGradeId(e.target.value); setFilterStudent(''); }}
+              onChange={(e) => { setFilterGradeId(e.target.value); setFilterStudent(''); setPage(1); }}
               className="input"
             >
               <option value="">All Grades</option>
               {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           )}
-          <select value={filterStudent} onChange={(e) => setFilterStudent(e.target.value)} className="input">
+          <select value={filterStudent} onChange={(e) => { setFilterStudent(e.target.value); setPage(1); }} className="input">
             <option value="">{isParent ? 'All My Children' : 'All Students'}</option>
             {filteredStudents.map((s) => (
               <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
             ))}
           </select>
-          <select value={filterYear === '' ? '' : filterYear} onChange={(e) => setFilterYear(e.target.value === '' ? '' : parseInt(e.target.value))} className="input">
+          <select value={filterYear === '' ? '' : filterYear} onChange={(e) => { setFilterYear(e.target.value === '' ? '' : parseInt(e.target.value)); setPage(1); }} className="input">
             <option value="">All Years</option>
             {[yearNow - 1, yearNow, yearNow + 1].map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
           {!isParent && (
-            <select value={filterMonth === '' ? '' : filterMonth} onChange={(e) => setFilterMonth(e.target.value === '' ? '' : parseInt(e.target.value))} className="input">
+            <select value={filterMonth === '' ? '' : filterMonth} onChange={(e) => { setFilterMonth(e.target.value === '' ? '' : parseInt(e.target.value)); setPage(1); }} className="input">
               <option value="">All Months</option>
               {MONTHS_FULL.map((m, i) => (
                 <option key={i} value={i + 1}>{m}</option>
@@ -213,7 +218,7 @@ export default function InvoicesPage() {
             </select>
           )}
           {!isParent && (
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input">
+            <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }} className="input">
               <option value="">All Statuses</option>
               <option value="draft">Draft</option>
               <option value="issued">Issued</option>
@@ -371,7 +376,7 @@ export default function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {invoices.map((inv) => (
+                {pagedInvoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{inv.invoice_number}</td>
                     <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(inv.student_id)}</td>
@@ -409,6 +414,13 @@ export default function InvoicesPage() {
               <p className="py-8 text-center text-sm text-slate-500">
                 {isParent ? 'No invoices for your children yet.' : 'No invoices found. Generate one above.'}
               </p>
+            )}
+            {invoices.length > PAGE_SIZE && (
+              <Pagination
+                page={page}
+                totalPages={Math.ceil(invoices.length / PAGE_SIZE)}
+                onPageChange={setPage}
+              />
             )}
           </>
         )}

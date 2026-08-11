@@ -8,7 +8,7 @@ even if a frontend sink is missed.
 
 from typing import Annotated
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 _HTML_META = set("<>")
 _CONTROL = set(chr(c) for c in range(32)) | set("\x7f")
@@ -42,3 +42,9 @@ SafeFullNameOptional = Annotated[
     Field(default=None, min_length=1, max_length=255),
     AfterValidator(_assert_safe_person_name),
 ]
+
+
+class CountResponse(BaseModel):
+    """Generic { total } payload for paginated list endpoints."""
+
+    total: int

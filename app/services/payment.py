@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
@@ -111,6 +111,36 @@ class PaymentService:
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_for_student(
+        self, student_id: str, month: int | None = None, year: int | None = None
+    ) -> int:
+        stmt = select(func.count()).select_from(Payment).where(
+            Payment.student_id == student_id, *self._month_filter(month, year)
+        )
+        return int((await self.db.execute(stmt)).scalar_one())
+
+    async def count_for_students(
+        self, student_ids: list[str], month: int | None = None, year: int | None = None
+    ) -> int:
+        stmt = select(func.count()).select_from(Payment).where(
+            Payment.student_id.in_(student_ids), *self._month_filter(month, year)
+        )
+        return int((await self.db.execute(stmt)).scalar_one())
+
+    async def count_pending(
+        self, month: int | None = None, year: int | None = None
+    ) -> int:
+        stmt = select(func.count()).select_from(Payment).where(
+            Payment.status == "pending", *self._month_filter(month, year)
+        )
+        return int((await self.db.execute(stmt)).scalar_one())
+
+    async def count_all(self, month: int | None = None, year: int | None = None) -> int:
+        stmt = select(func.count()).select_from(Payment).where(
+            *self._month_filter(month, year)
+        )
+        return int((await self.db.execute(stmt)).scalar_one())
 
     async def allocate(self, data: PaymentAllocationCreate) -> PaymentAllocation:
         payment = await self.get(data.payment_id)

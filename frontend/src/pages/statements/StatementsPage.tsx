@@ -5,8 +5,10 @@ import type { Student, Statement, Grade, AdditionalCharge, Payment } from '@/typ
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download, FilePlus2 } from 'lucide-react';
+import Pagination from '@/components/Pagination';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PAGE_SIZE = 50;
 
 interface SchoolStatement {
   student_id: string;
@@ -50,6 +52,9 @@ export default function StatementsPage() {
   const [bulkMonth, setBulkMonth] = useState<number | ''>(1);
   const [bulking, setBulking] = useState(false);
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
+  const [page, setPage] = useState(1);
+
+  const pagedSchoolStudents = (schoolReport?.students ?? []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
@@ -122,6 +127,7 @@ export default function StatementsPage() {
   const loadSchoolReport = () => {
     if (isParent) return;
     setLoadingSchool(true);
+    setPage(1);
     reportsApi
       .statements(year, schoolStatus === 'all' ? undefined : schoolStatus, selectedGrade || undefined)
       .then((r) => setSchoolReport(r.data))
@@ -429,7 +435,7 @@ export default function StatementsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {schoolReport?.students.map((s) => (
+                  {pagedSchoolStudents.map((s) => (
                     <tr key={s.student_id} className="hover:bg-slate-50">
                       <td className="px-6 py-3 font-mono text-sm text-slate-500">{s.student_number}</td>
                       <td className="px-6 py-3 text-sm font-medium text-slate-900">{s.name}</td>
@@ -448,6 +454,15 @@ export default function StatementsPage() {
               </table>
               {(!schoolReport || schoolReport.students.length === 0) && (
                 <p className="py-8 text-center text-sm text-slate-500">No students found for this year.</p>
+              )}
+              {schoolReport && schoolReport.students.length > PAGE_SIZE && (
+                <div className="border-t border-slate-100">
+                  <Pagination
+                    page={page}
+                    totalPages={Math.ceil(schoolReport.students.length / PAGE_SIZE)}
+                    onPageChange={setPage}
+                  />
+                </div>
               )}
             </div>
           )}

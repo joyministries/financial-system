@@ -23,6 +23,20 @@ from app.schemas.user import ParentRegisterCreate
 logger = logging.getLogger(__name__)
 
 
+def _apply_search(stmt, search: str | None):
+    """Add a case-insensitive name / student-number filter to a Student query."""
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Student.first_name.ilike(term),
+                Student.last_name.ilike(term),
+                Student.student_number.ilike(term),
+            )
+        )
+    return stmt
+
+
 class StudentService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -495,7 +509,7 @@ class StudentService:
         return result.scalar_one_or_none()
 
     async def list_by_parent(
-        self, parent_id: str, limit: int = 50, offset: int = 0
+        self, parent_id: str, limit: int = 50, offset: int = 0, search: str | None = None
     ) -> list[Student]:
         stmt = (
             select(Student)
@@ -504,11 +518,19 @@ class StudentService:
             .limit(limit)
             .offset(offset)
         )
+        stmt = _apply_search(stmt, search)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def count_by_parent(self, parent_id: str, search: str | None = None) -> int:
+        stmt = select(func.count()).select_from(Student).where(
+            Student.parent_id == parent_id, Student.is_active == True  # noqa: E712
+        )
+        stmt = _apply_search(stmt, search)
+        return int((await self.db.execute(stmt)).scalar_one())
+
     async def list_by_grade(
-        self, grade_id: str, limit: int = 50, offset: int = 0
+        self, grade_id: str, limit: int = 50, offset: int = 0, search: str | None = None
     ) -> list[Student]:
         stmt = (
             select(Student)
@@ -517,10 +539,20 @@ class StudentService:
             .limit(limit)
             .offset(offset)
         )
+        stmt = _apply_search(stmt, search)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_all(self, limit: int = 50, offset: int = 0) -> list[Student]:
+    async def count_by_grade(self, grade_id: str, search: str | None = None) -> int:
+        stmt = select(func.count()).select_from(Student).where(
+            Student.grade_id == grade_id, Student.is_active == True  # noqa: E712
+        )
+        stmt = _apply_search(stmt, search)
+        return int((await self.db.execute(stmt)).scalar_one())
+
+    async def list_all(
+        self, limit: int = 50, offset: int = 0, search: str | None = None
+    ) -> list[Student]:
         stmt = (
             select(Student)
             .where(Student.is_active == True)  # noqa: E712
@@ -528,8 +560,16 @@ class StudentService:
             .limit(limit)
             .offset(offset)
         )
+        stmt = _apply_search(stmt, search)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_all(self, search: str | None = None) -> int:
+        stmt = select(func.count()).select_from(Student).where(
+            Student.is_active == True  # noqa: E712
+        )
+        stmt = _apply_search(stmt, search)
+        return int((await self.db.execute(stmt)).scalar_one())
 
     async def list_recent(self, limit: int = 20) -> list[Student]:
         stmt = (

@@ -5,6 +5,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role, verify_student_access
 from app.core.rate_limit import limiter
 from app.models.user import User
+from app.schemas.common import CountResponse
 from app.schemas.student import (
     AdminStudentRegisterCreate,
     AdminStudentRegisterResponse,
@@ -167,6 +168,7 @@ async def create_student(
 async def list_students(
     grade_id: str | None = None,
     parent_id: str | None = None,
+    search: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -175,12 +177,31 @@ async def list_students(
     service = StudentService(db)
     # Parents can only see their own children
     if user.role == "parent":
-        return await service.list_by_parent(user.id, limit=limit, offset=offset)
+        return await service.list_by_parent(user.id, limit=limit, offset=offset, search=search)
     if parent_id:
-        return await service.list_by_parent(parent_id, limit=limit, offset=offset)
+        return await service.list_by_parent(parent_id, limit=limit, offset=offset, search=search)
     if grade_id:
-        return await service.list_by_grade(grade_id, limit=limit, offset=offset)
-    return await service.list_all(limit=limit, offset=offset)
+        return await service.list_by_grade(grade_id, limit=limit, offset=offset, search=search)
+    return await service.list_all(limit=limit, offset=offset, search=search)
+
+
+@router.get("/count", response_model=CountResponse)
+async def count_students(
+    grade_id: str | None = None,
+    parent_id: str | None = None,
+    search: str | None = Query(default=None, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Total matching students for pagination (mirrors GET /students filters)."""
+    service = StudentService(db)
+    if user.role == "parent":
+        return CountResponse(total=await service.count_by_parent(user.id, search=search))
+    if parent_id:
+        return CountResponse(total=await service.count_by_parent(parent_id, search=search))
+    if grade_id:
+        return CountResponse(total=await service.count_by_grade(grade_id, search=search))
+    return CountResponse(total=await service.count_all(search=search))
 
 
 @router.get("/registrations", response_model=list[StudentResponse])

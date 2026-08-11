@@ -4,9 +4,11 @@ import type { AdditionalCharge, Student, Grade } from '@/types';
 import toast from 'react-hot-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import Modal from '@/components/Modal';
+import Pagination from '@/components/Pagination';
 
 const CHARGE_TYPES = ['Excursions', 'School Trips', 'Concerts', 'Uniform', 'Books', 'Sports Fees', 'Registration Fees'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const PAGE_SIZE = 50;
 
 export default function ChargesPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -18,6 +20,7 @@ export default function ChargesPage() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   // Form state
   const [scope, setScope] = useState<'grade' | 'student'>('grade');
@@ -34,11 +37,14 @@ export default function ChargesPage() {
   useEffect(() => {
     if (selectedStudent) {
       setLoading(true);
+      setPage(1);
       chargesApi.list(selectedStudent, year).then((r) => setCharges(r.data)).finally(() => setLoading(false));
     } else {
       setCharges([]);
     }
   }, [selectedStudent, year]);
+
+  const pagedCharges = charges.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Students in a grade (grade-first dropdowns: pick a grade, then a student in it).
   const studentsInGrade = (grade: string) =>
@@ -263,7 +269,7 @@ export default function ChargesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {charges.map((c) => (
+                {pagedCharges.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.charge_type}</td>
                     <td className="px-6 py-4 text-sm text-slate-500">{c.description}</td>
@@ -282,6 +288,13 @@ export default function ChargesPage() {
               </tbody>
             </table>
             {charges.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No additional charges.' : 'Select a student.'}</p>}
+            {charges.length > PAGE_SIZE && (
+              <Pagination
+                page={page}
+                totalPages={Math.ceil(charges.length / PAGE_SIZE)}
+                onPageChange={setPage}
+              />
+            )}
           </>
         )}
       </div>

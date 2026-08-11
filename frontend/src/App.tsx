@@ -26,7 +26,7 @@ import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
 function AppRoutes() {
   const { user } = useAuth();
 
-  const isFinanceUser = user?.role === 'admin' || user?.role === 'finance';
+  const isFinanceUser = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'finance';
   const isParent = user?.role === 'parent';
 
   return (
@@ -75,7 +75,7 @@ function AppRoutes() {
           isFinanceUser ? <ChargesPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
         } />
         <Route path="/registrations" element={
-          user?.role === 'admin' ? <RegistrationsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
+          user?.role === 'admin' || user?.role === 'super_admin' ? <RegistrationsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
         } />
         <Route path="/reports" element={
           isFinanceUser ? <ReportsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
