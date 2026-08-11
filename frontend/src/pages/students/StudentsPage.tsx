@@ -71,6 +71,7 @@ export default function StudentsPage() {
   const [arOtherLast, setArOtherLast] = useState('');
   const [arOtherPhone, setArOtherPhone] = useState('');
   const [arOtherEmail, setArOtherEmail] = useState('');
+  const [arSendSms, setArSendSms] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -184,6 +185,7 @@ export default function StudentsPage() {
     setArParentName(''); setArParentEmail(''); setArRelationship('father');
     setArGuardianId(''); setArPhone(''); setArAddress(''); setArPoBox('');
     setArOtherFirst(''); setArOtherLast(''); setArOtherPhone(''); setArOtherEmail('');
+    setArSendSms(false);
   };
 
   const handleAdminRegister = async (e: React.FormEvent) => {
@@ -209,6 +211,7 @@ export default function StudentsPage() {
             email: arOtherEmail || undefined,
           },
         } : {}),
+        send_payment_sms: arSendSms,
       });
       setAdminRegisterResult(data);
       if (data.temporary_password) {
@@ -216,6 +219,8 @@ export default function StudentsPage() {
       } else {
         toast.success('Student registered, linked to existing parent account');
       }
+      if (data.sms_sent) toast.success('Registration fee payment link SMS sent to the guardian');
+      else if (data.sms_error) toast.error(data.sms_error);
       load();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Registration failed');
@@ -586,6 +591,30 @@ export default function StudentsPage() {
                 account, so the student was linked to it — no new password was created.
               </p>
             )}
+            {adminRegisterResult.payment_url && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm font-semibold text-blue-800">Registration fee payment link</p>
+                <p className="mt-1 text-xs text-blue-600">
+                  {adminRegisterResult.sms_sent
+                    ? 'Payment link SMS sent to the guardian. You can also share it directly:'
+                    : 'The payment link could not be SMSed — share it directly with the guardian:'}
+                  {adminRegisterResult.sms_error && (
+                    <span className="block font-medium text-amber-600">
+                      {adminRegisterResult.sms_error}
+                    </span>
+                  )}
+                </p>
+                <a
+                  href={adminRegisterResult.payment_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex max-w-full items-center gap-1 truncate rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  <Send className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{adminRegisterResult.payment_url}</span>
+                </a>
+              </div>
+            )}
             <div className="flex gap-2 pt-2">
               <button onClick={closeAdminRegister} className="btn btn-primary">Done</button>
             </div>
@@ -623,6 +652,20 @@ export default function StudentsPage() {
                   <input value={arPoBox} onChange={(e) => setArPoBox(e.target.value)} placeholder="PO Box" className="input" />
                 </div>
                 <input value={arAddress} onChange={(e) => setArAddress(e.target.value)} placeholder="Physical address" className="input" />
+                <label className="flex items-start gap-2 rounded-lg border border-primary-100 bg-white p-2.5 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={arSendSms}
+                    onChange={(e) => setArSendSms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>
+                    Send the registration fee payment link to the guardian by SMS
+                    <span className="block text-xs text-slate-400">
+                      Requires a registration fee to be set in Settings. The parent pays through the portal.
+                    </span>
+                  </span>
+                </label>
               </div>
             </div>
 

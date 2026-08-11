@@ -1,13 +1,16 @@
 import logging
 import secrets
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.money import to_decimal
 from app.core.security import hash_password
 from app.models.grade import Enrollment, FeeStructure, Student, StudentGuardian
+from app.models.payment import Payment
 from app.models.schedule import MonthlySchedule, OutstandingBalance
 from app.models.user import User
 from app.schemas.student import (
@@ -21,6 +24,11 @@ from app.schemas.student import (
 from app.schemas.user import ParentRegisterCreate
 
 logger = logging.getLogger(__name__)
+
+# Reference prefix on registration-fee payment links (created by the
+# admin-register SMS trigger or the self-registration portal payment). A
+# verified payment carrying this prefix marks the registration fee as paid.
+REGISTRATION_REFERENCE_PREFIX = "REG"
 
 
 def _apply_search(stmt, search: str | None):
@@ -446,13 +454,33 @@ class StudentService:
     async def get_registration_fee(self, student_id: str) -> RegistrationFeeResponse:
         """Parent-facing registration fee for a child.
 
-        Looks up the ACTIVE 'Registration' fee structure for the child's grade
-        in the current academic year. paid is True only when the child has
-        outstanding balances for that fee's schedules AND every balance is
-        settled (status == paid / balance <= 0). No fee configured, no
-        schedules generated, or any unsettled balance => unpaid.
+        The amount now comes from the super-admin `registration_fee` setting
+        (moved out of the per-grade FeeStructure). paid is True when the child
+        has a verified payment whose reference carries the registration prefix
+        (REG-…), i.e. a registration payment link was settled through the
+        portal. When the setting is blank the legacy 'Registration' fee
+        structure for the child's grade/year is used so existing data keeps
+        working.
         """
         student = await self.get_or_raise(student_id)
+
+        from app.services.setting import SettingService
+
+        setting_amount = await SettingService(self.db).get_plain(
+            "registration_fee", ""
+        )
+        if setting_amount.strip():
+            try:
+                amount = to_decimal(setting_amount)
+            except Exception:
+                amount = Decimal("0.00")
+            if amount > 0:
+                paid = await self._registration_fee_paid(student_id)
+                return RegistrationFeeResponse(
+                    configured=True, amount=amount, paid=paid
+                )
+
+        # Legacy path: per-grade 'Registration' fee structure for the current year.
         year = datetime.now(UTC).year
         stmt = (
             select(FeeStructure)
@@ -493,6 +521,18 @@ class StudentService:
         return RegistrationFeeResponse(
             configured=True, amount=fee.annual_amount, paid=paid
         )
+
+    async def _registration_fee_paid(self, student_id: str) -> bool:
+        """True when the child settled a registration payment link (verified
+        payment whose reference carries the REGISTRATION reference prefix)."""
+        prefix = f"{REGISTRATION_REFERENCE_PREFIX}-%"
+        stmt = select(Payment).where(
+            Payment.student_id == student_id,
+            Payment.status == "verified",
+            Payment.reference_number.like(prefix),
+        )
+        rows = (await self.db.execute(stmt)).scalars().all()
+        return bool(rows)
 
     async def get(self, student_id: str) -> Student | None:
         return await self.db.get(Student, student_id)

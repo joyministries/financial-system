@@ -194,7 +194,14 @@ async def download_statement(
     student_name = (
         f"{student.first_name} {student.last_name}" if student else student_id
     )
-    pdf = build_statement_pdf(statement, student_name)
+
+    ledger = await service.ledger_for_statement(statement)
+    pdf = build_statement_pdf(
+        statement,
+        student_name,
+        ledger,
+        student_number=student.student_number if student else "",
+    )
     return pdf_response(
         pdf,
         f"statement-{student_id[:8]}-{academic_year}-{month:02d}.pdf",

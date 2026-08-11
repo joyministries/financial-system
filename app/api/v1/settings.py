@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,13 +85,58 @@ async def update_reminder_settings(
     return _reminder_out(config)
 
 
-# ── site / gateway base URLs ─────────────────────────────────
-# These pin where PayFast sends the browser back and where the ITN callback
-# lives, overriding stale PAYFAST_BASE_URL / FRONTEND_BASE_URL env values.
+# ── registration fee ─────────────────────────────────────────
+# The one-time registration fee charged on student registration. Moved out of
+# the per-grade FeeStructure ("Registration" category) so it is configured in
+# one place instead of being duplicated per grade/year.
+
+REGISTRATION_FEE_KEY = "registration_fee"
+
 
 class BaseUrlIn(BaseModel):
     value: str
 
+
+@router.get("/registration-fee")
+async def get_registration_fee_setting(
+    _user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    svc = SettingService(db)
+    return {"amount": await svc.get_plain(REGISTRATION_FEE_KEY)}
+
+
+@router.put("/registration-fee")
+async def set_registration_fee_setting(
+    payload: BaseUrlIn,
+    user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    svc = SettingService(db)
+    value = payload.value.strip()
+    if value:
+        from decimal import Decimal, InvalidOperation
+
+        try:
+            amount = Decimal(value)
+        except InvalidOperation as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Registration fee must be a number",
+            ) from exc
+        if amount < 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Registration fee cannot be negative",
+            )
+    await svc.set_plain(REGISTRATION_FEE_KEY, value, user.id)
+    await db.commit()
+    return {"amount": value}
+
+
+# ── site / gateway base URLs ─────────────────────────────────
+# These pin where PayFast sends the browser back and where the ITN callback
+# lives, overriding stale PAYFAST_BASE_URL / FRONTEND_BASE_URL env values.
 
 @router.get("/base-urls")
 async def get_base_urls(

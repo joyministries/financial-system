@@ -119,6 +119,10 @@ class AdminStudentRegisterCreate(BaseModel):
     # Other parent (optional secondary guardian)
     other_parent: GuardianCreate | None = None
 
+    # When true, the registration fee (super-admin setting) is charged and a
+    # payment-link SMS is sent to the guardian right after registration.
+    send_payment_sms: bool = False
+
 
 class RegistrationFeeResponse(BaseModel):
     """Parent-facing registration fee for a child's grade + current year.
@@ -211,6 +215,11 @@ class AdminStudentRegisterResponse(BaseModel):
     # Set only when a NEW parent account was created; None when an existing
     # user was linked. Returned exactly once — display it to the admin.
     temporary_password: str | None = None
+    # Present when send_payment_sms was requested and a registration fee is
+    # configured — the admin can hand the link over directly.
+    payment_url: str | None = None
+    sms_sent: bool = False
+    sms_error: str | None = None
 
 
 class MonthlyScheduleResponse(BaseModel):

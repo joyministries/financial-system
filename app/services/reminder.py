@@ -61,7 +61,13 @@ async def outstanding_total(db: AsyncSession, student_id: str) -> Decimal:
 
 
 # ── link generation ──────────────────────────────────────────
-async def create_payment_link(db: AsyncSession, student: Student, amount: Decimal) -> str:
+async def create_payment_link(
+    db: AsyncSession,
+    student: Student,
+    amount: Decimal,
+    reference_prefix: str = REMINDER_REFERENCE_PREFIX,
+    notes: str = "Automated SMS payment-link reminder",
+) -> str:
     """Create a pending PayFast payment and return its shareable pay URL.
 
     Mirrors POST /payfast/initiate but requires no login — the payment id
@@ -73,8 +79,8 @@ async def create_payment_link(db: AsyncSession, student: Student, amount: Decima
             amount=amount,
             payment_method="payfast",
             payment_date=datetime.now(UTC),
-            reference_number=f"{REMINDER_REFERENCE_PREFIX}-{student.id[:8].upper()}",
-            notes="Automated SMS payment-link reminder",
+            reference_number=f"{reference_prefix}-{student.id[:8].upper()}",
+            notes=notes,
         ),
         user_id=student.parent_id,
     )

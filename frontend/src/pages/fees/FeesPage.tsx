@@ -5,7 +5,9 @@ import toast from 'react-hot-toast';
 import { Plus, Settings, Loader2 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
-const CATEGORIES = ['Tuition', 'Registration', 'Uniform', 'Books', 'Transport', 'Boarding', 'Laboratory', 'Examination'];
+// Registration is now configured as a single super-admin setting
+// (Settings → Registration Fee), not a per-grade fee structure.
+const CATEGORIES = ['Tuition', 'Uniform', 'Books', 'Transport', 'Boarding', 'Laboratory', 'Examination'];
 
 export default function FeesPage() {
   const [grades, setGrades] = useState<Grade[]>([]);

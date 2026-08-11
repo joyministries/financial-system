@@ -209,6 +209,8 @@ export const studentsApi = {
     physical_address?: string;
     po_box?: string;
     other_parent?: GuardianInput;
+    /** When true, create a registration-fee payment link and SMS it to the guardian. */
+    send_payment_sms?: boolean;
   }) => api.post<AdminStudentRegisterResponse>('/students/admin-register', data),
   /** Parent-facing registration fee for a child (amount + paid status). */
   registrationFee: (id: string) =>
@@ -434,6 +436,9 @@ export const settingsApi = {
     interval_days: number;
     count: number;
   }) => api.put<ReminderSettings>('/settings/reminders', data),
+  getRegistrationFee: () => api.get<{ amount: string }>('/settings/registration-fee'),
+  updateRegistrationFee: (value: string) =>
+    api.put<{ amount: string }>('/settings/registration-fee', { value }),
 };
 
 // ── SMS (staff) ──────────────────────────────────────────────

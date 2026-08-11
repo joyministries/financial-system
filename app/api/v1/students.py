@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,8 @@ from app.schemas.student import (
 )
 from app.services.audit import AuditService
 from app.services.student import StudentService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
@@ -72,7 +76,11 @@ async def admin_register_student(
     portal account in one action. The student is created as APPROVED (no
     pending step). When a NEW parent account is created, the response carries
     the one-time temporary password for the admin to hand over; when an
-    existing user with that email is linked, temporary_password is None."""
+    existing user with that email is linked, temporary_password is None.
+
+    When `send_payment_sms` is set and a registration fee is configured, a
+    payment link is generated and SMSed to the guardian so the parent can
+    settle the registration fee through the portal."""
     service = StudentService(db)
     student, parent, temp_password = await service.admin_register(data)
     audit = AuditService(db)
@@ -83,13 +91,48 @@ async def admin_register_student(
             "name": name,
             "parent_email": str(data.parent_email),
             "parent_account_created": temp_password is not None,
+            "payment_sms_requested": data.send_payment_sms,
         },
     )
-    return AdminStudentRegisterResponse(
+
+    response = AdminStudentRegisterResponse(
         student=student,
         parent=parent,
         temporary_password=temp_password,
     )
+    if not data.send_payment_sms:
+        return response
+
+    fee = await service.get_registration_fee(student.id)
+    if not fee.configured or fee.amount <= 0:
+        response.sms_error = "No registration fee configured — nothing to charge"
+        return response
+
+    from app.services.reminder import create_payment_link
+    from app.services.sms import SmsNotConfiguredError, SmsService
+    from app.services.student import REGISTRATION_REFERENCE_PREFIX
+
+    payment_url = await create_payment_link(
+        db,
+        student,
+        fee.amount,
+        reference_prefix=REGISTRATION_REFERENCE_PREFIX,
+        notes="Registration fee",
+    )
+    response.payment_url = payment_url
+    try:
+        message = await SmsService(db).send_payment_link(
+            student, fee.amount, payment_url, created_by=user.id
+        )
+        response.sms_sent = message is not None
+        if not message:
+            response.sms_error = "No phone number on the guardian record"
+    except (SmsNotConfiguredError, ValueError) as exc:
+        response.sms_error = str(exc)
+    except Exception as exc:  # noqa: BLE001 — provider failure must not fail registration
+        response.sms_error = f"SMS failed: {exc}"
+        logger.warning("Registration payment SMS failed for %s: %s", name, exc)
+    return response
 
 
 @router.get("/{student_id}/registration-fee", response_model=RegistrationFeeResponse)

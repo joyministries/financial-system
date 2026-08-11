@@ -144,3 +144,92 @@ class StatementService:
         if month == 12:
             return datetime(academic_year + 1, 1, 1, tzinfo=UTC)
         return datetime(academic_year, month + 1, 1, tzinfo=UTC)
+
+    async def ledger_for_statement(self, statement: Statement) -> list[dict]:
+        """Build the bank-style ledger rows for a generated statement.
+
+        Mirrors the frontend ledger: opening balance -> monthly installment
+        (debit) -> additional charges (debit) -> verified payments (credit) ->
+        closing balance, with a running balance column.
+        """
+        charges = await self.charge_service.list_for_student(
+            statement.student_id, statement.academic_year
+        )
+        charges = [c for c in charges if c.month == statement.month]
+        payments = await self._verified_payments_for_month(
+            statement.student_id, statement.academic_year, statement.month
+        )
+
+        due_date = self._due_date_for(statement.academic_year, statement.month)
+        due_str = due_date.strftime("%d %b %Y")
+
+        rows: list[dict] = []
+        balance = to_decimal(statement.opening_balance)
+
+        rows.append(
+            {
+                "date": due_str,
+                "description": "Balance brought forward",
+                "debit": None,
+                "credit": None,
+                "balance": balance,
+                "bold": True,
+            }
+        )
+
+        if statement.total_installments > 0:
+            balance += statement.total_installments
+            rows.append(
+                {
+                    "date": due_str,
+                    "description": (
+                        f"Monthly installment — {statement.month:02d}/{statement.academic_year}"
+                    ),
+                    "debit": statement.total_installments,
+                    "credit": None,
+                    "balance": balance,
+                }
+            )
+
+        for c in charges:
+            balance += c.amount
+            desc = c.description
+            if c.charge_type:
+                desc = f"{desc} ({c.charge_type})"
+            rows.append(
+                {
+                    "date": c.created_at.strftime("%d %b %Y") if c.created_at else due_str,
+                    "description": desc,
+                    "debit": c.amount,
+                    "credit": None,
+                    "balance": balance,
+                }
+            )
+
+        for p in payments:
+            balance -= p.amount
+            ref = f" ({p.reference_number})" if p.reference_number else ""
+            rows.append(
+                {
+                    "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
+                    "description": f"Payment — {p.payment_method}{ref}",
+                    "debit": None,
+                    "credit": p.amount,
+                    "balance": balance,
+                }
+            )
+
+        if abs(balance - to_decimal(statement.closing_balance)) > Decimal("0.01"):
+            balance = to_decimal(statement.closing_balance)
+
+        rows.append(
+            {
+                "date": due_str,
+                "description": "Balance carried forward",
+                "debit": None,
+                "credit": None,
+                "balance": balance,
+                "bold": True,
+            }
+        )
+        return rows

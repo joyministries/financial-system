@@ -48,6 +48,9 @@ export interface ParentRegisterResponse {
   user: User;
   students: Student[];
   access_token: string;
+  /** Portal pay-by-link for the registration fee (first child), when configured. */
+  payment_url: string | null;
+  registration_fee: RegistrationFeeResponse | null;
 }
 
 export interface Grade {
@@ -141,6 +144,10 @@ export interface AdminStudentRegisterResponse {
   };
   /** Set only when a NEW parent account was created — display once to the admin. */
   temporary_password: string | null;
+  /** Portal pay-by-link for the registration fee, when requested and configured. */
+  payment_url: string | null;
+  sms_sent: boolean;
+  sms_error: string | null;
 }
 
 /** Parent-facing registration fee for a child's grade + current year. */

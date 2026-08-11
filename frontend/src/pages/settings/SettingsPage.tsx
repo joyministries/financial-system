@@ -23,6 +23,7 @@ import {
   Send,
   Users,
   Save,
+  Wallet,
 } from 'lucide-react';
 
 const inputCls =
@@ -102,6 +103,9 @@ export default function SettingsPage() {
   const [savingReminders, setSavingReminders] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
 
+  const [registrationFee, setRegistrationFee] = useState('');
+  const [savingRegistrationFee, setSavingRegistrationFee] = useState(false);
+
   const [templates, setTemplates] = useState<SmsTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<SmsTemplate | null>(null);
@@ -161,6 +165,10 @@ export default function SettingsPage() {
       .getReminders()
       .then((res) => setReminders(res.data))
       .catch(() => toast.error('Failed to load reminder settings'));
+    settingsApi
+      .getRegistrationFee()
+      .then((res) => setRegistrationFee(res.data.amount || ''))
+      .catch(() => toast.error('Failed to load registration fee'));
     loadTemplates();
   }, [isAdmin]);
 
@@ -278,11 +286,35 @@ export default function SettingsPage() {
     }
   };
 
+  const saveRegistrationFee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingRegistrationFee(true);
+    try {
+      const res = await settingsApi.updateRegistrationFee(registrationFee.trim());
+      setRegistrationFee(res.data.amount || '');
+      toast.success(
+        res.data.amount
+          ? 'Registration fee saved — used for new registrations'
+          : 'Registration fee cleared — no fee will be charged on registration',
+      );
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to save registration fee');
+    } finally {
+      setSavingRegistrationFee(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
 
-      <div className="max-w-lg rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <div
+        className={`rounded-xl bg-white p-6 shadow-sm border border-slate-100 ${
+          !isAdmin ? 'max-w-lg' : ''
+        }`}
+      >
         <h2 className="text-lg font-semibold text-slate-900">Change Password</h2>
         <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-4">
           <div>
@@ -329,14 +361,9 @@ export default function SettingsPage() {
       </div>
 
       {isAdmin && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between max-w-lg">
-            <h2 className="text-lg font-semibold text-slate-900">Notification Channels</h2>
-            {loadingSettings && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-          </div>
-
+        <>
           {/* ── Email (SMTP) ─────────────────────────────────── */}
-          <div className="max-w-lg rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Mail className="h-5 w-5 text-primary-600" />
@@ -453,7 +480,7 @@ export default function SettingsPage() {
           </div>
 
           {/* ── SMS ──────────────────────────────────────────── */}
-          <div className="max-w-lg rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100 lg:col-span-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5 text-primary-600" />
@@ -545,7 +572,7 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Message Templates ────────────────────────────── */}
-          <div className="max-w-lg rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
             <div className="flex items-center gap-2">
               <Pencil className="h-5 w-5 text-primary-600" />
               <h3 className="text-base font-semibold text-slate-900">Message Templates</h3>
@@ -622,8 +649,42 @@ export default function SettingsPage() {
             )}
           </div>
 
+          {/* ── Registration Fee ─────────────────────────────── */}
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary-600" />
+              <h3 className="text-base font-semibold text-slate-900">Registration Fee</h3>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              One-time fee charged when a student is registered — SMSed to the guardian when an
+              admin ticks "send payment link" on registration, or paid via the portal by a parent
+              registering on their own. Leave blank to charge nothing.
+            </p>
+            <form onSubmit={saveRegistrationFee} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={registrationFee}
+                  onChange={(e) => setRegistrationFee(e.target.value)}
+                  placeholder="e.g. 500.00"
+                  className={inputCls}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={savingRegistrationFee}
+                className="btn btn-primary"
+              >
+                <Save className="h-4 w-4" />
+                {savingRegistrationFee ? 'Saving...' : 'Save Registration Fee'}
+              </button>
+            </form>
+          </div>
+
           {/* ── Payment Link Reminders ───────────────────────── */}
-          <div className="max-w-lg rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <BellRing className="h-5 w-5 text-primary-600" />
@@ -741,8 +802,9 @@ export default function SettingsPage() {
               </form>
             )}
           </div>
-        </div>
+        </>
       )}
+      </div>
     </div>
   );
 }

@@ -392,32 +392,277 @@ def build_receipt_pdf(receipt: Receipt, student_name: str, allocator_name: str) 
 
 
 # ── Statement ──────────────────────────────────────────────
-def build_statement_pdf(statement: Statement, student_name: str) -> bytes:
-    doc = _Document("STUDENT STATEMENT")
+# Bank-style ledger statement that mirrors the frontend statement page
+# exactly: navy account-header card (school name + 4 account fields),
+# a 3-cell balance strip (Opening / Closing / Amount Due), a 5-column
+# ledger (Date | Details | Debit | Credit | Balance) and a totals footer.
+
+_STMT_NAVY = colors.HexColor("#131D3C")
+_STMT_ROW_ALT = colors.HexColor("#F7F8FB")
+_STMT_DEBIT = colors.HexColor("#BE123C")      # rose-700 (frontend debit)
+_STMT_CREDIT = colors.HexColor("#047857")     # emerald-700 (frontend credit)
+_STMT_MUTED = colors.HexColor("#94A3B8")      # slate-400
+
+
+def _statement_header(account: dict) -> Table:
+    """Navy account-header card: school name + 'Statement of Account', then a
+    4-field grid — Account Holder / Account Number / Statement Period / Date Issued."""
+    _right = ParagraphStyle(
+        "StmtHeaderRight",
+        parent=_NORMAL,
+        alignment=TA_RIGHT,
+    )
+    header = Table(
+        [[
+            Paragraph(
+                '<font color="#FFFFFF"><b>Lambton Christian School</b></font>',
+                _NORMAL,
+            ),
+            Paragraph(
+                '<font color="#C7CFE6">STATEMENT OF ACCOUNT</font>',
+                _right,
+            ),
+        ]],
+        colWidths=[110 * mm, 70 * mm],
+    )
+    header.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
+                ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                ("TOPPADDING", (0, 0), (-1, -1), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+
+    fields = [
+        ("Account Holder", account.get("name", "—")),
+        ("Account Number", account.get("number", "—")),
+        ("Statement Period", account.get("period", "—")),
+        ("Date Issued", account.get("issued", "—")),
+    ]
+    cells = []
+    for label, value in fields:
+        cells.append(
+            Paragraph(
+                f'<font color="#94A3B8" size="7">{label.upper()}</font><br/>'
+                f'<font color="#FFFFFF"><b>{value}</b></font>',
+                _NORMAL,
+            )
+        )
+
+    fields_t = Table([cells], colWidths=[45 * mm] * 4)
+    fields_t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
+                ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+
+    body = [
+        [header],
+        [fields_t],
+    ]
+    t = Table(body, colWidths=[180 * mm])
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#FFFFFF22")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return t
+
+
+def _balance_strip(statement: Statement) -> Table:
+    """3-cell strip: Opening Balance | Closing Balance | Amount Due (navy)."""
+    opening = Paragraph(
+        '<font color="#64748B" size="7">OPENING BALANCE</font><br/>'
+        f'<font color="#0F172A"><b>{money(statement.opening_balance)}</b></font>',
+        _NORMAL,
+    )
+    closing = Paragraph(
+        '<font color="#64748B" size="7">CLOSING BALANCE</font><br/>'
+        f'<font color="#0F172A"><b>{money(statement.closing_balance)}</b></font>',
+        _NORMAL,
+    )
+    due = Paragraph(
+        '<font color="#94A3B8" size="7">AMOUNT DUE</font><br/>'
+        f'<font color="#FFFFFF"><b>{money(statement.current_amount_due)}</b></font>',
+        _NORMAL,
+    )
+
+    t = Table([[opening, closing, due]], colWidths=[60 * mm] * 3)
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (1, 0), _STMT_ROW_ALT),
+                ("BACKGROUND", (2, 0), (2, 0), _STMT_NAVY),
+                ("LINEAFTER", (0, 0), (1, 0), 0.5, _LINE),
+                ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return t
+
+
+def _ledger_table(rows: list[dict]) -> Table:
+    """5-column ledger matching the frontend: Date | Details | Debit | Credit | Balance."""
+    data = [
+        [
+            Paragraph('<b>Date</b>', _NORMAL),
+            Paragraph('<b>Transaction Details</b>', _NORMAL),
+            Paragraph('<b>Debit</b>', _MONEY_STYLE),
+            Paragraph('<b>Credit</b>', _MONEY_STYLE),
+            Paragraph('<b>Balance</b>', _MONEY_STYLE),
+        ]
+    ]
+    for r in rows:
+        # Frontend colours: debit rose-700, credit emerald-700, balance slate-900.
+        debit_p = Paragraph(
+            f'<font color="#BE123C">{money(r.get("debit"))}</font>'
+            if r.get("debit") is not None else "",
+            _MONEY_STYLE,
+        )
+        credit_p = Paragraph(
+            f'<font color="#047857">{money(r.get("credit"))}</font>'
+            if r.get("credit") is not None else "",
+            _MONEY_STYLE,
+        )
+        bold = r.get("bold")
+        desc_style = ParagraphStyle(
+            "LedgerDesc",
+            parent=_NORMAL,
+            fontName=_BRAND_BOLD if bold else _BRAND_FONT,
+        )
+        date_style = ParagraphStyle(
+            "LedgerDate",
+            parent=_NORMAL,
+            fontName=_BRAND_BOLD if bold else _BRAND_FONT,
+            textColor=_INK if bold else _INK_SOFT,
+        )
+        bal_style = ParagraphStyle(
+            "LedgerBal",
+            parent=_MONEY_BOLD if bold else _MONEY_STYLE,
+        )
+        data.append(
+            [
+                Paragraph(r.get("date", ""), date_style),
+                Paragraph(r.get("description", ""), desc_style),
+                debit_p,
+                credit_p,
+                Paragraph(money(r.get("balance")), bal_style),
+            ]
+        )
+
+    t = Table(data, colWidths=[30 * mm, 70 * mm, 25 * mm, 28 * mm, 27 * mm], repeatRows=1)
+    style = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.white),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.8, _STMT_MUTED),
+        ("FONTNAME", (0, 0), (-1, 0), _BRAND_BOLD),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, _STMT_ROW_ALT]),
+    ]
+    # Bold final row with a strong top border (balance carried forward)
+    if rows:
+        style.append(("LINEABOVE", (0, -1), (-1, -1), 1.2, _STMT_MUTED))
+        style.append(("FONTNAME", (0, -1), (-1, -1), _BRAND_BOLD))
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _statement_footer(statement: Statement) -> Table:
+    """Light strip: total annual fees, payments received, due date + thanks."""
+    fees = Paragraph(
+        'Total annual fees: '
+        f'<font color="#0F172A"><b>{money(statement.total_fees).replace(" ", "&nbsp;")}</b></font>',
+        _NORMAL,
+    )
+    payments = Paragraph(
+        "Payments received: "
+        '<font color="#047857"><b>'
+        f"{money(statement.total_payments).replace(' ', '&nbsp;')}"
+        "</b></font>",
+        _NORMAL,
+    )
+    due = Paragraph(
+        'Due date: '
+        f'<font color="#0F172A"><b>{_fmt_date(statement.due_date)}</b></font>',
+        _NORMAL,
+    )
+    thanks = Paragraph(
+        '<font color="#94A3B8">Thank you for banking with Lambton Christian School</font>',
+        _NORMAL,
+    )
+
+    t = Table([[fees, payments, due], [thanks]], colWidths=[60 * mm] * 3)
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _STMT_ROW_ALT),
+                ("LINEABOVE", (0, 0), (-1, 0), 0.5, _LINE),
+                ("SPAN", (0, 1), (-1, 1)),
+                ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+            ]
+        )
+    )
+    return t
+
+
+def build_statement_pdf(
+    statement: Statement,
+    student_name: str,
+    ledger: list[dict] | None = None,
+    *,
+    student_number: str = "",
+) -> bytes:
+    doc = _Document("STATEMENT OF ACCOUNT")
+
+    period_start = datetime(statement.academic_year, statement.month, 1)
+    period_label = f"{period_start.strftime('%B %Y')}"
+    issued = statement.generated_at
+    account = {
+        "name": student_name,
+        "number": student_number,
+        "period": period_label,
+        "issued": issued.strftime("%-d %b %Y") if issued else "—",
+    }
+
     doc.story.extend(
         [
-            _heading("Student Statement"),
-            Paragraph(
-                f"{statement.academic_year} · Month {statement.month:02d}", _NUMBER_STYLE
-            ),
-            Spacer(1, 2 * mm),
-            _gold_rule_flowable(),
+            _statement_header(account),
+            Spacer(1, 4 * mm),
+            _balance_strip(statement),
             Spacer(1, 6 * mm),
-            _meta_table(
-                [
-                    ("Student", student_name),
-                    ("Period", f"{statement.month:02d} / {statement.academic_year}"),
-                    ("Opening balance", money(statement.opening_balance)),
-                    ("Total annual fees", money(statement.total_fees)),
-                    ("Monthly installment", money(statement.total_installments)),
-                    ("Additional charges", money(statement.total_additional_charges)),
-                    ("Payments received", money(statement.total_payments)),
-                    ("Closing balance", money(statement.closing_balance)),
-                    ("Amount due", money(statement.current_amount_due)),
-                    ("Due date", _fmt_date(statement.due_date)),
-                    ("Generated", _fmt_datetime(statement.generated_at)),
-                ]
-            ),
+            _ledger_table(ledger or []),
+            Spacer(1, 6 * mm),
+            _statement_footer(statement),
         ]
     )
     return doc.build()

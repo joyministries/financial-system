@@ -138,7 +138,32 @@ async def register_parent(
     )
 
     token = create_access_token(subject=user.id, expires_delta=_token_expiry("parent"))
-    return {"user": user, "students": students, "access_token": token}
+
+    # When a registration fee is configured, create a portal payment link for
+    # the first child so the parent can settle it immediately after applying.
+    payment_url = None
+    registration_fee = None
+    if students:
+        registration_fee = await student_service.get_registration_fee(students[0].id)
+        if registration_fee and registration_fee.configured and registration_fee.amount > 0:
+            from app.services.reminder import create_payment_link
+            from app.services.student import REGISTRATION_REFERENCE_PREFIX
+
+            payment_url = await create_payment_link(
+                db,
+                students[0],
+                registration_fee.amount,
+                reference_prefix=REGISTRATION_REFERENCE_PREFIX,
+                notes="Registration fee",
+            )
+
+    return {
+        "user": user,
+        "students": students,
+        "access_token": token,
+        "payment_url": payment_url,
+        "registration_fee": registration_fee,
+    }
 
 
 @router.post("/login", response_model=Token)

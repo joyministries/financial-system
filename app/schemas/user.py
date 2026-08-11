@@ -1,7 +1,12 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.schemas.common import SafeFullName, SafeName
-from app.schemas.student import ChildRegisterCreate, GuardianCreate, StudentResponse
+from app.schemas.student import (
+    ChildRegisterCreate,
+    GuardianCreate,
+    RegistrationFeeResponse,
+    StudentResponse,
+)
 
 
 def _normalize_email(value: str) -> str:
@@ -86,11 +91,14 @@ class ParentRegisterResponse(BaseModel):
     """Returned after a combined registration so the parent immediately sees
     the generated student numbers and that the applications are pending. The
     access_token logs the parent in so they can upload application documents
-    right away."""
+    right away. When a registration fee is configured, payment_url lets the
+    parent settle it through the portal."""
 
     user: UserResponse
     students: list[StudentResponse]
     access_token: str
+    payment_url: str | None = None
+    registration_fee: RegistrationFeeResponse | None = None
 
 
 class Token(BaseModel):

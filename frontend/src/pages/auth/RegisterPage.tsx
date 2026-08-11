@@ -378,6 +378,27 @@ export default function RegisterPage() {
               </label>
             </div>
 
+            {submitted.payment_url && submitted.registration_fee && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <h2 className="text-sm font-semibold text-blue-900">Registration Fee</h2>
+                <p className="mt-1 text-sm text-blue-800">
+                  A one-time registration fee of{' '}
+                  <span className="font-semibold">
+                    R {Number(submitted.registration_fee.amount).toLocaleString()}
+                  </span>{' '}
+                  applies. Pay now through the secure portal to complete your registration.
+                </p>
+                <a
+                  href={submitted.payment_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-primary mt-3 w-full"
+                >
+                  Pay registration fee via portal
+                </a>
+              </div>
+            )}
+
             <button
               onClick={() => navigate('/dashboard')}
               className="btn btn-primary mt-6 w-full"
