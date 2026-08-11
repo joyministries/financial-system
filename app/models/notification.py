@@ -31,6 +31,9 @@ class Notification(Base):
     entity_type: Mapped[str | None] = mapped_column(String(50))
     entity_id: Mapped[str | None] = mapped_column(String(36))
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # When the recipient opened it; used to auto-delete viewed notifications
+    # shortly after they are read (see NotificationService.purge_viewed).
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

@@ -27,6 +27,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.services.balance import BalanceEngine
+from app.services.notification import NotificationService
 from app.services.receipt import ReceiptService
 from app.services.reminder import due_reminder_index, send_payment_link_reminders
 from app.services.setting import SettingService
@@ -70,11 +71,17 @@ async def run_daily_jobs(
     """
     _require_authorization(authorized)
 
+    # Always run notification cleanup first — independent of reminder config.
+    async with async_session_factory() as db:
+        service = NotificationService(db)
+        cleaned = await service.purge_viewed(settings.READ_NOTIFICATION_RETENTION_SECONDS)
+        await db.commit()
+
     async with async_session_factory() as db:
         setting_service = SettingService(db)
         config = await setting_service.get_reminder_config()
         if not config.get("enabled"):
-            return {"status": "skipped_disabled"}
+            return {"status": "skipped_disabled", "read_notifications_cleaned": cleaned}
 
         idx = due_reminder_index(config)
         if idx is None:
@@ -91,7 +98,12 @@ async def run_daily_jobs(
 
         await setting_service.record_reminder_run(idx + 1)
         await db.commit()
-        return {"status": "sent", "reminder": idx + 1, **result}
+        return {
+            "status": "sent",
+            "reminder": idx + 1,
+            "read_notifications_cleaned": cleaned,
+            **result,
+        }
 
 
 @router.post("/cron/monthly")

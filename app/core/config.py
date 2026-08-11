@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Empty = only Vercel Cron's `x-vercel-cron` header may trigger them.
     CRON_SECRET: str = ""
 
+    # Viewed (read) notifications are auto-deleted this many seconds after the
+    # user opens them. Unread notifications are never deleted.
+    READ_NOTIFICATION_RETENTION_SECONDS: int = 10
+
     SUPERADMIN_EMAIL: str = "admin@school.com"
     SUPERADMIN_PASSWORD: str = "changeme"
 

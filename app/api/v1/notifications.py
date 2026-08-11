@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import require_role
 from app.models.user import User
@@ -23,6 +24,10 @@ async def list_notifications(
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = NotificationService(db)
+    # Self-clean: drop notifications that were viewed more than a few seconds
+    # ago so the bell reflects deletions immediately without waiting for cron.
+    await service.purge_viewed(get_settings().READ_NOTIFICATION_RETENTION_SECONDS)
+    await db.commit()
     items, total, unread = await service.list_for_user(
         user.id, limit=limit, offset=offset, unread_only=unread_only
     )

@@ -5,7 +5,9 @@ office sees them regardless of who is logged in. `notify_staff` runs inside
 the caller's transaction (flush, no commit) — the caller commits as part of
 its own operation, keeping notification delivery atomic with the event.
 """
-from sqlalchemy import func, select
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification
@@ -91,6 +93,7 @@ class NotificationService:
             return None
         if not notification.is_read:
             notification.is_read = True
+            notification.read_at = datetime.now(UTC)
             await self.db.flush()
         return notification
 
@@ -100,8 +103,30 @@ class NotificationService:
             Notification.user_id == user_id, Notification.is_read == False  # noqa: E712
         )
         rows = (await self.db.execute(stmt)).scalars().all()
+        now = datetime.now(UTC)
         for row in rows:
             row.is_read = True
+            row.read_at = now
         if rows:
             await self.db.flush()
         return len(rows)
+
+    async def purge_viewed(self, seconds: int) -> int:
+        """Delete notifications that were viewed (read) more than `seconds` ago.
+
+        Unread notifications are never touched — staff must keep actionable
+        items (pending approvals, payments to verify) until they act on them.
+        Read rows without a read_at timestamp (created before this feature)
+        are treated as old enough to purge. Returns the number of rows deleted.
+        """
+        cutoff = datetime.now(UTC) - timedelta(seconds=seconds)
+        result = await self.db.execute(
+            delete(Notification).where(
+                Notification.is_read == True,  # noqa: E712
+                or_(
+                    Notification.read_at.is_(None),
+                    Notification.read_at < cutoff,
+                ),
+            )
+        )
+        return result.rowcount or 0
