@@ -115,6 +115,24 @@ async def verify_payment(
     if data.action == "approve":
         receipt_service = ReceiptService(db)
         receipt = await receipt_service.generate(payment)
+        # Notify the office: a payment was verified (receipt issued).
+        from app.models.grade import Student
+        from app.services.notification import NotificationService
+
+        student = await db.get(Student, payment.student_id)
+        student_name = (
+            f"{student.first_name} {student.last_name}" if student else "a student"
+        )
+        await NotificationService(db).notify_staff(
+            title="Payment verified",
+            message=(
+                f"{user.full_name} verified R{payment.amount:,.2f} for "
+                f"{student_name} (receipt {receipt.receipt_number})."
+            ),
+            category="payment_received",
+            entity_type="student",
+            entity_id=payment.student_id,
+        )
         # Notify the parent (fire-and-forget after the response; the SMS/email
         # providers must never block the office).
         from app.services.email import send_payment_receipt_email_async
@@ -129,6 +147,25 @@ async def verify_payment(
             receipt.receipt_number, payment.payment_date,
         )
         return {"detail": "Payment verified", "receipt_number": receipt.receipt_number}
+
+    if data.action == "reject":
+        from app.models.grade import Student
+        from app.services.notification import NotificationService
+
+        student = await db.get(Student, payment.student_id)
+        student_name = (
+            f"{student.first_name} {student.last_name}" if student else "a student"
+        )
+        await NotificationService(db).notify_staff(
+            title="Payment rejected",
+            message=(
+                f"{user.full_name} rejected a R{payment.amount:,.2f} payment "
+                f"for {student_name}. The parent should be contacted."
+            ),
+            category="payment_reversed",
+            entity_type="student",
+            entity_id=payment.student_id,
+        )
 
     return {"detail": f"Payment {data.action}d"}
 

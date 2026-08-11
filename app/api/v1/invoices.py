@@ -55,6 +55,26 @@ async def generate_all_invoices(
         academic_year, month, user.id, grade_id=grade_id, notify_parents=notify_parents
     )
     await db.commit()
+
+    # Notify the office when a bulk run finishes (a time-budgeted run reports
+    # complete=false and must be re-invoked; only announce the finished run).
+    if result.get("complete"):
+        from app.services.notification import NotificationService
+
+        created = result.get("created", 0)
+        skipped = result.get("skipped_existing", 0)
+        failed = result.get("failed", 0)
+        await NotificationService(db).notify_staff(
+            title="Invoice generation complete",
+            message=(
+                f"Bulk invoices for {academic_year}-{month:02d}"
+                f"{(' (grade ' + grade_id[:8] + ')') if grade_id else ''}: "
+                f"{created} created, {skipped} already existed"
+                f"{', ' + str(failed) + ' failed' if failed else ''}."
+            ),
+            category="system",
+        )
+        await db.commit()
     return result
 
 
