@@ -60,9 +60,9 @@ export default function StatementsPage() {
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
     studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => {
-      setStudents(r.data);
+      setStudents(r.data.items);
       // Auto-select the first child so a parent sees statements immediately.
-      if (isParent && r.data.length > 0) setSelectedStudent(r.data[0].id);
+      if (isParent && r.data.items.length > 0) setSelectedStudent(r.data.items[0].id);
     });
     gradesApi.list().then((r) => setGrades(r.data));
     getStudentNames().then(setNameMap);
@@ -86,7 +86,7 @@ export default function StatementsPage() {
     setLoadingLedger(true);
     Promise.all([
       chargesApi.list(sid, y).then((r) => r.data as AdditionalCharge[]).catch(() => [] as AdditionalCharge[]),
-      paymentsApi.list({ student_id: sid, limit: 200 }).then((r) => r.data as Payment[]).catch(() => [] as Payment[]),
+      paymentsApi.list({ student_id: sid, limit: 200 }).then((r) => r.data.items as Payment[]).catch(() => [] as Payment[]),
     ])
       .then(([charges, payments]) => {
         setLedgerCharges(charges.filter((c) => c.academic_year === y && c.month === m));

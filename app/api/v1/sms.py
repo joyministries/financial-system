@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.core.deps import require_role
 from app.models.grade import Student
 from app.models.schedule import OutstandingBalance
+from app.schemas.common import PageResponse, build_page_response
 from app.schemas.sms import (
     SmsMessageOut,
     SmsReminderRequest,
@@ -172,16 +173,19 @@ async def send_paylink_reminders_now(
     return SmsReminderResponse(**result)
 
 
-@router.get("/messages", response_model=list[SmsMessageOut])
+@router.get("/messages", response_model=PageResponse[SmsMessageOut])
 async def list_sms_log(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     status: str | None = Query(default=None, max_length=20),
     _user=Depends(staff_only),
     db: AsyncSession = Depends(get_db),
-) -> list[SmsMessageOut]:
-    """SMS send log, newest first."""
-    return await SmsService(db).list_log(limit=limit, offset=offset, status=status)
+) -> PageResponse[SmsMessageOut]:
+    """SMS send log, newest first — one page + pagination metadata."""
+    service = SmsService(db)
+    items = await service.list_log(limit=limit, offset=offset, status=status)
+    total = await service.count(status=status)
+    return build_page_response(items, total, limit, offset)
 
 
 # ── curated templates ────────────────────────────────────────

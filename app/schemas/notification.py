@@ -20,6 +20,11 @@ class NotificationListResponse(BaseModel):
     items: list[NotificationResponse]
     total: int
     unread: int
+    page: int = 1
+    page_size: int = 50
+    total_pages: int = 1
+    has_next_page: bool = False
+    has_previous_page: bool = False
 
 
 class UnreadCountResponse(BaseModel):

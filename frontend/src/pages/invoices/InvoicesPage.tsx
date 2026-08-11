@@ -27,6 +27,7 @@ export default function InvoicesPage() {
   const monthNow = new Date().getMonth() + 1;
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [filterGradeId, setFilterGradeId] = useState('');
@@ -59,24 +60,28 @@ export default function InvoicesPage() {
         academic_year: filterYear === '' ? undefined : filterYear,
         month: filterMonth === '' ? undefined : filterMonth,
         status: filterStatus || undefined,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
       });
-      setInvoices(res.data);
+      setInvoices(res.data.items);
+      setTotalCount(res.data.total);
     } catch {
       setInvoices([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [filterStudent, filterYear, filterMonth, filterStatus]);
+  }, [filterStudent, filterYear, filterMonth, filterStatus, page]);
 
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
 
-  const pagedInvoices = invoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [filterStudent, filterYear, filterMonth, filterStatus]);
 
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
-    studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => setStudents(r.data)).catch(() => setStudents([]));
+    studentsApi.list(isParent ? { parent_id: user!.id, limit: 200 } : { limit: 200 }).then((r) => setStudents(r.data.items)).catch(() => setStudents([]));
     gradesApi.list().then((r) => setGrades(r.data)).catch(() => setGrades([]));
     getStudentNames().then(setNameMap);
   }, []);
@@ -371,7 +376,7 @@ export default function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {pagedInvoices.map((inv) => (
+                {invoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{inv.invoice_number}</td>
                     <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(inv.student_id)}</td>
@@ -412,8 +417,8 @@ export default function InvoicesPage() {
             )}
             <Pagination
               page={page}
-              totalPages={Math.max(1, Math.ceil(invoices.length / PAGE_SIZE))}
-              total={invoices.length}
+              totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+              total={totalCount}
               pageSize={PAGE_SIZE}
               onPageChange={setPage}
             />

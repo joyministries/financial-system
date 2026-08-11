@@ -10,6 +10,7 @@ from app.core.deps import (
 )
 from app.models.grade import Student
 from app.models.user import User
+from app.schemas.common import PageResponse, build_page_response
 from app.schemas.invoice import (
     InvoiceGenerateRequest,
     InvoiceResponse,
@@ -78,7 +79,7 @@ async def generate_all_invoices(
     return result
 
 
-@router.get("/", response_model=list[InvoiceResponse])
+@router.get("/", response_model=PageResponse[InvoiceResponse])
 async def list_invoices(
     student_id: str | None = None,
     academic_year: int | None = None,
@@ -89,6 +90,8 @@ async def list_invoices(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """List invoices — one page only (LIMIT/OFFSET at the DB level) plus
+    pagination metadata so the UI renders controls without a count call."""
     service = InvoiceService(db)
     filters = {
         "academic_year": academic_year,
@@ -97,18 +100,33 @@ async def list_invoices(
         "limit": limit,
         "offset": offset,
     }
+    count_filters = {
+        "academic_year": academic_year,
+        "month": month,
+        "status": status,
+    }
     if user.role == "parent":
         child_ids = await get_parent_student_ids(user, db)
         if not child_ids:
-            return []
+            return build_page_response([], 0, limit, offset)
         if student_id:
             if student_id not in child_ids:
                 raise HTTPException(status_code=403, detail="Access denied")
-            return await service.list_invoices(student_ids=[student_id], **filters)
-        return await service.list_invoices(student_ids=child_ids, **filters)
+            items = await service.list_invoices(student_ids=[student_id], **filters)
+            total = await service.count_invoices(
+                student_ids=[student_id], **count_filters
+            )
+            return build_page_response(items, total, limit, offset)
+        items = await service.list_invoices(student_ids=child_ids, **filters)
+        total = await service.count_invoices(student_ids=child_ids, **count_filters)
+        return build_page_response(items, total, limit, offset)
     if student_id:
-        return await service.list_invoices(student_ids=[student_id], **filters)
-    return await service.list_invoices(**filters)
+        items = await service.list_invoices(student_ids=[student_id], **filters)
+        total = await service.count_invoices(student_ids=[student_id], **count_filters)
+        return build_page_response(items, total, limit, offset)
+    items = await service.list_invoices(**filters)
+    total = await service.count_invoices(**count_filters)
+    return build_page_response(items, total, limit, offset)
 
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)

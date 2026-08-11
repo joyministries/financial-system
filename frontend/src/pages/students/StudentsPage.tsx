@@ -82,22 +82,16 @@ export default function StudentsPage() {
       offset: (page - 1) * PAGE_SIZE,
     };
     studentsApi.list(params)
-      .then((r) => setStudents(r.data))
+      .then((r) => {
+        setStudents(r.data.items);
+        setTotalCount(r.data.total);
+      })
       .catch(() => toast.error('Failed to load students'))
       .finally(() => setLoading(false));
   };
 
-  const loadCount = () => {
-    studentsApi.count({
-      ...(filterGrade ? { grade_id: filterGrade } : {}),
-      ...(search ? { search } : {}),
-    })
-      .then((r) => setTotalCount(r.data.total))
-      .catch(() => setTotalCount(0));
-  };
-
   useEffect(() => { gradesApi.list().then((r) => setGrades(r.data)); }, []);
-  useEffect(() => { load(); loadCount(); }, [filterGrade, search, page]);
+  useEffect(() => { load(); }, [filterGrade, search, page]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,10 +268,10 @@ export default function StudentsPage() {
     try {
       const year = new Date().getFullYear();
       const [payRes, stmtRes] = await Promise.all([
-        paymentsApi.list({ student_id: s.id, limit: 6 }).catch(() => ({ data: [] as Payment[] })),
+        paymentsApi.list({ student_id: s.id, limit: 6 }).catch(() => ({ data: { items: [] as Payment[] } })),
         financialApi.listStatements(s.id, year).catch(() => ({ data: [] as Statement[] })),
       ]);
-      setViewPayments(payRes.data);
+      setViewPayments(payRes.data.items);
       setViewStatements(stmtRes.data);
     } finally {
       setViewLoading(false);

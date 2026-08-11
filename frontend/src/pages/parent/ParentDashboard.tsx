@@ -123,7 +123,7 @@ export default function ParentDashboard() {
     if (!user) return;
     try {
       const studentsRes = await studentsApi.list({ parent_id: user.id });
-      const students = studentsRes.data;
+      const students = studentsRes.data.items;
       setChildren(students);
 
       const balancePromises = students.map((s: Student) =>
@@ -161,7 +161,7 @@ export default function ParentDashboard() {
 
       if (students.length > 0) {
         const payRes = await paymentsApi.list({ student_id: students[0].id });
-        setRecentPayments(payRes.data.slice(0, 5));
+        setRecentPayments(payRes.data.items.slice(0, 5));
       }
     } catch {
       // Errors handled per-request above
@@ -181,7 +181,7 @@ export default function ParentDashboard() {
     }
     try {
       const res = await paymentsApi.list(params);
-      setRecentPayments(res.data.slice(0, 50));
+      setRecentPayments(res.data.items.slice(0, 50));
     } catch {
       setRecentPayments([]);
     }
@@ -372,12 +372,12 @@ export default function ParentDashboard() {
       ]);
       setFinData({
         summary: summaryRes.data,
-        receipts: receiptsRes.data,
+        receipts: receiptsRes.data.items,
         statements: statementsRes.data,
         fees: feesRes.data,
         charges: chargesRes.data,
         documents: [],
-        invoices: invoicesRes.data,
+        invoices: invoicesRes.data.items,
       });
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Failed to load financials');

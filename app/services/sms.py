@@ -466,10 +466,13 @@ class SmsService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def count(self) -> int:
+    async def count(self, status: str | None = None) -> int:
         from sqlalchemy import func
 
-        result = await self.db.execute(select(func.count()).select_from(SmsMessage))
+        stmt = select(func.count()).select_from(SmsMessage)
+        if status:
+            stmt = stmt.where(SmsMessage.status == status)
+        result = await self.db.execute(stmt)
         return result.scalar_one()
 
 

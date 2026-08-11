@@ -54,24 +54,18 @@ export default function PaymentsPage() {
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     };
-    const countParams: Record<string, string | number> = {
-      ...(filter === 'pending' ? { status: 'pending' } : {}),
-      ...(search.trim() ? { search: search.trim() } : {}),
-    };
     if (monthFilter) {
       const [year, month] = monthFilter.split('-').map(Number);
       params.year = year;
       params.month = month;
-      countParams.year = year;
-      countParams.month = month;
     }
     paymentsApi.list(params)
-      .then((r) => setPayments(r.data))
+      .then((r) => {
+        setPayments(r.data.items);
+        setTotalCount(r.data.total);
+      })
       .catch(() => toast.error('Failed to load payments'))
       .finally(() => setLoading(false));
-    paymentsApi.count(countParams)
-      .then((r) => setTotalCount(r.data.total))
-      .catch(() => {});
   };
 
   useEffect(() => { getStudentNames().then(setNameMap); }, []);

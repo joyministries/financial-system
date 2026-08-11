@@ -422,10 +422,30 @@ export interface AppNotification {
   created_at: string;
 }
 
+/**
+ * Self-describing pagination envelope returned by list endpoints.
+ * The server fetches ONLY `page_size` rows (LIMIT/OFFSET at the DB level) and
+ * computes the metadata from a cheap count(*) — never the whole table.
+ */
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  page_size: number;
+  total_pages: number;
+  total: number;
+  has_next_page: boolean;
+  has_previous_page: boolean;
+}
+
 export interface NotificationListResponse {
   items: AppNotification[];
   total: number;
   unread: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next_page: boolean;
+  has_previous_page: boolean;
 }
 
 export interface UnreadCountResponse {

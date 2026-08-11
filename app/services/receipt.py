@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError
@@ -84,3 +84,37 @@ class ReceiptService:
         stmt = stmt.order_by(Receipt.created_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_for_student(self, student_id: str) -> int:
+        stmt = select(func.count()).select_from(Receipt).where(
+            Receipt.student_id == student_id
+        )
+        return int((await self.db.execute(stmt)).scalar_one())
+
+    async def count_all(
+        self,
+        student_ids: list[str] | None = None,
+        grade_id: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        payment_method: str | None = None,
+    ) -> int:
+        """count(*) mirroring list_all filters (for pagination metadata)."""
+        stmt = select(func.count()).select_from(Receipt)
+
+        if student_ids is not None:
+            if not student_ids:
+                return 0
+            stmt = stmt.where(Receipt.student_id.in_(student_ids))
+        if grade_id:
+            stmt = stmt.join(Student, Student.id == Receipt.student_id).where(
+                Student.grade_id == grade_id
+            )
+        if payment_method:
+            stmt = stmt.where(Receipt.payment_method == payment_method)
+        if start_date:
+            stmt = stmt.where(Receipt.created_at >= start_date)
+        if end_date:
+            stmt = stmt.where(Receipt.created_at <= end_date)
+
+        return int((await self.db.execute(stmt)).scalar_one())

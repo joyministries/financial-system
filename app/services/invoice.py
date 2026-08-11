@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
@@ -125,6 +125,29 @@ class InvoiceService:
         stmt = stmt.order_by(Invoice.created_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_invoices(
+        self,
+        student_ids: list[str] | None = None,
+        academic_year: int | None = None,
+        month: int | None = None,
+        status: str | None = None,
+    ) -> int:
+        """count(*) mirroring list_invoices filters (for pagination metadata)."""
+        stmt = select(func.count()).select_from(Invoice)
+
+        if student_ids is not None:
+            if not student_ids:
+                return 0
+            stmt = stmt.where(Invoice.student_id.in_(student_ids))
+        if academic_year:
+            stmt = stmt.where(Invoice.academic_year == academic_year)
+        if month:
+            stmt = stmt.where(Invoice.month == month)
+        if status:
+            stmt = stmt.where(Invoice.status == status)
+
+        return int((await self.db.execute(stmt)).scalar_one())
 
     async def update_status(self, invoice_id: str, status: str, user_id: str) -> Invoice:
         invoice = await self.get(invoice_id)

@@ -32,7 +32,7 @@ export default function ChargesPage() {
   const [amount, setAmount] = useState('');
   const [month, setMonth] = useState(new Date().getMonth() + 1);
 
-  useEffect(() => { studentsApi.list().then((r) => setStudents(r.data)); }, []);
+  useEffect(() => { studentsApi.list({ limit: 200 }).then((r) => setStudents(r.data.items)); }, []);
   useEffect(() => { gradesApi.list().then((r) => setGrades(r.data)); }, []);
 
   useEffect(() => {

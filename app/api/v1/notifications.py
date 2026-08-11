@@ -5,6 +5,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import require_role
 from app.models.user import User
+from app.schemas.common import build_page_response
 from app.schemas.notification import (
     NotificationListResponse,
     NotificationResponse,
@@ -31,10 +32,18 @@ async def list_notifications(
     items, total, unread = await service.list_for_user(
         user.id, limit=limit, offset=offset, unread_only=unread_only
     )
+    page = build_page_response(
+        [NotificationResponse.model_validate(n) for n in items], total, limit, offset
+    )
     return NotificationListResponse(
-        items=[NotificationResponse.model_validate(n) for n in items],
-        total=total,
+        items=page.items,
+        total=page.total,
         unread=unread,
+        page=page.page,
+        page_size=page.page_size,
+        total_pages=page.total_pages,
+        has_next_page=page.has_next_page,
+        has_previous_page=page.has_previous_page,
     )
 
 

@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.core.deps import (
 )
 from app.models.grade import Student
 from app.models.user import User
+from app.schemas.common import PageResponse, build_page_response
 from app.schemas.financial import (
     MonthlySummaryResponse,
     ReceiptResponse,
@@ -29,26 +30,42 @@ from app.services.student_summary import StudentSummaryService
 router = APIRouter(prefix="/financial", tags=["Financial"])
 
 
-@router.get("/receipts", response_model=list[ReceiptResponse])
+@router.get("/receipts", response_model=PageResponse[ReceiptResponse])
 async def list_receipts(
     student_id: str | None = None,
     grade_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """List receipts — one page only (LIMIT/OFFSET at the DB level) plus
+    pagination metadata so the UI never loads the full receipt history."""
     service = ReceiptService(db)
     if user.role == "parent":
         child_ids = await get_parent_student_ids(user, db)
         if not child_ids:
-            return []
+            return build_page_response([], 0, limit, offset)
         if student_id:
             if student_id not in child_ids:
                 raise HTTPException(status_code=403, detail="Access denied")
-            return await service.list_for_student(student_id)
-        return await service.list_all(student_ids=child_ids)
+            items = await service.list_for_student(
+                student_id, limit=limit, offset=offset
+            )
+            total = await service.count_for_student(student_id)
+            return build_page_response(items, total, limit, offset)
+        items = await service.list_all(
+            student_ids=child_ids, limit=limit, offset=offset
+        )
+        total = await service.count_all(student_ids=child_ids)
+        return build_page_response(items, total, limit, offset)
     if student_id:
-        return await service.list_for_student(student_id)
-    return await service.list_all(grade_id=grade_id)
+        items = await service.list_for_student(student_id, limit=limit, offset=offset)
+        total = await service.count_for_student(student_id)
+        return build_page_response(items, total, limit, offset)
+    items = await service.list_all(grade_id=grade_id, limit=limit, offset=offset)
+    total = await service.count_all(grade_id=grade_id)
+    return build_page_response(items, total, limit, offset)
 
 
 @router.get("/receipts/{receipt_number}", response_model=ReceiptResponse)

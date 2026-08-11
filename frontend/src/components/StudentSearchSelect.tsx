@@ -54,7 +54,7 @@ export default function StudentSearchSelect({
       setLoading(true);
       studentsApi
         .list({ search: query.trim() || undefined, limit: 10 })
-        .then((r) => setResults(r.data.filter((s: Student) => !excludeIds.includes(s.id))))
+        .then((r) => setResults(r.data.items.filter((s: Student) => !excludeIds.includes(s.id))))
         .catch(() => setResults([]))
         .finally(() => setLoading(false));
     }, 250);

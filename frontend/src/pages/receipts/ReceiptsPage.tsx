@@ -14,6 +14,7 @@ export default function ReceiptsPage() {
   const { user } = useAuth();
   const isParent = user?.role === 'parent';
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [selectedGrade, setSelectedGrade] = useState('');
@@ -22,28 +23,31 @@ export default function ReceiptsPage() {
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
   const [page, setPage] = useState(1);
 
-  const pagedReceipts = receipts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   useEffect(() => {
     setLoading(true);
     // Parents only ever see their own children (the backend enforces this too).
     Promise.all([
-      studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => setStudents(r.data)),
+      studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => setStudents(r.data.items)),
       gradesApi.list().then((r) => setGrades(r.data)),
-      financialApi.listReceipts().then((r) => setReceipts(r.data)),
+      financialApi
+        .listReceipts({
+          student_id: selectedStudent || undefined,
+          grade_id: !selectedStudent ? selectedGrade || undefined : undefined,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+        })
+        .then((r) => {
+          setReceipts(r.data.items);
+          setTotalCount(r.data.total);
+        }),
       getStudentNames().then(setNameMap),
     ]).finally(() => setLoading(false));
-  }, []);
+  }, [selectedStudent, selectedGrade, page]);
 
   const handleFilter = (studentId: string, gradeId: string) => {
     setSelectedStudent(studentId);
     setSelectedGrade(gradeId);
     setPage(1);
-    setLoading(true);
-    financialApi
-      .listReceipts({ student_id: studentId || undefined, grade_id: !studentId ? gradeId || undefined : undefined })
-      .then((r) => setReceipts(r.data))
-      .finally(() => setLoading(false));
   };
 
   const getStudentName = (id: string) => {
@@ -119,7 +123,7 @@ export default function ReceiptsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {pagedReceipts.map((r) => (
+            {receipts.map((r) => (
               <tr key={r.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{r.receipt_number}</td>
                 <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(r.student_id)}</td>
@@ -138,8 +142,8 @@ export default function ReceiptsPage() {
         {receipts.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No receipts found.</p>}
         <Pagination
           page={page}
-          totalPages={Math.max(1, Math.ceil(receipts.length / PAGE_SIZE))}
-          total={receipts.length}
+          totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+          total={totalCount}
           pageSize={PAGE_SIZE}
           onPageChange={setPage}
         />

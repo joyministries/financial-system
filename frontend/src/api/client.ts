@@ -9,14 +9,18 @@ import type {
   Invoice,
   NotificationListResponse,
   NotificationSettings,
+  PageResponse,
   ParentRegisterPayload,
   ParentRegisterResponse,
+  Payment,
+  Receipt,
   RegistrationFeeResponse,
   ReminderRunResult,
   ReminderSettings,
   SmsSettings,
   SmsTemplate,
   SmsTemplateRenderResult,
+  Student,
   StudentDocument,
   UnreadCountResponse,
 } from '@/types';
@@ -140,7 +144,7 @@ export const feesApi = {
 // ── Students ──────────────────────────────────────────────
 export const studentsApi = {
   list: (params?: { grade_id?: string; parent_id?: string; search?: string; limit?: number; offset?: number }) =>
-    api.get('/students/', { params }),
+    api.get<PageResponse<Student>>('/students/', { params }),
   count: (params?: { grade_id?: string; parent_id?: string; search?: string }) =>
     api.get<{ total: number }>('/students/count', { params }),
   names: () =>
@@ -272,7 +276,7 @@ export const chargesApi = {
 // ── Payments ──────────────────────────────────────────────
 export const paymentsApi = {
   list: (params?: { student_id?: string; status?: string; month?: number; year?: number; limit?: number; offset?: number }) =>
-    api.get('/payments/', { params }),
+    api.get<PageResponse<Payment>>('/payments/', { params }),
   count: (params?: { student_id?: string; status?: string; month?: number; year?: number }) =>
     api.get<{ total: number }>('/payments/count', { params }),
   get: (id: string) => api.get(`/payments/${id}`),
@@ -300,8 +304,15 @@ export const paymentsApi = {
 
 // ── Financial ─────────────────────────────────────────────
 export const financialApi = {
-  listReceipts: (params?: { student_id?: string; grade_id?: string }) =>
-    api.get('/financial/receipts', { params: { student_id: params?.student_id, grade_id: params?.grade_id } }),
+  listReceipts: (params?: { student_id?: string; grade_id?: string; limit?: number; offset?: number }) =>
+    api.get<PageResponse<Receipt>>('/financial/receipts', {
+      params: {
+        student_id: params?.student_id,
+        grade_id: params?.grade_id,
+        limit: params?.limit,
+        offset: params?.offset,
+      },
+    }),
   getReceipt: (num: string) => api.get(`/financial/receipts/${num}`),
   receiptDownloadUrl: (receiptNumber: string) =>
     `/financial/receipts/${encodeURIComponent(receiptNumber)}/download`,
@@ -330,7 +341,7 @@ export const invoicesApi = {
     status?: string;
     limit?: number;
     offset?: number;
-  }) => api.get<Invoice[]>('/invoices/', { params }),
+  }) => api.get<PageResponse<Invoice>>('/invoices/', { params }),
   get: (id: string) => api.get<Invoice>(`/invoices/${id}`),
   generate: (data: { student_id: string; academic_year: number; month: number }) =>
     api.post<Invoice>('/invoices/generate', data),
@@ -450,7 +461,7 @@ export const smsApi = {
     api.post<SmsReminderResponse>('/sms/reminders', { academic_year, month }),
   payLinkReminders: () => api.post<ReminderRunResult>('/sms/reminders/paylink'),
   log: (params?: { limit?: number; offset?: number; status?: string }) =>
-    api.get<SmsMessage[]>(`/sms/messages`, { params }),
+    api.get<PageResponse<SmsMessage>>(`/sms/messages`, { params }),
   templates: () => api.get<SmsTemplate[]>('/sms/templates'),
   updateTemplate: (key: string, data: { name?: string; body: string; is_active: boolean }) =>
     api.put<SmsTemplate>(`/sms/templates/${key}`, data),

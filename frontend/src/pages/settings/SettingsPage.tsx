@@ -860,7 +860,7 @@ function SmsTools({ ready }: { ready: boolean }) {
     setLoadingLog(true);
     try {
       const res = await smsApi.log({ limit: 15 });
-      setLog(res.data);
+      setLog(res.data.items);
     } catch {
       /* log is non-blocking */
     } finally {

@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role, verify_student_access
 from app.core.rate_limit import limiter
 from app.models.user import User
-from app.schemas.common import CountResponse
+from app.schemas.common import CountResponse, PageResponse, build_page_response
 from app.schemas.student import (
     AdminStudentRegisterCreate,
     AdminStudentRegisterResponse,
@@ -207,7 +207,7 @@ async def create_student(
     return student
 
 
-@router.get("/", response_model=list[StudentResponse])
+@router.get("/", response_model=PageResponse[StudentResponse])
 async def list_students(
     grade_id: str | None = None,
     parent_id: str | None = None,
@@ -217,15 +217,32 @@ async def list_students(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """List students — one page only (LIMIT/OFFSET at the DB level) plus
+    self-describing pagination metadata so the UI renders controls without a
+    second count request."""
     service = StudentService(db)
     # Parents can only see their own children
     if user.role == "parent":
-        return await service.list_by_parent(user.id, limit=limit, offset=offset, search=search)
+        items = await service.list_by_parent(
+            user.id, limit=limit, offset=offset, search=search
+        )
+        total = await service.count_by_parent(user.id, search=search)
+        return build_page_response(items, total, limit, offset)
     if parent_id:
-        return await service.list_by_parent(parent_id, limit=limit, offset=offset, search=search)
+        items = await service.list_by_parent(
+            parent_id, limit=limit, offset=offset, search=search
+        )
+        total = await service.count_by_parent(parent_id, search=search)
+        return build_page_response(items, total, limit, offset)
     if grade_id:
-        return await service.list_by_grade(grade_id, limit=limit, offset=offset, search=search)
-    return await service.list_all(limit=limit, offset=offset, search=search)
+        items = await service.list_by_grade(
+            grade_id, limit=limit, offset=offset, search=search
+        )
+        total = await service.count_by_grade(grade_id, search=search)
+        return build_page_response(items, total, limit, offset)
+    items = await service.list_all(limit=limit, offset=offset, search=search)
+    total = await service.count_all(search=search)
+    return build_page_response(items, total, limit, offset)
 
 
 @router.get("/count", response_model=CountResponse)

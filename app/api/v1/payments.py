@@ -9,7 +9,7 @@ from app.core.deps import (
     verify_student_access,
 )
 from app.models.user import User
-from app.schemas.common import CountResponse
+from app.schemas.common import CountResponse, PageResponse, build_page_response
 from app.schemas.payment import (
     PaymentAllocationCreate,
     PaymentAllocationResponse,
@@ -35,7 +35,7 @@ async def record_payment(
     return await service.record_payment(data, user.id)
 
 
-@router.get("/", response_model=list[PaymentResponse])
+@router.get("/", response_model=PageResponse[PaymentResponse])
 async def list_payments(
     student_id: str | None = None,
     status: str | None = None,
@@ -47,31 +47,45 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """List payments — one page only (LIMIT/OFFSET at the DB level) plus
+    pagination metadata so the UI never needs a separate count call."""
     service = PaymentService(db)
     if user.role == "parent":
         child_ids = await get_parent_student_ids(user, db)
         if not child_ids:
-            return []
+            return build_page_response([], 0, limit, offset)
         if student_id:
             if student_id not in child_ids:
                 raise HTTPException(status_code=403, detail="Access denied")
-            return await service.list_for_student(
+            items = await service.list_for_student(
                 student_id, limit=limit, offset=offset, month=month, year=year
             )
-        return await service.list_for_students(
+            total = await service.count_for_student(student_id, month=month, year=year)
+            return build_page_response(items, total, limit, offset)
+        items = await service.list_for_students(
             child_ids, limit=limit, offset=offset, month=month, year=year, search=search
         )
+        total = await service.count_for_students(
+            child_ids, month=month, year=year, search=search
+        )
+        return build_page_response(items, total, limit, offset)
     if student_id:
-        return await service.list_for_student(
+        items = await service.list_for_student(
             student_id, limit=limit, offset=offset, month=month, year=year
         )
+        total = await service.count_for_student(student_id, month=month, year=year)
+        return build_page_response(items, total, limit, offset)
     if status == "pending":
-        return await service.list_pending(
+        items = await service.list_pending(
             limit=limit, offset=offset, month=month, year=year, search=search
         )
-    return await service.list_all(
+        total = await service.count_pending(month=month, year=year, search=search)
+        return build_page_response(items, total, limit, offset)
+    items = await service.list_all(
         limit=limit, offset=offset, month=month, year=year, search=search
     )
+    total = await service.count_all(month=month, year=year, search=search)
+    return build_page_response(items, total, limit, offset)
 
 
 @router.get("/count", response_model=CountResponse)
