@@ -271,11 +271,12 @@ class ReportService:
         }
 
     async def statement_report(
-        self, academic_year: int, status_filter: str | None = None
+        self, academic_year: int, status_filter: str | None = None, grade_id: str | None = None
     ) -> dict:
         """School-wide statement summary — every approved student with their
         outstanding balance for the academic year (balance 0 when no fee rows
-        exist yet), so admin can see the whole school, not just one child."""
+        exist yet), so admin can see the whole school, not just one child.
+        Pass `grade_id` to restrict the report to one grade."""
         stmt = (
             select(
                 Student.id,
@@ -300,7 +301,11 @@ class ReportService:
             )
             .outerjoin(Grade, Grade.id == Student.grade_id)
             .where(Student.registration_status == "approved")
-            .group_by(
+        )
+        if grade_id:
+            stmt = stmt.where(Student.grade_id == grade_id)
+        stmt = (
+            stmt.group_by(
                 Student.id,
                 Student.student_number,
                 Student.first_name,

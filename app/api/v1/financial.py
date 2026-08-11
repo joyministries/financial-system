@@ -276,11 +276,12 @@ async def payment_trends_report(
 async def statement_report(
     academic_year: int,
     status: str | None = None,
+    grade_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = ReportService(db)
-    return await service.statement_report(academic_year, status)
+    return await service.statement_report(academic_year, status, grade_id)
 
 
 @router.post("/balance-engine/rollover")

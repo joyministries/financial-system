@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { financialApi, reportsApi, studentsApi, gradesApi, downloadPdf } from '@/api/client';
+import { financialApi, reportsApi, studentsApi, gradesApi, chargesApi, paymentsApi, downloadPdf } from '@/api/client';
 import { getStudentNames } from '@/lib/studentNames';
-import type { Student, Statement, Grade } from '@/types';
+import type { Student, Statement, Grade, AdditionalCharge, Payment } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download, FilePlus2 } from 'lucide-react';
@@ -33,9 +33,15 @@ export default function StatementsPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [statements, setStatements] = useState<Statement[]>([]);
   const [selectedStatement, setSelectedStatement] = useState<Statement | null>(null);
+  const [stmtMonth, setStmtMonth] = useState<number | ''>('');
   const [genMonth, setGenMonth] = useState<number | ''>(1);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Transaction ledger for the selected bank-style statement.
+  const [ledgerCharges, setLedgerCharges] = useState<AdditionalCharge[]>([]);
+  const [ledgerPayments, setLedgerPayments] = useState<Payment[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
 
   // Whole-school statement summary (admin / finance only).
   const [schoolStatus, setSchoolStatus] = useState<'all' | 'paid' | 'overdue'>('all');
@@ -68,6 +74,29 @@ export default function StatementsPage() {
 
   useEffect(() => { loadStatements(); }, [selectedStudent, year]);
 
+  // Load the transaction detail behind a statement so it can be rendered as a
+  // bank-style ledger (charges + verified payments for the statement month).
+  useEffect(() => {
+    if (!selectedStatement) { setLedgerCharges([]); setLedgerPayments([]); return; }
+    const sid = selectedStatement.student_id;
+    const y = selectedStatement.academic_year;
+    const m = selectedStatement.month;
+    setLoadingLedger(true);
+    Promise.all([
+      chargesApi.list(sid, y).then((r) => r.data as AdditionalCharge[]).catch(() => [] as AdditionalCharge[]),
+      paymentsApi.list({ student_id: sid, limit: 200 }).then((r) => r.data as Payment[]).catch(() => [] as Payment[]),
+    ])
+      .then(([charges, payments]) => {
+        setLedgerCharges(charges.filter((c) => c.academic_year === y && c.month === m));
+        setLedgerPayments(
+          payments.filter(
+            (p) => p.status === 'verified' && p.payment_date?.startsWith(`${y}-${String(m).padStart(2, '0')}`)
+          )
+        );
+      })
+      .finally(() => setLoadingLedger(false));
+  }, [selectedStatement]);
+
   const handleGenerate = async (month: number) => {
     if (!selectedStudent) return toast.error('Select a student');
     setGenerating(true);
@@ -94,13 +123,13 @@ export default function StatementsPage() {
     if (isParent) return;
     setLoadingSchool(true);
     reportsApi
-      .statements(year, schoolStatus === 'all' ? undefined : schoolStatus)
+      .statements(year, schoolStatus === 'all' ? undefined : schoolStatus, selectedGrade || undefined)
       .then((r) => setSchoolReport(r.data))
       .catch(() => toast.error('Could not load the school statement summary'))
       .finally(() => setLoadingSchool(false));
   };
 
-  useEffect(() => { loadSchoolReport(); }, [year, schoolStatus]);
+  useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade]);
 
   const handleBulkGenerate = async () => {
     if (!bulkMonth) return toast.error('Select a month');
@@ -143,6 +172,66 @@ export default function StatementsPage() {
     }
   };
 
+  const visibleStatements = stmtMonth
+    ? statements.filter((s) => s.month === stmtMonth)
+    : statements;
+
+  // ── Bank-style ledger ─────────────────────────────────────
+  // Rows: opening balance → installment (debit) → charges (debit) →
+  // payments (credit) → closing balance. Running balance column like a bank
+  // statement so parents see exactly how the month's number was reached.
+  interface LedgerRow { date: string; description: string; debit?: number; credit?: number; balance: number; bold?: boolean }
+  const buildLedger = (s: Statement): LedgerRow[] => {
+    const rows: LedgerRow[] = [];
+    let balance = s.opening_balance;
+    const dueDate = s.due_date ? new Date(s.due_date).toLocaleDateString() : `${MONTHS[s.month - 1]} ${s.academic_year}`;
+    rows.push({
+      date: dueDate,
+      description: 'Balance brought forward',
+      balance,
+      bold: true,
+    });
+    if (s.total_installments > 0) {
+      balance += s.total_installments;
+      rows.push({
+        date: dueDate,
+        description: `Monthly installment — ${MONTHS[s.month - 1]} ${s.academic_year}`,
+        debit: s.total_installments,
+        balance,
+      });
+    }
+    ledgerCharges.forEach((c) => {
+      balance += c.amount;
+      rows.push({
+        date: c.created_at ? new Date(c.created_at).toLocaleDateString() : dueDate,
+        description: `${c.description}${c.charge_type ? ` (${c.charge_type})` : ''}`,
+        debit: c.amount,
+        balance,
+      });
+    });
+    ledgerPayments.forEach((p) => {
+      balance -= p.amount;
+      rows.push({
+        date: new Date(p.payment_date).toLocaleDateString(),
+        description: `Payment — ${p.payment_method}${p.reference_number ? ` (${p.reference_number})` : ''}`,
+        credit: p.amount,
+        balance,
+      });
+    });
+    if (Math.abs(balance - s.closing_balance) > 0.01) {
+      // Safety net: reconcile to the stored closing balance if the live
+      // transaction list is incomplete.
+      balance = s.closing_balance;
+    }
+    rows.push({
+      date: dueDate,
+      description: 'Balance carried forward',
+      balance,
+      bold: true,
+    });
+    return rows;
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Statements' : 'Student Statements'}</h1>
@@ -159,6 +248,10 @@ export default function StatementsPage() {
           {filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.student_number})</option>)}
         </select>
         <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value))} className="input w-28" />
+        <select value={stmtMonth} onChange={(e) => setStmtMonth(e.target.value ? parseInt(e.target.value) : '')} className="input w-44">
+          <option value="">All months</option>
+          {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
+        </select>
         {!isParent && (
           <>
             <select value={genMonth} onChange={(e) => setGenMonth(parseInt(e.target.value))} className="input w-44">
@@ -185,24 +278,58 @@ export default function StatementsPage() {
       {selectedStatement && (
         <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Statement — {MONTHS[selectedStatement.month - 1]} {selectedStatement.academic_year}</h2>
+            <div>
+              <h2 className="text-lg font-semibold">Bank Statement — {MONTHS[selectedStatement.month - 1]} {selectedStatement.academic_year}</h2>
+              <p className="text-sm text-slate-500">{getStudentName(selectedStatement.student_id)}</p>
+            </div>
             <button onClick={() => downloadStatement(selectedStatement)} className="btn btn-secondary">
               <Download className="h-4 w-4" /> Download PDF
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Row label="Student" value={getStudentName(selectedStatement.student_id)} />
-              <Row label="Opening Balance" value={`R ${selectedStatement.opening_balance.toLocaleString()}`} />
-              <Row label="Total Annual Fees" value={`R ${selectedStatement.total_fees.toLocaleString()}`} />
-              <Row label="Monthly Installment" value={`R ${selectedStatement.total_installments.toLocaleString()}`} />
+
+          {loadingLedger ? (
+            <div className="flex h-32 items-center justify-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
             </div>
-            <div className="space-y-2">
-              <Row label="Additional Charges" value={`R ${selectedStatement.total_additional_charges.toLocaleString()}`} />
-              <Row label="Payments Received" value={`R ${selectedStatement.total_payments.toLocaleString()}`} />
-              <Row label="Closing Balance" value={`R ${selectedStatement.closing_balance.toLocaleString()}`} highlight />
-              <Row label="Amount Due" value={`R ${selectedStatement.current_amount_due.toLocaleString()}`} highlight />
-              <Row label="Due Date" value={new Date(selectedStatement.due_date).toLocaleDateString()} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Description</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Debit</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Credit</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-sm">
+                  {buildLedger(selectedStatement).map((row, i) => (
+                    <tr key={i} className={row.bold ? 'bg-slate-50 font-semibold' : ''}>
+                      <td className="px-4 py-2.5 text-slate-600">{row.date}</td>
+                      <td className="px-4 py-2.5 text-slate-800">{row.description}</td>
+                      <td className="px-4 py-2.5 text-right text-rose-600">{row.debit ? `R ${row.debit.toLocaleString()}` : ''}</td>
+                      <td className="px-4 py-2.5 text-right text-emerald-600">{row.credit ? `R ${row.credit.toLocaleString()}` : ''}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-900">{`R ${row.balance.toLocaleString()}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">Amount due:</span>
+              <span className="font-bold text-primary-700">R {selectedStatement.current_amount_due.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">Due date:</span>
+              <span className="font-semibold">{new Date(selectedStatement.due_date).toLocaleDateString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">Total annual fees:</span>
+              <span>R {selectedStatement.total_fees.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -227,7 +354,7 @@ export default function StatementsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {statements.map((s) => (
+            {visibleStatements.map((s) => (
               <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedStatement(s)}>
                 <td className="px-6 py-4 text-sm font-medium text-slate-900">{MONTHS[s.month - 1]}</td>
                 <td className="px-6 py-4 text-sm text-slate-700">R {s.total_installments.toLocaleString()}</td>
@@ -243,7 +370,7 @@ export default function StatementsPage() {
             ))}
           </tbody>
         </table>
-        {statements.length === 0 && !loading && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? (isParent ? 'No statements generated for this child yet.' : 'No statements. Generate one above.') : 'Select a student.'}</p>}
+        {visibleStatements.length === 0 && !loading && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? (isParent ? 'No statements generated for this child yet.' : 'No statements. Generate one above.') : 'Select a student.'}</p>}
           </>
         )}
       </div>
@@ -326,15 +453,6 @@ export default function StatementsPage() {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="flex justify-between border-b border-slate-100 py-2">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className={`text-sm font-medium ${highlight ? 'text-primary-700' : 'text-slate-900'}`}>{value}</span>
     </div>
   );
 }

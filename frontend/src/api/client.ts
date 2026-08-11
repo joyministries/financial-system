@@ -381,9 +381,9 @@ export const reportsApi = {
     api.get(`/financial/reports/payment-trends?academic_year=${year}`),
   carryForward: (year: number, month: number) =>
     api.get(`/financial/reports/carry-forward?academic_year=${year}&month=${month}`),
-  statements: (year: number, status?: string) =>
+  statements: (year: number, status?: string, gradeId?: string) =>
     api.get('/financial/reports/statements', {
-      params: { academic_year: year, status },
+      params: { academic_year: year, status, grade_id: gradeId || undefined },
     }),
 };
 
