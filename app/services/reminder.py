@@ -79,9 +79,12 @@ async def create_payment_link(db: AsyncSession, student: Student, amount: Decima
         user_id=student.parent_id,
     )
     await db.flush()
+    from app.services.setting import SettingService
+
     settings = get_settings()
+    link_base = await SettingService(db).get_plain("payfast_base_url") or settings.PAYFAST_BASE_URL
     code = payment.pay_code or payment.id[:10]
-    return f"{settings.FRONTEND_BASE_URL.rstrip('/')}/pay/{code}"
+    return f"{link_base.rstrip('/')}/pay/{code}"
 
 
 # ── send ─────────────────────────────────────────────────────

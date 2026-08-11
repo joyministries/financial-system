@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { financialApi, reportsApi, studentsApi, gradesApi, downloadPdf } from '@/api/client';
+import { getStudentNames } from '@/lib/studentNames';
 import type { Student, Statement, Grade } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -42,6 +43,7 @@ export default function StatementsPage() {
   const [loadingSchool, setLoadingSchool] = useState(false);
   const [bulkMonth, setBulkMonth] = useState<number | ''>(1);
   const [bulking, setBulking] = useState(false);
+  const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
 
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
@@ -51,6 +53,7 @@ export default function StatementsPage() {
       if (isParent && r.data.length > 0) setSelectedStudent(r.data[0].id);
     });
     gradesApi.list().then((r) => setGrades(r.data));
+    getStudentNames().then(setNameMap);
   }, []);
 
   const filteredStudents = selectedGrade
@@ -81,6 +84,8 @@ export default function StatementsPage() {
   };
 
   const getStudentName = (id: string) => {
+    const entry = nameMap.get(id);
+    if (entry) return entry.name;
     const s = students.find((s) => s.id === id);
     return s ? `${s.first_name} ${s.last_name}` : id;
   };

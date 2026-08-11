@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoicesApi, studentsApi, gradesApi, downloadPdf } from '@/api/client';
+import { getStudentNames } from '@/lib/studentNames';
 import type { Invoice, Student, Grade } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -44,6 +45,7 @@ export default function InvoicesPage() {
   const [bulkMonth, setBulkMonth] = useState(monthNow);
   const [bulkNotify, setBulkNotify] = useState(true);
   const [bulking, setBulking] = useState(false);
+  const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -70,9 +72,12 @@ export default function InvoicesPage() {
     // Parents only ever see their own children (the backend enforces this too).
     studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => setStudents(r.data)).catch(() => setStudents([]));
     gradesApi.list().then((r) => setGrades(r.data)).catch(() => setGrades([]));
+    getStudentNames().then(setNameMap);
   }, []);
 
   const getStudentName = (id: string) => {
+    const entry = nameMap.get(id);
+    if (entry) return `${entry.name} (${entry.student_number})`;
     const s = students.find((s) => s.id === id);
     return s ? `${s.first_name} ${s.last_name} (${s.student_number})` : id;
   };

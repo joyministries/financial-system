@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.financial import Student
 from app.models.grade import Grade
@@ -195,6 +196,12 @@ async def payment_page(
                 name_last = parent.full_name.split(" ", 1)[1] if " " in parent.full_name else ""
                 email_address = parent.email or ""
             try:
+                from app.services.setting import SettingService
+
+                settings = get_settings()
+                base = await SettingService(db).get_plain("payfast_base_url")
+                if not base:
+                    base = settings.PAYFAST_BASE_URL
                 form_fields = pf.build_form_data(
                     payment_id=payment.id,
                     amount=payment.amount,
@@ -203,6 +210,7 @@ async def payment_page(
                     name_first=name_first,
                     name_last=name_last,
                     email_address=email_address,
+                    base_url=base or None,
                 )
             except Exception:  # noqa: BLE001 - config errors render the not-found page
                 body = _NOT_FOUND_BODY

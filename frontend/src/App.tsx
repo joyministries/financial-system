@@ -20,6 +20,8 @@ import ChargesPage from '@/pages/charges/ChargesPage';
 import ParentDashboard from '@/pages/parent/ParentDashboard';
 import SettingsPage from '@/pages/settings/SettingsPage';
 import RegistrationsPage from '@/pages/registrations/RegistrationsPage';
+import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
+import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -32,6 +34,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/payment/success" element={<PaymentSuccessPage />} />
+      <Route path="/payment/failed" element={<PaymentFailedPage />} />
       <Route
         element={
           <ProtectedRoute>

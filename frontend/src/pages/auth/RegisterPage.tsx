@@ -496,7 +496,7 @@ export default function RegisterPage() {
                               <li key={fee.id} className="flex items-center justify-between text-sm">
                                 <span className="text-blue-900">{fee.category}</span>
                                 <span className="font-semibold text-blue-900">
-                                  ZMW {Number(fee.annual_amount).toLocaleString()}
+                                  R {Number(fee.annual_amount).toLocaleString()}
                                   <span className="ml-1 text-xs font-normal text-blue-600">
                                     /{fee.payment_plan === 'monthly' ? 'month' : 'year'}
                                   </span>

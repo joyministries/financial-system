@@ -45,7 +45,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // A failed LOGIN returns 401 too — redirecting there hard-reloads the page
+    // before the form can show the error, so the user sees a silent refresh.
+    // Only force-redirect for 401s on authenticated (non-login) requests.
+    const url: string | undefined = error.config?.url;
+    const isLoginRequest = typeof url === 'string' && url.includes('/auth/login');
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
@@ -68,7 +73,9 @@ uploadApi.interceptors.request.use((config) => {
 uploadApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url: string | undefined = error.config?.url;
+    const isLoginRequest = typeof url === 'string' && url.includes('/auth/login');
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
@@ -132,6 +139,8 @@ export const feesApi = {
 export const studentsApi = {
   list: (params?: { grade_id?: string; parent_id?: string }) =>
     api.get('/students/', { params }),
+  names: () =>
+    api.get<{ id: string; student_number: string; first_name: string; last_name: string; grade_id: string }[]>('/students/names'),
   get: (id: string) => api.get(`/students/${id}`),
   getByNumber: (num: string) => api.get(`/students/number/${num}`),
   registrations: (limit?: number) =>

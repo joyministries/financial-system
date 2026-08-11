@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -82,3 +83,47 @@ async def update_reminder_settings(
     """Save the reminder schedule. Admin only."""
     config = await SettingService(db).update_reminder_config(payload, user.id)
     return _reminder_out(config)
+
+
+# ── site / gateway base URLs ─────────────────────────────────
+# These pin where PayFast sends the browser back and where the ITN callback
+# lives, overriding stale PAYFAST_BASE_URL / FRONTEND_BASE_URL env values.
+
+class BaseUrlIn(BaseModel):
+    value: str
+
+
+@router.get("/base-urls")
+async def get_base_urls(
+    _user=Depends(admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    svc = SettingService(db)
+    return {
+        "frontend_base_url": await svc.get_plain("frontend_base_url"),
+        "payfast_base_url": await svc.get_plain("payfast_base_url"),
+    }
+
+
+@router.put("/base-urls/frontend")
+async def set_frontend_base_url(
+    payload: BaseUrlIn,
+    user=Depends(admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    svc = SettingService(db)
+    await svc.set_plain("frontend_base_url", payload.value, user.id)
+    await db.commit()
+    return {"frontend_base_url": payload.value.strip()}
+
+
+@router.put("/base-urls/payfast")
+async def set_payfast_base_url(
+    payload: BaseUrlIn,
+    user=Depends(admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    svc = SettingService(db)
+    await svc.set_plain("payfast_base_url", payload.value, user.id)
+    await db.commit()
+    return {"payfast_base_url": payload.value.strip()}

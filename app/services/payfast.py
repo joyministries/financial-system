@@ -67,19 +67,25 @@ def validate_url() -> str:
     return _SANDBOX_VALIDATE if _settings().PAYFAST_MODE == "sandbox" else _LIVE_VALIDATE
 
 
-def _resolve_return_url() -> str:
+def _resolve_return_url(base_url: str | None = None) -> str:
     s = _settings()
+    if base_url:
+        return s.PAYFAST_RETURN_URL or f"{base_url.rstrip('/')}/api/v1/payfast/return"
     return s.PAYFAST_RETURN_URL or f"{s.PAYFAST_BASE_URL.rstrip('/')}/api/v1/payfast/return"
 
 
-def _resolve_cancel_url() -> str:
+def _resolve_cancel_url(base_url: str | None = None) -> str:
     s = _settings()
+    if base_url:
+        return s.PAYFAST_CANCEL_URL or f"{base_url.rstrip('/')}/api/v1/payfast/cancel"
     return s.PAYFAST_CANCEL_URL or f"{s.PAYFAST_BASE_URL.rstrip('/')}/api/v1/payfast/cancel"
 
 
-def _resolve_notify_url() -> str:
+def _resolve_notify_url(base_url: str | None = None) -> str:
     s = _settings()
-    return s.PAYFAST_NOTIFY_URL or f"{s.PAYFAST_BASE_URL.rstrip('/')}/api/v1/payfast/itn"
+    return s.PAYFAST_NOTIFY_URL or f"{base_url.rstrip('/')}/api/v1/payfast/itn" if base_url else (
+        s.PAYFAST_NOTIFY_URL or f"{s.PAYFAST_BASE_URL.rstrip('/')}/api/v1/payfast/itn"
+    )
 
 
 def generate_signature(params: dict[str, str], passphrase: str = "") -> str:
@@ -111,19 +117,23 @@ def build_form_data(
     name_first: str,
     name_last: str,
     email_address: str,
+    base_url: str | None = None,
 ) -> dict[str, str]:
     """Build the hidden form fields posted to the PayFast process URL.
 
     The returned dict includes `signature`; post it to :func:`process_url`
     as an HTML form (application/x-www-form-urlencoded).
+
+    `base_url` overrides `PAYFAST_BASE_URL` for the return/cancel/notify
+    callbacks (used when the operator pins the gateway base via the DB).
     """
     s = _settings()
     params = {
         "merchant_id": s.PAYFAST_MERCHANT_ID,
         "merchant_key": s.PAYFAST_MERCHANT_KEY,
-        "return_url": _resolve_return_url(),
-        "cancel_url": _resolve_cancel_url(),
-        "notify_url": _resolve_notify_url(),
+        "return_url": _resolve_return_url(base_url),
+        "cancel_url": _resolve_cancel_url(base_url),
+        "notify_url": _resolve_notify_url(base_url),
         "m_payment_id": payment_id,  # our internal payment id
         "amount": f"{amount:.2f}",   # two decimal places, no thousands separators
         "item_name": item_name,

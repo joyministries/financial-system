@@ -177,6 +177,17 @@ class StudentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class StudentNameResponse(BaseModel):
+    """Lean identity record used to resolve student IDs to display names in
+    tables, PDFs and statements without loading full guardian data."""
+
+    id: str
+    student_number: str
+    first_name: str
+    last_name: str
+    grade_id: str
+
+
 class AdminParentResponse(BaseModel):
     """Lightweight parent account info returned to the admin. Defined here
     (not in user.py) to avoid a circular import — user.py already imports

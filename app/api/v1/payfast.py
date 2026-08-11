@@ -22,6 +22,7 @@ from app.services import payfast as pf
 from app.services.audit import AuditService
 from app.services.payment import PaymentService
 from app.services.receipt import ReceiptService
+from app.services.setting import SettingService
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,12 @@ async def initiate_payment(
         )
 
     await verify_student_access(data.student_id, user, db)
+
+    # The operator can pin the gateway/frontend base URLs in system_settings —
+    # this overrides a stale/absent PAYFAST_BASE_URL / FRONTEND_BASE_URL env var
+    # (e.g. a leftover localhost/ngrok value) without a redeploy.
+    setting_service = SettingService(db)
+    payfast_base = await setting_service.get_plain("payfast_base_url")
 
     # Record the pending payment so the ITN can reconcile against it.
     service = PaymentService(db)
@@ -70,6 +77,7 @@ async def initiate_payment(
         name_first=user.full_name.split(" ", 1)[0] or "Parent",
         name_last=user.full_name.split(" ", 1)[1] if " " in user.full_name else "",
         email_address=user.email,
+        base_url=payfast_base or None,
     )
 
     audit = AuditService(db)
@@ -77,7 +85,11 @@ async def initiate_payment(
                     new_values={"amount": str(data.amount)})
 
     settings = get_settings()
-    payment_url = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/pay/{payment.id}"
+    # The pay-by-link page is served by the BACKEND (app/api/pay.py) so the
+    # link works with zero login — point at it, not the SPA.
+    link_base = (await setting_service.get_plain("payfast_base_url")
+                 or settings.PAYFAST_BASE_URL)
+    payment_url = f"{link_base.rstrip('/')}/pay/{payment.id}"
 
     return PayFastInitiateResponse(
         payment_id=payment.id,
@@ -211,18 +223,25 @@ async def payfast_itn(
 @router.get("/return")
 async def payfast_return(
     request: Request,
-    payment_id: str = "",
+    db: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
-    base = settings.FRONTEND_BASE_URL.rstrip("/")
-    return RedirectResponse(f"{base}/parent?payfast=success&payment_id={payment_id}")
+    base = (await SettingService(db).get_plain("frontend_base_url")) or settings.FRONTEND_BASE_URL
+    base = base.rstrip("/")
+    # PayFast appends m_payment_id (our internal id) when returning the browser.
+    payment_id = (request.query_params.get("m_payment_id")
+                  or request.query_params.get("payment_id", ""))
+    return RedirectResponse(f"{base}/payment/success?payment_id={payment_id}")
 
 
 @router.get("/cancel")
 async def payfast_cancel(
     request: Request,
-    payment_id: str = "",
+    db: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
-    base = settings.FRONTEND_BASE_URL.rstrip("/")
-    return RedirectResponse(f"{base}/parent?payfast=cancelled&payment_id={payment_id}")
+    base = (await SettingService(db).get_plain("frontend_base_url")) or settings.FRONTEND_BASE_URL
+    base = base.rstrip("/")
+    payment_id = (request.query_params.get("m_payment_id")
+                  or request.query_params.get("payment_id", ""))
+    return RedirectResponse(f"{base}/payment/failed?payment_id={payment_id}")

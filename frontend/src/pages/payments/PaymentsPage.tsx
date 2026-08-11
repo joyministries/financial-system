@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { paymentsApi, studentsApi } from '@/api/client';
+import { getStudentNames } from '@/lib/studentNames';
 import type { Payment, Student } from '@/types';
 import toast from 'react-hot-toast';
 import { Plus, Check, XCircle, RotateCcw, Loader2 } from 'lucide-react';
@@ -21,6 +22,7 @@ export default function PaymentsPage() {
 
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
 
   const [studentId, setStudentId] = useState('');
   const [amount, setAmount] = useState('');
@@ -45,6 +47,7 @@ export default function PaymentsPage() {
   };
 
   useEffect(() => { studentsApi.list().then((r) => setStudents(r.data)); }, []);
+  useEffect(() => { getStudentNames().then(setNameMap); }, []);
   useEffect(() => { load(); }, [filter, page]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -104,6 +107,8 @@ export default function PaymentsPage() {
   };
 
   const getStudentName = (id: string) => {
+    const entry = nameMap.get(id);
+    if (entry) return entry.name;
     const s = students.find((st) => st.id === id);
     return s ? `${s.first_name} ${s.last_name}` : id;
   };

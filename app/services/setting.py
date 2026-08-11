@@ -144,6 +144,20 @@ class SettingService:
                     raw[field] = None
         return raw
 
+    async def get_plain(self, key: str, default: str = "") -> str:
+        """Read a non-secret, plain-string system setting (e.g. a base URL).
+
+        Stored under `value_json` as ``{"value": "<string>"}`` so it can share
+        the same table as the encrypted channel configs.
+        """
+        raw = await self._get_raw(key)
+        value = raw.get("value", "")
+        return str(value) if value else default
+
+    async def set_plain(self, key: str, value: str, user_id: str | None) -> None:
+        """Persist a plain-string setting, trimming it to empty-safe storage."""
+        await self._store(key, {"value": value.strip()}, user_id or "")
+
     async def get_public(self) -> NotificationSettingsOut:
         email = await self.get_email()
         sms = await self.get_sms()

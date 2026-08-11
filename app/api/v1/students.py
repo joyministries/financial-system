@@ -14,6 +14,7 @@ from app.schemas.student import (
     PaymentPreferenceUpdate,
     RegistrationFeeResponse,
     StudentCreate,
+    StudentNameResponse,
     StudentResponse,
     StudentUpdate,
 )
@@ -191,6 +192,36 @@ async def recent_registrations(
     """Newest student registrations, most recent first (for the admin sidebar)."""
     service = StudentService(db)
     return await service.list_recent(limit=limit)
+
+
+@router.get("/names", response_model=list[StudentNameResponse])
+async def list_student_names(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Lean id → name map for the whole school.
+
+    Tables and PDFs use this to render student names instead of raw UUIDs,
+    regardless of how many students exist. Parents only see their own children.
+    """
+    from sqlalchemy import select
+
+    from app.models.grade import Student
+
+    stmt = select(Student).where(Student.registration_status == "approved")
+    if user.role == "parent":
+        stmt = stmt.where(Student.parent_id == user.id)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        StudentNameResponse(
+            id=s.id,
+            student_number=s.student_number,
+            first_name=s.first_name,
+            last_name=s.last_name,
+            grade_id=s.grade_id,
+        )
+        for s in rows
+    ]
 
 
 @router.get("/{student_id}", response_model=StudentResponse)

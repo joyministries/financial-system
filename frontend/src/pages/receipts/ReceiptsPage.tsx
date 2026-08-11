@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { financialApi, studentsApi, gradesApi, downloadPdf } from '@/api/client';
+import { getStudentNames } from '@/lib/studentNames';
 import type { Receipt, Student, Grade } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -14,6 +15,7 @@ export default function ReceiptsPage() {
   const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [loading, setLoading] = useState(true);
+  const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
 
   useEffect(() => {
     setLoading(true);
@@ -22,6 +24,7 @@ export default function ReceiptsPage() {
       studentsApi.list(isParent ? { parent_id: user!.id } : {}).then((r) => setStudents(r.data)),
       gradesApi.list().then((r) => setGrades(r.data)),
       financialApi.listReceipts().then((r) => setReceipts(r.data)),
+      getStudentNames().then(setNameMap),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -40,6 +43,8 @@ export default function ReceiptsPage() {
   };
 
   const getStudentName = (id: string) => {
+    const entry = nameMap.get(id);
+    if (entry) return entry.name;
     const s = students.find((s) => s.id === id);
     return s ? `${s.first_name} ${s.last_name}` : id;
   };
