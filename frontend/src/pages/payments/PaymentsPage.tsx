@@ -11,6 +11,20 @@ import StudentSearchSelect from '@/components/StudentSearchSelect';
 const METHODS = ['Bank Transfer', 'EFT', 'Cash', 'Card', 'Mobile Payment'];
 const PAGE_SIZE = 20;
 
+// Last 12 calendar months, newest first, for the month filter dropdown.
+const monthOptions = (() => {
+  const opts: { label: string; value: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    opts.push({
+      label: `${d.toLocaleString('en', { month: 'long' })} ${d.getFullYear()}`,
+      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    });
+  }
+  return opts;
+})();
+
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending'>('all');
@@ -133,9 +147,9 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
-        <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+        <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -150,13 +164,17 @@ export default function PaymentsPage() {
             <option value="all">All Payments</option>
             <option value="pending">Pending Verification</option>
           </select>
-          <input
-            type="month"
+          <select
             value={monthFilter}
             onChange={(e) => { setMonthFilter(e.target.value); setPage(1); }}
-            className="input"
-            title="Filter by month"
-          />
+            className="input w-44"
+            aria-label="Filter payments by month"
+          >
+            <option value="">All months</option>
+            {monthOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
           <button onClick={() => setShowForm(true)} className="btn btn-primary whitespace-nowrap">
             <Plus className="h-4 w-4" /> Record Payment
           </button>

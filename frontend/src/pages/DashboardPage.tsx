@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { gradesApi, reportsApi } from '@/api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, AlertTriangle, Users, TrendingUp } from 'lucide-react';
+import Pagination from '@/components/Pagination';
 import type { Grade, MonthlySummaryReport } from '@/types';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const OWING_PAGE_SIZE = 10;
 
 const selectCls =
   'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20';
@@ -19,6 +21,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<MonthlySummaryReport | null>(null);
   const [trends, setTrends] = useState<{ month: number; total: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [owingPage, setOwingPage] = useState(1);
 
   useEffect(() => {
     gradesApi.list().then((r) => setGrades(r.data)).catch(() => setGrades([]));
@@ -43,6 +46,15 @@ export default function DashboardPage() {
   useEffect(() => {
     loadSummary(year, month, gradeId);
   }, [year, month, gradeId, loadSummary]);
+
+  useEffect(() => { setOwingPage(1); }, [year, month, gradeId]);
+
+  const owingTotal = summary?.students_owing_list.length ?? 0;
+  const owingTotalPages = Math.max(1, Math.ceil(owingTotal / OWING_PAGE_SIZE));
+  const owingList = (summary?.students_owing_list ?? []).slice(
+    (owingPage - 1) * OWING_PAGE_SIZE,
+    owingPage * OWING_PAGE_SIZE,
+  );
 
   const activeGradeName = grades.find((g) => g.id === gradeId)?.name;
 
@@ -166,8 +178,9 @@ export default function DashboardPage() {
             <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
           </div>
         ) : summary && summary.students_owing_list.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Student</th>
@@ -177,7 +190,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {summary.students_owing_list.map((s) => (
+                {owingList.map((s) => (
                   <tr key={s.student_id} className="transition-colors hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-semibold text-slate-900">{s.name}</td>
                     <td className="px-6 py-4 font-mono text-sm text-slate-500">{s.student_number}</td>
@@ -187,7 +200,17 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+            {owingTotal > OWING_PAGE_SIZE && (
+              <Pagination
+                page={owingPage}
+                totalPages={owingTotalPages}
+                total={owingTotal}
+                pageSize={OWING_PAGE_SIZE}
+                onPageChange={setOwingPage}
+              />
+            )}
+          </>
         ) : (
           <p className="py-10 text-center text-sm text-slate-500">No outstanding balances for this month.</p>
         )}
