@@ -6,7 +6,7 @@ import { Plus, Pencil, UserX, UserPlus, Copy, Loader2, MessageSquare, Send, Eye,
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -15,6 +15,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -78,8 +79,8 @@ export default function StudentsPage() {
     const params = {
       ...(filterGrade ? { grade_id: filterGrade } : {}),
       ...(search ? { search } : {}),
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
     };
     studentsApi.list(params)
       .then((r) => {
@@ -91,7 +92,7 @@ export default function StudentsPage() {
   };
 
   useEffect(() => { gradesApi.list().then((r) => setGrades(r.data)); }, []);
-  useEffect(() => { load(); }, [filterGrade, search, page]);
+  useEffect(() => { load(); }, [filterGrade, search, page, pageSize]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -750,10 +751,11 @@ export default function StudentsPage() {
         </table>
         <Pagination
           page={page}
-          totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+          totalPages={Math.max(1, Math.ceil(totalCount / pageSize))}
           total={totalCount}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize}
           onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       </div>
 

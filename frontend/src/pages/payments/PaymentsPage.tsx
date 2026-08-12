@@ -9,7 +9,7 @@ import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const METHODS = ['Bank Transfer', 'EFT', 'Cash', 'Card', 'Mobile Payment'];
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
 
 // Last 12 calendar months, newest first, for the month filter dropdown.
 const monthOptions = (() => {
@@ -37,6 +37,7 @@ export default function PaymentsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
 
@@ -51,8 +52,8 @@ export default function PaymentsPage() {
     const params: Record<string, string | number> = {
       ...(filter === 'pending' ? { status: 'pending' } : {}),
       ...(search.trim() ? { search: search.trim() } : {}),
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
     };
     if (monthFilter) {
       const [year, month] = monthFilter.split('-').map(Number);
@@ -69,7 +70,7 @@ export default function PaymentsPage() {
   };
 
   useEffect(() => { getStudentNames().then(setNameMap); }, []);
-  useEffect(() => { load(); }, [filter, monthFilter, search, page]);
+  useEffect(() => { load(); }, [filter, monthFilter, search, page, pageSize]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,7 +138,7 @@ export default function PaymentsPage() {
     return id;
   };
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
     <div className="space-y-6">
@@ -278,7 +279,7 @@ export default function PaymentsPage() {
             ))}
           </tbody>
         </table>
-        <Pagination page={page} totalPages={totalPages} total={totalCount} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} totalPages={totalPages} total={totalCount} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />
       </div>
     </div>
   );

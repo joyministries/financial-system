@@ -11,7 +11,7 @@ import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -36,6 +36,7 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterStudent, setFilterStudent] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const [genStudent, setGenStudent] = useState('');
   const [genYear, setGenYear] = useState(yearNow);
@@ -60,8 +61,8 @@ export default function InvoicesPage() {
         academic_year: filterYear === '' ? undefined : filterYear,
         month: filterMonth === '' ? undefined : filterMonth,
         status: filterStatus || undefined,
-        limit: PAGE_SIZE,
-        offset: (page - 1) * PAGE_SIZE,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       });
       setInvoices(res.data.items);
       setTotalCount(res.data.total);
@@ -71,7 +72,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterStudent, filterYear, filterMonth, filterStatus, page]);
+  }, [filterStudent, filterYear, filterMonth, filterStatus, page, pageSize]);
 
   useEffect(() => {
     loadInvoices();
@@ -417,10 +418,11 @@ export default function InvoicesPage() {
             )}
             <Pagination
               page={page}
-              totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+              totalPages={Math.max(1, Math.ceil(totalCount / pageSize))}
               total={totalCount}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
               onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
             />
           </>
         )}

@@ -8,7 +8,7 @@ import { Download } from 'lucide-react';
 import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 export default function ReceiptsPage() {
   const { user } = useAuth();
@@ -22,6 +22,7 @@ export default function ReceiptsPage() {
   const [loading, setLoading] = useState(true);
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   useEffect(() => {
     setLoading(true);
@@ -33,8 +34,8 @@ export default function ReceiptsPage() {
         .listReceipts({
           student_id: selectedStudent || undefined,
           grade_id: !selectedStudent ? selectedGrade || undefined : undefined,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
         })
         .then((r) => {
           setReceipts(r.data.items);
@@ -42,7 +43,7 @@ export default function ReceiptsPage() {
         }),
       getStudentNames().then(setNameMap),
     ]).finally(() => setLoading(false));
-  }, [selectedStudent, selectedGrade, page]);
+  }, [selectedStudent, selectedGrade, page, pageSize]);
 
   const handleFilter = (studentId: string, gradeId: string) => {
     setSelectedStudent(studentId);
@@ -142,10 +143,11 @@ export default function ReceiptsPage() {
         {receipts.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No receipts found.</p>}
         <Pagination
           page={page}
-          totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+          totalPages={Math.max(1, Math.ceil(totalCount / pageSize))}
           total={totalCount}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize}
           onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
           </>
         )}

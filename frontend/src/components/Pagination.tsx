@@ -1,14 +1,24 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 interface PaginationProps {
   page: number;
   totalPages: number;
-  total: number;         // total matching records
-  pageSize: number;      // records per page
+  total: number;
+  pageSize: number;
   onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
 }
 
-export default function Pagination({ page, totalPages, total, pageSize, onPageChange }: PaginationProps) {
+export default function Pagination({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: PaginationProps) {
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
 
@@ -22,16 +32,36 @@ export default function Pagination({ page, totalPages, total, pageSize, onPageCh
   }
 
   return (
-    <div className="flex flex-col items-center gap-1 border-t border-slate-100 px-4 py-3 sm:flex-row sm:justify-between">
-      {/* Record count */}
-      <p className="text-sm text-slate-500">
-        {total === 0
-          ? 'No results'
-          : <>Showing <span className="font-medium text-slate-700">{from}–{to}</span> of <span className="font-medium text-slate-700">{total.toLocaleString()}</span></>
-        }
-      </p>
+    <div className="flex flex-col items-center gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:justify-between">
 
-      {/* Page buttons — always shown */}
+      {/* Left: record count + rows-per-page */}
+      <div className="flex items-center gap-3">
+        <p className="text-sm text-slate-500">
+          {total === 0
+            ? 'No results'
+            : <>Showing <span className="font-medium text-slate-700">{from}–{to}</span> of <span className="font-medium text-slate-700">{total.toLocaleString()}</span></>
+          }
+        </p>
+        {onPageSizeChange && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-400">Rows</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                onPageSizeChange(Number(e.target.value));
+                onPageChange(1); // reset to page 1 when size changes
+              }}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {PAGE_SIZE_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Right: page buttons */}
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(page - 1)}
