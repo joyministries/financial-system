@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 import { Loader2, UserCheck, Phone, Mail, Check, X, Clock3, UserPlus } from 'lucide-react';
 import clsx from 'clsx';
 import Pagination from '@/components/Pagination';
-import { isUuid } from '@/lib/isUuid';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -202,9 +201,7 @@ export default function RegistrationsPage() {
                           <span className="text-slate-400">-</span>
                         ) : (
                           <div className="space-y-2">
-                            {guardians.map((g) => {
-                              const idLabel = isUuid(g.guardian_id) ? null : g.guardian_id;
-                              return (
+                            {guardians.map((g) => (
                                 <div key={g.id} className="flex items-start gap-2.5">
                                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100">
                                     <UserCheck className={clsx('h-3.5 w-3.5', isMother(g.guardian_type) ? 'text-blue-500' : 'text-green-500')} />
@@ -221,12 +218,10 @@ export default function RegistrationsPage() {
                                     <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
                                       {g.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {g.phone}</span>}
                                       {g.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {g.email}</span>}
-                                      {idLabel && <span className="font-mono">ID: {idLabel}</span>}
                                     </p>
                                   </div>
                                 </div>
-                              );
-                            })}
+                              ))}
                           </div>
                         )}
                       </td>
