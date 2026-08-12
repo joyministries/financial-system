@@ -360,7 +360,7 @@ export default function StudentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Students</h1>
+        <h1 className="text-2xl font-bold text-ledger-ink">Students</h1>
         <div className="flex gap-2">
           <button onClick={() => setShowAdminRegister(true)} className="btn btn-outline">
             <UserPlus className="h-4 w-4" /> Register Student + Parent
@@ -373,7 +373,7 @@ export default function StudentsPage() {
 
       <form onSubmit={submitSearch} className="flex flex-wrap items-center gap-4">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ledger-muted" />
           <input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -387,7 +387,7 @@ export default function StudentsPage() {
         </select>
         <button type="submit" className="btn btn-primary">Search</button>
         {!loading && (
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-ledger-muted">
             {totalCount.toLocaleString()} student{totalCount === 1 ? '' : 's'}
             {search ? ` matching “${search}”` : ''}
           </span>
@@ -399,16 +399,16 @@ export default function StudentsPage() {
           {editingId && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Student Number</label>
+                <label className="block text-sm font-medium text-ledger-ink">Student Number</label>
                 <input value={studentNum || (students.find((s) => s.id === editingId)?.student_number || '')} disabled className="input mt-1 font-mono" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Enrollment Date</label>
+                  <label className="block text-sm font-medium text-ledger-ink">Enrollment Date</label>
                   <input type="date" value={enrollDate} onChange={(e) => setEnrollDate(e.target.value)} className="input mt-1" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Payment Preference</label>
+                  <label className="block text-sm font-medium text-ledger-ink">Payment Preference</label>
                   <select value={paymentPref} onChange={(e) => setPaymentPref(e.target.value as 'monthly' | 'cumulative')} className="input mt-1">
                     <option value="monthly">Monthly installments</option>
                     <option value="cumulative">Cumulative</option>
@@ -416,14 +416,14 @@ export default function StudentsPage() {
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-3 text-sm font-semibold text-slate-700">Parents / Guardians</p>
+                <p className="mb-3 text-sm font-semibold text-ledger-ink">Parents / Guardians</p>
                 <div className="space-y-4">
                   {editGuardians.length === 0 && (
-                    <p className="text-sm text-slate-500">No guardians on file.</p>
+                    <p className="text-sm text-ledger-muted">No guardians on file.</p>
                   )}
                   {editGuardians.map((g, idx) => (
                     <div key={g.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ledger-muted">
                         {g.guardian_type === 'father' ? 'Father' : g.guardian_type === 'mother' ? 'Mother' : g.guardian_type === 'primary' ? 'Primary Guardian' : 'Secondary Guardian'}
                       </p>
                       <div className="space-y-2">
@@ -472,7 +472,7 @@ export default function StudentsPage() {
           {!editingId && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Student Number</label>
+                <label className="block text-sm font-medium text-ledger-ink">Student Number</label>
                 <input value={studentNum} onChange={(e) => setStudentNum(e.target.value)} required className="input mt-1" />
               </div>
               <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
@@ -494,7 +494,7 @@ export default function StudentsPage() {
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-2 text-sm font-semibold text-slate-700">Mother (optional)</p>
+                <p className="mb-2 text-sm font-semibold text-ledger-ink">Mother (optional)</p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <input value={p2First} onChange={(e) => setP2First(e.target.value)} placeholder="First name" className="input" />
@@ -515,16 +515,16 @@ export default function StudentsPage() {
           )}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">First Name</label>
+              <label className="block text-sm font-medium text-ledger-ink">First Name</label>
               <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Last Name</label>
+              <label className="block text-sm font-medium text-ledger-ink">Last Name</label>
               <input value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input mt-1" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Grade</label>
+            <label className="block text-sm font-medium text-ledger-ink">Grade</label>
             <select value={gradeId} onChange={(e) => setGradeId(e.target.value)} required className="input mt-1">
               <option value="">Select</option>
               {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -532,7 +532,7 @@ export default function StudentsPage() {
           </div>
           {!editingId && (
             <div>
-              <label className="block text-sm font-medium text-slate-700">Enrollment Date</label>
+              <label className="block text-sm font-medium text-ledger-ink">Enrollment Date</label>
               <input type="date" value={enrollDate} onChange={(e) => setEnrollDate(e.target.value)} required className="input mt-1" />
             </div>
           )}
@@ -589,7 +589,7 @@ export default function StudentsPage() {
             {adminRegisterResult.payment_url && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
                 <p className="text-sm font-semibold text-blue-800">Registration fee payment link</p>
-                <p className="mt-1 text-xs text-blue-600">
+                <p className="mt-1 text-xs text-primary-600">
                   {adminRegisterResult.sms_sent
                     ? 'Payment link SMS sent to the guardian. You can also share it directly:'
                     : 'The payment link could not be SMSed — share it directly with the guardian:'}
@@ -647,7 +647,7 @@ export default function StudentsPage() {
                   <input value={arPoBox} onChange={(e) => setArPoBox(e.target.value)} placeholder="PO Box" className="input" />
                 </div>
                 <input value={arAddress} onChange={(e) => setArAddress(e.target.value)} placeholder="Physical address" className="input" />
-                <label className="flex items-start gap-2 rounded-lg border border-primary-100 bg-white p-2.5 text-sm text-slate-700">
+                <label className="flex items-start gap-2 rounded-lg border border-primary-100 bg-white p-2.5 text-sm text-ledger-ink">
                   <input
                     type="checkbox"
                     checked={arSendSms}
@@ -656,7 +656,7 @@ export default function StudentsPage() {
                   />
                   <span>
                     Send the registration fee payment link to the guardian by SMS
-                    <span className="block text-xs text-slate-400">
+                    <span className="block text-xs text-ledger-muted">
                       Requires a registration fee to be set in Settings. The parent pays through the portal.
                     </span>
                   </span>
@@ -665,7 +665,7 @@ export default function StudentsPage() {
             </div>
 
             <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <summary className="text-sm font-semibold text-slate-700">Other parent (optional)</summary>
+              <summary className="text-sm font-semibold text-ledger-ink">Other parent (optional)</summary>
               <div className="mt-2 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <input value={arOtherFirst} onChange={(e) => setArOtherFirst(e.target.value)} placeholder="First name" className="input" />
@@ -688,61 +688,61 @@ export default function StudentsPage() {
         )}
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+      <div className="table-wrap">
+        <table className="ledger-table">
+          <thead className="bg-ledger-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Number</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grade</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Parents</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Phone</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Number</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Grade</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Parents</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Phone</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Status</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-ledger-muted uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="">
             {loading ? (
-              <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
+              <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-ledger-muted mx-auto" /></td></tr>
             ) : students.length === 0 ? (
-              <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-500">No students found.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-sm text-ledger-muted">No students found.</td></tr>
             ) : students.map((s) => (
-              <tr key={s.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-sm font-mono text-slate-700">{s.student_number}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">{s.first_name} {s.last_name}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{grades.find((g) => g.id === s.grade_id)?.name || s.grade_id}</td>
+              <tr key={s.id} className="hover:bg-ledger-row-hover">
+                <td className="td font-mono td-muted">{s.student_number}</td>
+                <td className="td font-medium">{s.first_name} {s.last_name}</td>
+                <td className="td td-muted">{grades.find((g) => g.id === s.grade_id)?.name || s.grade_id}</td>
                 <td className="px-6 py-4">
-                  <div className="text-sm text-slate-700">
+                  <div className="text-sm text-ledger-ink">
                     {s.guardians?.map((g) => {
                       const isMother = g.guardian_type === 'mother' || g.guardian_type === 'secondary';
                       return (
                         <div key={g.id} className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-ledger-muted">
                             {isMother ? 'Mother:' : 'Father:'}
                           </span>
                           <span>{g.full_name}</span>
                         </div>
                       );
                     })}
-                    {(!s.guardians || s.guardians.length === 0) && <span className="text-slate-400">-</span>}
+                    {(!s.guardians || s.guardians.length === 0) && <span className="text-ledger-muted">-</span>}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                <td className="px-6 py-4 text-sm font-mono text-ledger-muted">
                   {s.guardians?.length
                     ? s.guardians.map((g) => <div key={g.id}>{g.phone || '-'}</div>)
-                    : <span className="text-slate-400">-</span>}
+                    : <span className="text-ledger-muted">-</span>}
                 </td>
                 <td className="px-6 py-4">
                   <span className={`badge ${s.is_active ? 'badge-success' : 'badge-danger'}`}>
                     {s.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="td text-right">
                   <div className="flex justify-end gap-1">
-                    <button onClick={() => openView(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="View full profile"><Eye className="h-4 w-4" /></button>
-                    <button onClick={() => openSmsModal(s)} className="rounded p-1 text-slate-400 hover:text-green-600" title="Send SMS to parent"><MessageSquare className="h-4 w-4" /></button>
-                    <button onClick={() => handleEdit(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="Edit"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => handleDeactivate(s.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Deactivate"><UserX className="h-4 w-4" /></button>
+                    <button onClick={() => openView(s)} className="rounded p-1 text-ledger-muted hover:text-primary-600" title="View full profile"><Eye className="h-4 w-4" /></button>
+                    <button onClick={() => openSmsModal(s)} className="rounded p-1 text-ledger-muted hover:text-ledger-muted" title="Send SMS to parent"><MessageSquare className="h-4 w-4" /></button>
+                    <button onClick={() => handleEdit(s)} className="rounded p-1 text-ledger-muted hover:text-primary-600" title="Edit"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => handleDeactivate(s.id)} className="rounded p-1 text-ledger-muted hover:text-ledger-muted" title="Deactivate"><UserX className="h-4 w-4" /></button>
                   </div>
                 </td>
               </tr>
@@ -781,12 +781,12 @@ export default function StudentsPage() {
             </div>
 
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Parents / Guardians</h4>
+              <h4 className="text-sm font-semibold text-ledger-ink">Parents / Guardians</h4>
               <div className="mt-2 space-y-2">
                 {viewing.guardians?.length ? viewing.guardians.map((g) => (
                   <div key={g.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                    <p className="font-medium text-slate-900">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="font-medium text-ledger-ink">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-ledger-muted">
                         {g.guardian_type === 'mother' || g.guardian_type === 'secondary' ? 'Mother · ' : 'Father · '}
                       </span>
                       {g.full_name}
@@ -797,19 +797,19 @@ export default function StudentsPage() {
                       {g.physical_address && <span>Address: {g.physical_address}</span>}
                       {g.po_box && <span>PO Box: {g.po_box}</span>}
                       {!g.phone && !g.email && !g.physical_address && !g.po_box && (
-                        <span className="text-slate-400">No contact details on file.</span>
+                        <span className="text-ledger-muted">No contact details on file.</span>
                       )}
                     </div>
                   </div>
                 )) : (
-                  <p className="text-sm text-slate-400">No guardian records.</p>
+                  <p className="text-sm text-ledger-muted">No guardian records.</p>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Recent payments</h4>
+                <h4 className="text-sm font-semibold text-ledger-ink">Recent payments</h4>
                 {viewLoading ? (
                   <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
                 ) : viewPayments.length ? (
@@ -818,7 +818,7 @@ export default function StudentsPage() {
                       <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
                         <div>
                           <p className="font-medium text-slate-800">R {p.amount.toLocaleString()}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-ledger-muted">
                             {new Date(p.payment_date).toLocaleDateString()} · {p.payment_method}
                           </p>
                         </div>
@@ -829,26 +829,26 @@ export default function StudentsPage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">No payments recorded.</p>
+                  <p className="mt-2 text-sm text-ledger-muted">No payments recorded.</p>
                 )}
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Statements ({new Date().getFullYear()})</h4>
+                <h4 className="text-sm font-semibold text-ledger-ink">Statements ({new Date().getFullYear()})</h4>
                 {viewLoading ? (
                   <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
                 ) : viewStatements.length ? (
                   <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
                     {viewStatements.slice(0, 4).map((st) => (
                       <li key={st.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                        <span className="text-slate-700">Month {st.month}</span>
-                        <span className={`font-medium ${Number(st.closing_balance) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        <span className="text-ledger-ink">Month {st.month}</span>
+                        <span className={`font-medium ${Number(st.closing_balance) > 0 ? 'text-ledger-muted' : 'text-emerald-600'}`}>
                           R {Number(st.closing_balance).toLocaleString()}
                         </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">No statements generated yet.</p>
+                  <p className="mt-2 text-sm text-ledger-muted">No statements generated yet.</p>
                 )}
               </div>
             </div>
@@ -870,7 +870,7 @@ export default function StudentsPage() {
         {smsTarget && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Message template</label>
+              <label className="block text-sm font-medium text-ledger-ink">Message template</label>
               <select
                 value={smsTemplateKey}
                 onChange={(e) => selectSmsTemplate(e.target.value)}
@@ -882,16 +882,16 @@ export default function StudentsPage() {
                   <option key={t.key} value={t.key}>{t.name}</option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-ledger-muted">
                 Pick a template to pre-fill the message, then edit the text below before sending.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Message</label>
+              <label className="block text-sm font-medium text-ledger-ink">Message</label>
               {smsLoading ? (
                 <div className="mt-2 flex h-24 items-center justify-center rounded-lg border border-slate-200">
-                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                  <Loader2 className="h-5 w-5 animate-spin text-ledger-muted" />
                 </div>
               ) : (
                 <textarea
@@ -903,7 +903,7 @@ export default function StudentsPage() {
                   className="input mt-1"
                 />
               )}
-              <p className="mt-1 text-right text-xs text-slate-400">{smsContent.length}/1600</p>
+              <p className="mt-1 text-right text-xs text-ledger-muted">{smsContent.length}/1600</p>
             </div>
 
             <div className="flex gap-2 pt-1">
@@ -934,8 +934,8 @@ export default function StudentsPage() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
-      <dd className="mt-0.5 font-medium text-slate-900">{value || '—'}</dd>
+      <dt className="text-xs font-medium uppercase tracking-wide text-ledger-muted">{label}</dt>
+      <dd className="mt-0.5 font-medium text-ledger-ink">{value || '—'}</dd>
     </div>
   );
 }

@@ -7,10 +7,9 @@ import type { Grade, MonthlySummaryReport } from '@/types';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DEFAULT_OWING_PAGE_SIZE = 10;
+const DEFAULT_OWING_PAGE_SIZE = 20;
 
-const selectCls =
-  'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20';
+const selectCls = 'input';
 
 export default function DashboardPage() {
   const now = new Date();
@@ -65,32 +64,24 @@ export default function DashboardPage() {
       value: summary ? `R ${summary.total_income.toLocaleString()}` : '—',
       sub: 'verified payments this month',
       icon: DollarSign,
-      gradient: 'from-emerald-500 to-teal-600',
-      ring: 'ring-emerald-100',
     },
     {
       label: 'Outstanding',
       value: summary ? `R ${summary.outstanding_total.toLocaleString()}` : '—',
       sub: 'owed up to this month',
       icon: AlertTriangle,
-      gradient: 'from-red-500 to-rose-600',
-      ring: 'ring-red-100',
     },
     {
       label: 'Students Owing',
       value: summary ? String(summary.students_owing) : '—',
       sub: 'with an unpaid balance',
       icon: Users,
-      gradient: 'from-amber-500 to-orange-600',
-      ring: 'ring-amber-100',
     },
     {
       label: 'Payments',
       value: summary ? String(summary.payment_count) : '—',
       sub: 'received this month',
       icon: TrendingUp,
-      gradient: 'from-primary-500 to-primary-700',
-      ring: 'ring-primary-100',
     },
   ];
 
@@ -98,8 +89,8 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Financial Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="page-title">Financial Dashboard</h1>
+          <p className="mt-1 text-sm text-ledger-muted">
             Monthly view — {MONTHS_FULL[month - 1]} {year}
             {activeGradeName ? ` · ${activeGradeName}` : ''}
           </p>
@@ -143,29 +134,27 @@ export default function DashboardPage() {
         {stats.map((s) => (
           <div
             key={s.label}
-            className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+            className="card p-5"
           >
             <div className="flex items-center gap-4">
-              <div
-                className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow-soft ring-4 ${s.ring}`}
-              >
-                <s.icon className="h-6 w-6" />
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-ledger-border bg-ledger-bg text-ledger-muted">
+                <s.icon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-500">{s.label}</p>
-                <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-slate-900">
+                <p className="truncate text-sm font-medium text-ledger-muted">{s.label}</p>
+                <p className="mt-0.5 truncate font-display text-2xl font-semibold text-ledger-ink">
                   {s.value}
                 </p>
-                <p className="truncate text-xs text-slate-400">{s.sub}</p>
+                <p className="truncate text-xs text-ledger-muted">{s.sub}</p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-soft">
+      <div className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold tracking-tight text-slate-900">
+          <h2 className="section-title">
             Students Owing — {MONTHS_FULL[month - 1]} {year}
           </h2>
           {summary && summary.students_owing > 0 && (
@@ -176,27 +165,27 @@ export default function DashboardPage() {
         </div>
         {loading ? (
           <div className="flex h-32 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+            <div className="w-full"><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /></div>
           </div>
         ) : summary && summary.students_owing_list.length > 0 ? (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+              <table className="ledger-table">
+              <thead className="bg-ledger-bg">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Student</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Number</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Grade</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Outstanding</th>
+                  <th className="th">Student</th>
+                  <th className="th">Number</th>
+                  <th className="th">Grade</th>
+                  <th className="th th-num">Outstanding</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="">
                 {owingList.map((s) => (
-                  <tr key={s.student_id} className="transition-colors hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">{s.name}</td>
-                    <td className="px-6 py-4 font-mono text-sm text-slate-500">{s.student_number}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{s.grade}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-red-600">R {s.balance.toLocaleString()}</td>
+                  <tr key={s.student_id} className="transition-colors hover:bg-ledger-row-hover">
+                    <td className="td font-semibold">{s.name}</td>
+                    <td className="td font-mono td-muted">{s.student_number}</td>
+                    <td className="td td-muted">{s.grade}</td>
+                    <td className="td text-right text-sm font-semibold text-ledger-muted">R {s.balance.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -214,25 +203,25 @@ export default function DashboardPage() {
             )}
           </>
         ) : (
-          <p className="py-10 text-center text-sm text-slate-500">No outstanding balances for this month.</p>
+          <p className="py-10 text-center text-sm text-ledger-muted">No outstanding balances for this month.</p>
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
-        <h2 className="mb-4 text-base font-semibold tracking-tight text-slate-900">
+      <div className="card p-6">
+        <h2 className="mb-4 section-title">
           Payment Trends ({year})
         </h2>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={trends.map((t) => ({ name: MONTHS[t.month - 1], total: t.total }))}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E0" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
             <Tooltip
-              cursor={{ fill: '#f1f5f9' }}
+              cursor={{ fill: '#FAFAF9' }}
               formatter={(v: number) => [`R ${v.toLocaleString()}`, 'Income']}
-              contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 12px 32px -12px rgba(16,24,40,0.2)' }}
+              contentStyle={{ borderRadius: 8, border: '1px solid #E7E5E0', boxShadow: 'none' }}
             />
-            <Bar dataKey="total" fill="#c9a227" radius={[6, 6, 0, 0]} maxBarSize={48} />
+            <Bar dataKey="total" fill="#2451B0" radius={[4, 4, 0, 0]} maxBarSize={48} />
           </BarChart>
         </ResponsiveContainer>
       </div>

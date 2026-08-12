@@ -3,7 +3,7 @@ import { paymentsApi } from '@/api/client';
 import { getStudentNames } from '@/lib/studentNames';
 import type { Payment } from '@/types';
 import toast from 'react-hot-toast';
-import { Plus, Check, XCircle, RotateCcw, Loader2, Search } from 'lucide-react';
+import { Plus, Check, XCircle, RotateCcw, Search } from 'lucide-react';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
@@ -35,6 +35,7 @@ export default function PaymentsPage() {
   const [showReverse, setShowReverse] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
   const [loading, setLoading] = useState(true);
+  const [namesLoading, setNamesLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const [page, setPage] = useState(1);
@@ -70,7 +71,12 @@ export default function PaymentsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { getStudentNames().then(setNameMap); }, []);
+  useEffect(() => {
+    setNamesLoading(true);
+    getStudentNames()
+      .then(setNameMap)
+      .finally(() => setNamesLoading(false));
+  }, []);
 
   // Debounce the search box: only trigger a refetch ~350ms after the user
   // stops typing, not on every keystroke.
@@ -147,7 +153,7 @@ export default function PaymentsPage() {
   const getStudentName = (id: string) => {
     const entry = nameMap.get(id);
     if (entry) return entry.name;
-    return id;
+    return 'Student unavailable';
   };
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -155,10 +161,10 @@ export default function PaymentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
+        <h1 className="text-2xl font-bold text-ledger-ink">Payments</h1>
         <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ledger-muted" />
             <input
               type="text"
               value={searchInput}
@@ -191,18 +197,18 @@ export default function PaymentsPage() {
       <Modal open={showForm} onClose={closeForm} title="Record Payment">
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Student</label>
+            <label className="block text-sm font-medium text-ledger-ink">Student</label>
             <div className="mt-1">
               <StudentSearchSelect value={studentId} onChange={setStudentId} placeholder="Search by name or number…" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+              <label className="block text-sm font-medium text-ledger-ink">Amount (R)</label>
               <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Method</label>
+              <label className="block text-sm font-medium text-ledger-ink">Method</label>
               <select value={method} onChange={(e) => setMethod(e.target.value)} className="input mt-1">
                 {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -210,11 +216,11 @@ export default function PaymentsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Payment Date</label>
+              <label className="block text-sm font-medium text-ledger-ink">Payment Date</label>
               <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Reference Number</label>
+              <label className="block text-sm font-medium text-ledger-ink">Reference Number</label>
               <input value={refNum} onChange={(e) => setRefNum(e.target.value)} className="input mt-1" />
             </div>
           </div>
@@ -230,7 +236,7 @@ export default function PaymentsPage() {
       <Modal open={!!showReverse} onClose={() => { setShowReverse(null); setReverseReason(''); }} title="Reverse Payment">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Reason for reversal</label>
+            <label className="block text-sm font-medium text-ledger-ink">Reason for reversal</label>
             <textarea value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} required rows={3} className="input mt-1" />
           </div>
           <div className="flex gap-2 pt-2">
@@ -242,30 +248,30 @@ export default function PaymentsPage() {
         </div>
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+      <div className="table-wrap">
+        <table className="ledger-table">
+          <thead className="bg-ledger-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Method</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+              <th className="th">Student</th>
+              <th className="th">Amount</th>
+              <th className="th">Method</th>
+              <th className="th">Date</th>
+              <th className="th">Status</th>
+              <th className="th th-num">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
-            {loading ? (
-              <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
+          <tbody className="">
+            {loading || namesLoading ? (
+              <tr><td colSpan={6} className="p-0"><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /></td></tr>
             ) : payments.length === 0 ? (
-              <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-500">No payments found.</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-sm text-ledger-muted">No payments found.</td></tr>
             ) : payments.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(p.student_id)}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {Number(p.amount).toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{p.payment_method}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{new Date(p.payment_date).toLocaleDateString()}</td>
-                <td className="px-6 py-4">
+              <tr key={p.id} className="hover:bg-ledger-row-hover">
+                <td className="td font-medium">{getStudentName(p.student_id)}</td>
+                <td className="td font-medium">R {Number(p.amount).toLocaleString()}</td>
+                <td className="td td-muted">{p.payment_method}</td>
+                <td className="td td-muted">{new Date(p.payment_date).toLocaleDateString()}</td>
+                <td className="td td-status">
                   <span className={`badge ${
                     p.status === 'verified' ? 'badge-success' :
                     p.status === 'reversed' ? 'badge-danger' :
@@ -274,16 +280,16 @@ export default function PaymentsPage() {
                     {p.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="td text-right">
                   <div className="flex justify-end gap-1">
                     {p.status === 'pending' && (
                       <>
-                        <button onClick={() => handleVerify(p.id, 'approve')} className="rounded p-1 text-slate-400 hover:text-green-600" title="Approve"><Check className="h-4 w-4" /></button>
-                        <button onClick={() => handleVerify(p.id, 'reject')} className="rounded p-1 text-slate-400 hover:text-yellow-600" title="Reject"><XCircle className="h-4 w-4" /></button>
+                        <button onClick={() => handleVerify(p.id, 'approve')} className="rounded p-1 text-ledger-muted hover:text-ledger-ink" title="Approve"><Check className="h-4 w-4" /></button>
+                        <button onClick={() => handleVerify(p.id, 'reject')} className="rounded p-1 text-ledger-muted hover:text-ledger-ink" title="Reject"><XCircle className="h-4 w-4" /></button>
                       </>
                     )}
                     {p.status === 'verified' && (
-                      <button onClick={() => setShowReverse(p.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Reverse"><RotateCcw className="h-4 w-4" /></button>
+                      <button onClick={() => setShowReverse(p.id)} className="rounded p-1 text-ledger-muted hover:text-ledger-ink" title="Reverse"><RotateCcw className="h-4 w-4" /></button>
                     )}
                   </div>
                 </td>

@@ -3,7 +3,7 @@ import { reportsApi } from '@/api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#2451B0', '#6B7280', '#A1A8B3', '#C8CDD4', '#E7E5E0'];
 
 export default function ReportsPage() {
   const year = new Date().getFullYear();
@@ -31,14 +31,14 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Reports</h1>
+      <h1 className="page-title">Reports</h1>
 
       <div className="flex gap-2">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === t.key ? 'bg-primary-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === t.key ? 'bg-primary-600 text-white' : 'border border-ledger-border text-ledger-ink hover:bg-ledger-row-hover'}`}
           >
             {t.label}
           </button>
@@ -46,8 +46,8 @@ export default function ReportsPage() {
       </div>
 
       {tab === 'trends' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          <h2 className="mb-4 text-lg font-semibold">Monthly Payment Trends ({year})</h2>
+        <div className="card p-6">
+          <h2 className="mb-4 section-title">Monthly Payment Trends ({year})</h2>
           {loading ? (
             <div className="flex h-64 items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
@@ -55,11 +55,11 @@ export default function ReportsPage() {
           ) : (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={trends.map((t) => ({ name: MONTHS[t.month - 1], total: t.total }))}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
-              <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E0" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} contentStyle={{ borderRadius: 8, border: '1px solid #E7E5E0', boxShadow: 'none' }} />
+              <Bar dataKey="total" fill="#2451B0" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           )}
@@ -67,26 +67,26 @@ export default function ReportsPage() {
       )}
 
       {tab === 'outstanding' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          <h2 className="mb-4 text-lg font-semibold">Outstanding Fees ({outstanding.students_with_outstanding} students)</h2>
+        <div className="card p-6">
+          <h2 className="mb-4 section-title">Outstanding Fees ({outstanding.students_with_outstanding} students)</h2>
           {outstanding.students.length > 0 && (
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={outstanding.students.map((s) => ({ name: s.name, outstanding: s.outstanding }))}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
-                <Bar dataKey="outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} contentStyle={{ borderRadius: 8, border: '1px solid #E7E5E0', boxShadow: 'none' }} />
+                <Bar dataKey="outstanding" fill="#2451B0" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
-          {outstanding.students.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No outstanding fees.</p>}
+          {outstanding.students.length === 0 && <p className="py-8 text-center text-sm text-ledger-muted">No outstanding fees.</p>}
         </div>
       )}
 
       {tab === 'payments' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          <h2 className="mb-4 text-lg font-semibold">Payments by Method — R {payments.total_received.toLocaleString()} total</h2>
+        <div className="card p-6">
+          <h2 className="mb-4 section-title">Payments by Method — R {payments.total_received.toLocaleString()} total</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -102,7 +102,7 @@ export default function ReportsPage() {
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
+                <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} contentStyle={{ borderRadius: 8, border: '1px solid #E7E5E0', boxShadow: 'none' }} />
               </PieChart>
             </ResponsiveContainer>
 
@@ -110,8 +110,8 @@ export default function ReportsPage() {
               {Object.entries(payments.by_method).map(([method, amount], i) => (
                 <div key={method} className="flex items-center gap-3">
                   <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="flex-1 text-sm text-slate-700">{method}</span>
-                  <span className="text-sm font-medium text-slate-900">R {amount.toLocaleString()}</span>
+                  <span className="flex-1 text-sm text-ledger-ink">{method}</span>
+                  <span className="text-sm font-medium text-ledger-ink">R {amount.toLocaleString()}</span>
                 </div>
               ))}
             </div>

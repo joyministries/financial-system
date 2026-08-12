@@ -40,6 +40,7 @@ export default function StatementsPage() {
   const [genMonth, setGenMonth] = useState<number | ''>(1);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [namesLoading, setNamesLoading] = useState(true);
 
   // Transaction ledger for the selected bank-style statement.
   const [ledgerCharges, setLedgerCharges] = useState<AdditionalCharge[]>([]);
@@ -66,7 +67,7 @@ export default function StatementsPage() {
       if (isParent && r.data.items.length > 0) setSelectedStudent(r.data.items[0].id);
     });
     gradesApi.list().then((r) => setGrades(r.data));
-    getStudentNames().then(setNameMap);
+    getStudentNames().then(setNameMap).finally(() => setNamesLoading(false));
   }, []);
 
   const loadStatements = () => {
@@ -119,7 +120,7 @@ export default function StatementsPage() {
     const entry = nameMap.get(id);
     if (entry) return entry.name;
     const s = students.find((s) => s.id === id);
-    return s ? `${s.first_name} ${s.last_name}` : id;
+    return s ? `${s.first_name} ${s.last_name}` : 'Student unavailable';
   };
 
   const loadSchoolReport = () => {
@@ -238,7 +239,7 @@ export default function StatementsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Statements' : 'Student Statements'}</h1>
+      <h1 className="text-2xl font-bold text-ledger-ink">{isParent ? 'My Statements' : 'Student Statements'}</h1>
 
       <div className="flex flex-wrap items-center gap-4">
         {!isParent && (
@@ -271,7 +272,7 @@ export default function StatementsPage() {
       </div>
 
       {isParent && (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-ledger-muted">
           Generate a statement for any month of the current school year. Statements you generate are only for your own children.
         </p>
       )}
@@ -298,21 +299,21 @@ export default function StatementsPage() {
             </div>
             <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/10 pt-4 text-sm sm:grid-cols-4">
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-slate-400">Account Holder</p>
+                <p className="text-[11px] uppercase tracking-wider text-ledger-muted">Account Holder</p>
                 <p className="mt-0.5 font-semibold text-white">{getStudentName(selectedStatement.student_id)}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-slate-400">Account Number</p>
+                <p className="text-[11px] uppercase tracking-wider text-ledger-muted">Account Number</p>
                 <p className="mt-0.5 font-mono font-semibold text-white">
                   {students.find((s) => s.id === selectedStatement.student_id)?.student_number || '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-slate-400">Statement Period</p>
+                <p className="text-[11px] uppercase tracking-wider text-ledger-muted">Statement Period</p>
                 <p className="mt-0.5 font-semibold text-white">{MONTHS[selectedStatement.month - 1]} {selectedStatement.academic_year}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-slate-400">Date Issued</p>
+                <p className="text-[11px] uppercase tracking-wider text-ledger-muted">Date Issued</p>
                 <p className="mt-0.5 font-semibold text-white">{new Date(selectedStatement.generated_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
               </div>
             </div>
@@ -321,12 +322,12 @@ export default function StatementsPage() {
           {/* Balance summary strip */}
           <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <div className="bg-slate-50 px-6 py-4">
-              <p className="text-[11px] uppercase tracking-wider text-slate-500">Opening Balance</p>
-              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.opening_balance.toLocaleString()}</p>
+              <p className="text-[11px] uppercase tracking-wider text-ledger-muted">Opening Balance</p>
+              <p className="mt-1 font-mono text-lg font-bold text-ledger-ink">R {selectedStatement.opening_balance.toLocaleString()}</p>
             </div>
             <div className="bg-slate-50 px-6 py-4">
-              <p className="text-[11px] uppercase tracking-wider text-slate-500">Closing Balance</p>
-              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.closing_balance.toLocaleString()}</p>
+              <p className="text-[11px] uppercase tracking-wider text-ledger-muted">Closing Balance</p>
+              <p className="mt-1 font-mono text-lg font-bold text-ledger-ink">R {selectedStatement.closing_balance.toLocaleString()}</p>
             </div>
             <div className="bg-[#131d3c] px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-300">Amount Due</p>
@@ -342,7 +343,7 @@ export default function StatementsPage() {
             <div className="overflow-x-auto px-2 py-2">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-[11px] uppercase tracking-wider text-slate-500">
+                  <tr className="text-[11px] uppercase tracking-wider text-ledger-muted">
                     <th className="border-b border-slate-300 px-4 py-3 text-left font-medium">Date</th>
                     <th className="border-b border-slate-300 px-4 py-3 text-left font-medium">Transaction Details</th>
                     <th className="border-b border-slate-300 px-4 py-3 text-right font-medium">Debit</th>
@@ -354,12 +355,12 @@ export default function StatementsPage() {
                   {buildLedger(selectedStatement).map((row, i) => {
                     const isClosing = i === buildLedger(selectedStatement).length - 1;
                     return (
-                      <tr key={i} className={`text-[13px] ${isClosing ? 'border-t-2 border-slate-400 font-bold' : row.bold ? 'font-semibold' : 'text-slate-700'}`}>
+                      <tr key={i} className={`text-[13px] ${isClosing ? 'border-t-2 border-slate-400 font-bold' : row.bold ? 'font-semibold' : 'text-ledger-ink'}`}>
                         <td className={`px-4 py-2.5 ${row.bold ? 'text-slate-800' : 'text-slate-600'}`}>{row.date}</td>
-                        <td className={`px-4 py-2.5 ${row.bold ? 'text-slate-900' : 'text-slate-800'}`}>{row.description}</td>
+                        <td className={`px-4 py-2.5 ${row.bold ? 'text-ledger-ink' : 'text-slate-800'}`}>{row.description}</td>
                         <td className="px-4 py-2.5 text-right text-rose-700">{row.debit ? `R ${row.debit.toLocaleString()}` : ''}</td>
                         <td className="px-4 py-2.5 text-right text-emerald-700">{row.credit ? `R ${row.credit.toLocaleString()}` : ''}</td>
-                        <td className="px-4 py-2.5 text-right text-slate-900">{`R ${row.balance.toLocaleString()}`}</td>
+                        <td className="px-4 py-2.5 text-right text-ledger-ink">{`R ${row.balance.toLocaleString()}`}</td>
                       </tr>
                     );
                   })}
@@ -371,42 +372,40 @@ export default function StatementsPage() {
           {/* Statement footer */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <span className="text-slate-500">Total annual fees: <span className="font-semibold text-slate-800">R {selectedStatement.total_fees.toLocaleString()}</span></span>
-              <span className="text-slate-500">Payments received: <span className="font-semibold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</span></span>
-              <span className="text-slate-500">Due date: <span className="font-semibold text-slate-800">{new Date(selectedStatement.due_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>
+              <span className="text-ledger-muted">Total annual fees: <span className="font-semibold text-slate-800">R {selectedStatement.total_fees.toLocaleString()}</span></span>
+              <span className="text-ledger-muted">Payments received: <span className="font-semibold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</span></span>
+              <span className="text-ledger-muted">Due date: <span className="font-semibold text-slate-800">{new Date(selectedStatement.due_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>
             </div>
-            <p className="text-xs text-slate-400">Thank you for banking with Lambton Christian School</p>
+            <p className="text-xs text-ledger-muted">Thank you for banking with Lambton Christian School</p>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-        {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-          </div>
+      <div className="table-wrap">
+        {loading || namesLoading ? (
+          <div className="p-0"><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /></div>
         ) : (
           <>
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+        <table className="ledger-table">
+          <thead className="bg-ledger-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Installment</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Payments</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Closing Balance</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Generated</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Month</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Installment</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Payments</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Closing Balance</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Generated</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-ledger-muted uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="">
             {visibleStatements.map((s) => (
               <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedStatement(s)}>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">{MONTHS[s.month - 1]}</td>
-                <td className="px-6 py-4 text-sm text-slate-700">R {s.total_installments.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-green-600">R {s.total_payments.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {s.closing_balance.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{new Date(s.generated_at).toLocaleDateString()}</td>
-                <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                <td className="td font-medium">{MONTHS[s.month - 1]}</td>
+                <td className="td td-muted">R {s.total_installments.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-ledger-muted">R {s.total_payments.toLocaleString()}</td>
+                <td className="td font-medium">R {s.closing_balance.toLocaleString()}</td>
+                <td className="td td-muted">{new Date(s.generated_at).toLocaleDateString()}</td>
+                <td className="td text-right" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => downloadStatement(s)} className="btn btn-secondary btn-sm">
                     <Download className="h-3.5 w-3.5" /> Download
                   </button>
@@ -415,20 +414,20 @@ export default function StatementsPage() {
             ))}
           </tbody>
         </table>
-        {visibleStatements.length === 0 && !loading && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? (isParent ? 'No statements generated for this child yet.' : 'No statements. Generate one above.') : 'Select a student.'}</p>}
+        {visibleStatements.length === 0 && !loading && <p className="py-8 text-center text-sm text-ledger-muted">{selectedStudent ? (isParent ? 'No statements generated for this child yet.' : 'No statements. Generate one above.') : 'Select a student.'}</p>}
           </>
         )}
       </div>
 
       {!isParent && (
-        <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
+        <div className="table-wrap">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({year})</h2>
-              <p className="text-sm text-slate-500">
+              <h2 className="text-lg font-semibold text-ledger-ink">Whole School — Statement Summary ({year})</h2>
+              <p className="text-sm text-ledger-muted">
                 Every approved student's outstanding balance for the year.
                 {schoolReport && schoolReport.total_students > 0 && (
-                  <span> Total outstanding: <span className="font-medium text-red-600">R {Number(schoolReport.total_outstanding).toLocaleString()}</span></span>
+                  <span> Total outstanding: <span className="font-medium text-ledger-muted">R {Number(schoolReport.total_outstanding).toLocaleString()}</span></span>
                 )}
               </p>
             </div>
@@ -446,7 +445,7 @@ export default function StatementsPage() {
 
           <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-slate-500">Generate statements for the whole school:</span>
+              <span className="text-sm font-medium text-ledger-muted">Generate statements for the whole school:</span>
               <select value={bulkMonth} onChange={(e) => setBulkMonth(parseInt(e.target.value))} className="input w-44">
                 <option value="">Select month…</option>
                 {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
@@ -463,23 +462,23 @@ export default function StatementsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
+              <table className="ledger-table">
+                <thead className="bg-ledger-bg">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student No.</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grade</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Balance</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Student No.</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Student</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-ledger-muted uppercase">Grade</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-ledger-muted uppercase">Balance</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-ledger-muted uppercase">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="">
                   {pagedSchoolStudents.map((s) => (
-                    <tr key={s.student_id} className="hover:bg-slate-50">
-                      <td className="px-6 py-3 font-mono text-sm text-slate-500">{s.student_number}</td>
-                      <td className="px-6 py-3 text-sm font-medium text-slate-900">{s.name}</td>
-                      <td className="px-6 py-3 text-sm text-slate-700">{s.grade}</td>
-                      <td className={`px-6 py-3 text-right text-sm font-medium ${Number(s.balance) > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                    <tr key={s.student_id} className="hover:bg-ledger-row-hover">
+                      <td className="px-6 py-3 font-mono text-sm text-ledger-muted">{s.student_number}</td>
+                      <td className="px-6 py-3 text-sm font-medium text-ledger-ink">{s.name}</td>
+                      <td className="px-6 py-3 text-sm text-ledger-ink">{s.grade}</td>
+                      <td className={`px-6 py-3 text-right text-sm font-medium ${Number(s.balance) > 0 ? 'text-ledger-muted' : 'text-ledger-muted'}`}>
                         R {Number(s.balance).toLocaleString()}
                       </td>
                       <td className="px-6 py-3 text-right">
@@ -492,7 +491,7 @@ export default function StatementsPage() {
                 </tbody>
               </table>
               {(!schoolReport || schoolReport.students.length === 0) && (
-                <p className="py-8 text-center text-sm text-slate-500">No students found for this year.</p>
+                <p className="py-8 text-center text-sm text-ledger-muted">No students found for this year.</p>
               )}
               {schoolReport && schoolReport.students.length > 0 && (
                 <div className="border-t border-slate-100">

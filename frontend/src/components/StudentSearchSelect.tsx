@@ -87,7 +87,7 @@ export default function StudentSearchSelect({
   return (
     <div ref={rootRef} className="relative min-w-56">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ledger-muted" />
         <input
           value={selected ? `${selected.first_name} ${selected.last_name} (${selected.student_number})` : query}
           onChange={(e) => {
@@ -113,7 +113,7 @@ export default function StudentSearchSelect({
           <button
             type="button"
             onClick={clear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-600"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-ledger-muted hover:text-ledger-ink"
             aria-label="Clear selection"
           >
             <X className="h-4 w-4" />
@@ -121,13 +121,13 @@ export default function StudentSearchSelect({
         )}
       </div>
       {open && !selected && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-ledger-border bg-ledger-surface py-1">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-slate-500">
+            <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-ledger-muted">
               <Loader2 className="h-4 w-4 animate-spin" /> Searching…
             </div>
           ) : results.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-slate-500">No students found.</p>
+            <p className="px-4 py-3 text-sm text-ledger-muted">No students found.</p>
           ) : (
             results.map((s) => (
               <button
@@ -135,13 +135,13 @@ export default function StudentSearchSelect({
                 type="button"
                 onClick={() => pick(s)}
                 className={clsx(
-                  'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50'
+                  'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm hover:bg-ledger-row-hover'
                 )}
               >
-                <span className="truncate font-medium text-slate-800">
+                <span className="truncate font-medium text-ledger-ink">
                   {s.first_name} {s.last_name}
                 </span>
-                <span className="shrink-0 font-mono text-xs text-slate-400">{s.student_number}</span>
+                <span className="shrink-0 font-mono text-xs text-ledger-muted">{s.student_number}</span>
               </button>
             ))
           )}

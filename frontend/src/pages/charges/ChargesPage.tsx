@@ -125,7 +125,7 @@ export default function ChargesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Additional Charges</h1>
+        <h1 className="page-title">Additional Charges</h1>
         <button onClick={() => setShowForm(true)} className="btn btn-primary">
           <Plus className="h-4 w-4" /> Add Additional Charge
         </button>
@@ -152,12 +152,12 @@ export default function ChargesPage() {
         <form onSubmit={handleCreate} className="space-y-4">
           {/* Scope */}
           <div>
-            <label className="block text-sm font-medium text-slate-700">Apply to</label>
+            <label className="label">Apply to</label>
             <div className="mt-1 flex gap-2">
-              <button type="button" onClick={() => setScope('grade')} className={`rounded-lg px-3 py-2 text-sm font-medium ${scope === 'grade' ? 'bg-primary-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+              <button type="button" onClick={() => setScope('grade')} className={`rounded-lg px-3 py-2 text-sm font-medium ${scope === 'grade' ? 'bg-primary-600 text-white' : 'border border-ledger-border text-ledger-ink hover:bg-ledger-bg'}`}>
                 Whole Grade
               </button>
-              <button type="button" onClick={() => setScope('student')} className={`rounded-lg px-3 py-2 text-sm font-medium ${scope === 'student' ? 'bg-primary-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+              <button type="button" onClick={() => setScope('student')} className={`rounded-lg px-3 py-2 text-sm font-medium ${scope === 'student' ? 'bg-primary-600 text-white' : 'border border-ledger-border text-ledger-ink hover:bg-ledger-bg'}`}>
                 Single Student
               </button>
             </div>
@@ -165,13 +165,13 @@ export default function ChargesPage() {
 
           {scope === 'grade' ? (
             <div>
-              <label className="block text-sm font-medium text-slate-700">Grade</label>
+              <label className="label">Grade</label>
               <select value={gradeId} onChange={(e) => { setGradeId(e.target.value); setOptOutIds(new Set()); }} required className="input mt-1">
                 <option value="">Select Grade</option>
                 {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
               {gradeId && gradeStudents.length > 0 && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mt-3 rounded-lg border border-slate-200 bg-ledger-bg p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-600">
                       {gradeStudents.length - optOutIds.size} of {gradeStudents.length} students charged
@@ -181,7 +181,7 @@ export default function ChargesPage() {
                       <button type="button" onClick={selectNone} className="text-red-500 hover:underline">None</button>
                     </div>
                   </div>
-                  <p className="mb-2 text-xs text-slate-500">Uncheck a student to opt them out (e.g. not attending the excursion).</p>
+                  <p className="mb-2 text-xs text-ledger-muted">Uncheck a student to opt them out (e.g. not attending the excursion).</p>
                   <div className="max-h-40 space-y-1 overflow-y-auto">
                     {gradeStudents.map((s) => (
                       <label key={s.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-100">
@@ -189,7 +189,7 @@ export default function ChargesPage() {
                           type="checkbox"
                           checked={!optOutIds.has(s.id)}
                           onChange={() => toggleOptOut(s.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-primary-600"
+                          className="h-4 w-4 rounded border-ledger-border text-primary-600"
                         />
                         {s.first_name} {s.last_name}
                       </label>
@@ -201,7 +201,7 @@ export default function ChargesPage() {
           ) : (
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Grade</label>
+                <label className="label">Grade</label>
                 <select
                   value={gradeId}
                   onChange={(e) => { setGradeId(e.target.value); setSelectedStudent(''); }}
@@ -212,34 +212,34 @@ export default function ChargesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Student</label>
+                <label className="label">Student</label>
                 <StudentSearchSelect
                   value={selectedStudent}
                   onChange={setSelectedStudent}
                   placeholder="Search student by name or number…"
                 />
-                {!gradeId && <p className="mt-1 text-xs text-slate-500">Pick a grade first to see its students.</p>}
+                {!gradeId && <p className="mt-1 text-xs text-ledger-muted">Pick a grade first to see its students.</p>}
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700">Type</label>
+            <label className="label">Type</label>
             <select value={chargeType} onChange={(e) => setChargeType(e.target.value)} className="input mt-1">
               {CHARGE_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Description</label>
+            <label className="label">Description</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} required className="input mt-1" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+              <label className="label">Amount (R)</label>
               <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Month</label>
+              <label className="label">Month</label>
               <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))} className="input mt-1">
                 {MONTHS.map((m) => (
                   <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString('default', { month: 'long' })}</option>
@@ -256,42 +256,42 @@ export default function ChargesPage() {
         </form>
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
+      <div className="table-wrap">
         {loading ? (
-          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-ledger-muted" /></div>
         ) : (
           <>
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+            <table className="ledger-table">
+              <thead className="bg-ledger-bg">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Description</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+                  <th className="th">Type</th>
+                  <th className="th">Description</th>
+                  <th className="th">Amount</th>
+                  <th className="th">Month</th>
+                  <th className="th">Status</th>
+                  <th className="th th-num">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="">
                 {pagedCharges.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.charge_type}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{c.description}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">R {Number(c.amount).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{new Date(2024, c.month - 1).toLocaleString('default', { month: 'long' })}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${c.is_paid ? 'badge badge-success' : 'bg-yellow-100 text-yellow-700'}`}>
+                  <tr key={c.id} className="hover:bg-ledger-bg">
+                    <td className="td font-medium">{c.charge_type}</td>
+                    <td className="td td-muted">{c.description}</td>
+                    <td className="td font-medium">R {Number(c.amount).toLocaleString()}</td>
+                    <td className="td td-muted">{new Date(2024, c.month - 1).toLocaleString('default', { month: 'long' })}</td>
+                    <td className="td">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${c.is_paid ? 'badge badge-success' : 'badge badge-warning'}`}>
                         {c.is_paid ? 'Paid' : 'Unpaid'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <button onClick={() => handleDelete(c.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                    <td className="td text-right">
+                      <button onClick={() => handleDelete(c.id)} className="rounded p-1 text-ledger-muted hover:text-ledger-ink" title="Delete"><Trash2 className="h-4 w-4" /></button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {charges.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No additional charges.' : 'Select a student.'}</p>}
+            {charges.length === 0 && <p className="py-8 text-center text-sm text-ledger-muted">{selectedStudent ? 'No additional charges.' : 'Select a student.'}</p>}
             <Pagination
               page={page}
               totalPages={Math.max(1, Math.ceil(charges.length / pageSize))}

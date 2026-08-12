@@ -14,7 +14,7 @@ const MONTHS_FULL = ['January','February','March','April','May','June','July','A
 const DEFAULT_PAGE_SIZE = 50;
 
 const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-700',
+  draft: 'bg-slate-100 text-ledger-ink',
   issued: 'badge badge-info',
   paid: 'badge badge-success',
   void: 'badge badge-danger',
@@ -43,6 +43,7 @@ export default function InvoicesPage() {
   const [genMonth, setGenMonth] = useState(monthNow);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [namesLoading, setNamesLoading] = useState(true);
 
   // Bulk generation (whole grade / whole school)
   const [bulkScope, setBulkScope] = useState<'all' | 'grade'>('all');
@@ -84,14 +85,14 @@ export default function InvoicesPage() {
     // Parents only ever see their own children (the backend enforces this too).
     studentsApi.list(isParent ? { parent_id: user!.id, limit: 200 } : { limit: 200 }).then((r) => setStudents(r.data.items)).catch(() => setStudents([]));
     gradesApi.list().then((r) => setGrades(r.data)).catch(() => setGrades([]));
-    getStudentNames().then(setNameMap);
+    getStudentNames().then(setNameMap).finally(() => setNamesLoading(false));
   }, []);
 
   const getStudentName = (id: string) => {
     const entry = nameMap.get(id);
     if (entry) return `${entry.name} (${entry.student_number})`;
     const s = students.find((s) => s.id === id);
-    return s ? `${s.first_name} ${s.last_name} (${s.student_number})` : id;
+    return s ? `${s.first_name} ${s.last_name} (${s.student_number})` : 'Student unavailable';
   };
 
   const handleGenerate = async () => {
@@ -188,7 +189,7 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Invoices' : 'Invoices'}</h1>
+        <h1 className="text-2xl font-bold text-ledger-ink">{isParent ? 'My Invoices' : 'Invoices'}</h1>
         <div className="flex gap-2">
           {!isParent && (
             <select
@@ -232,17 +233,17 @@ export default function InvoicesPage() {
       </div>
 
       {!isParent && (
-        <div className="space-y-6 rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+        <div className="card space-y-6 p-6">
           {/* Bulk generation: whole grade / whole school */}
           <div>
-            <h2 className="mb-1 text-lg font-semibold text-slate-900">Generate Invoices (Bulk)</h2>
-            <p className="mb-4 text-sm text-slate-500">
+            <h2 className="mb-1 text-lg font-semibold text-ledger-ink">Generate Invoices (Bulk)</h2>
+            <p className="mb-4 text-sm text-ledger-muted">
               Create the monthly invoice for every student in a grade — or the whole school.
               Parents automatically receive an SMS with their invoice amount.
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Scope</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Scope</label>
                 <div className="flex gap-1 rounded-lg border border-slate-200 p-1">
                   <button
                     type="button"
@@ -262,7 +263,7 @@ export default function InvoicesPage() {
               </div>
               {bulkScope === 'grade' && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Grade</label>
+                  <label className="mb-1 block text-xs font-medium text-ledger-muted">Grade</label>
                   <select value={bulkGradeId} onChange={(e) => setBulkGradeId(e.target.value)} className="input min-w-40">
                     <option value="">Select grade</option>
                     {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -270,7 +271,7 @@ export default function InvoicesPage() {
                 </div>
               )}
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Year</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Year</label>
                 <select value={bulkYear} onChange={(e) => setBulkYear(parseInt(e.target.value))} className="input">
                   {[yearNow - 1, yearNow, yearNow + 1].map((y) => (
                     <option key={y} value={y}>{y}</option>
@@ -278,7 +279,7 @@ export default function InvoicesPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Month</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Month</label>
                 <select value={bulkMonth} onChange={(e) => setBulkMonth(parseInt(e.target.value))} className="input">
                   {MONTHS_FULL.map((m, i) => (
                     <option key={i} value={i + 1}>{m}</option>
@@ -286,11 +287,11 @@ export default function InvoicesPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">SMS parents</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">SMS parents</label>
                 <button
                   type="button"
                   onClick={() => setBulkNotify((v) => !v)}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium ${bulkNotify ? 'bg-green-600 text-white' : 'border border-slate-300 text-slate-600'}`}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${bulkNotify ? 'border-primary-600 bg-primary-600 text-white' : 'border-ledger-border text-ledger-muted hover:bg-ledger-row-hover'}`}
                 >
                   {bulkNotify ? 'Yes' : 'No'}
                 </button>
@@ -307,10 +308,10 @@ export default function InvoicesPage() {
           </div>
 
           <div className="border-t border-slate-100 pt-5">
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Generate Invoice (Single Student)</h2>
+            <h2 className="mb-4 text-lg font-semibold text-ledger-ink">Generate Invoice (Single Student)</h2>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Grade</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Grade</label>
                 <select
                   value={filterGradeId}
                   onChange={(e) => { setFilterGradeId(e.target.value); setGenStudent(''); }}
@@ -321,7 +322,7 @@ export default function InvoicesPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Student</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Student</label>
                 <StudentSearchSelect
                   value={genStudent}
                   onChange={setGenStudent}
@@ -329,7 +330,7 @@ export default function InvoicesPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Year</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Year</label>
                 <select value={genYear} onChange={(e) => setGenYear(parseInt(e.target.value))} className="input">
                   {[yearNow - 1, yearNow, yearNow + 1].map((y) => (
                     <option key={y} value={y}>{y}</option>
@@ -337,7 +338,7 @@ export default function InvoicesPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Month</label>
+                <label className="mb-1 block text-xs font-medium text-ledger-muted">Month</label>
                 <select value={genMonth} onChange={(e) => setGenMonth(parseInt(e.target.value))} className="input">
                   {MONTHS_FULL.map((m, i) => (
                     <option key={i} value={i + 1}>{m}</option>
@@ -356,52 +357,50 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-        {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-          </div>
+      <div className="table-wrap">
+        {loading || namesLoading ? (
+          <div className="p-0"><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /></div>
         ) : (
           <>
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+            <table className="ledger-table">
+              <thead className="bg-ledger-bg">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Invoice #</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Subtotal</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Paid</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Balance Due</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+                  <th className="th">Invoice #</th>
+                  <th className="th">Student</th>
+                  <th className="th">Month</th>
+                  <th className="th th-num">Subtotal</th>
+                  <th className="th th-num">Paid</th>
+                  <th className="th th-num">Balance Due</th>
+                  <th className="th">Status</th>
+                  <th className="th th-num">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="">
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{inv.invoice_number}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(inv.student_id)}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{MONTHS[inv.month - 1]} {inv.academic_year}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700 text-right">R {inv.subtotal.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm text-green-600 text-right">R {inv.amount_paid.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900 text-right">R {inv.balance_due.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm">
+                  <tr key={inv.id} className="hover:bg-ledger-row-hover">
+                    <td className="td font-mono font-medium">{inv.invoice_number}</td>
+                    <td className="td">{getStudentName(inv.student_id)}</td>
+                    <td className="td td-muted">{MONTHS[inv.month - 1]} {inv.academic_year}</td>
+                    <td className="td td-muted text-right">R {inv.subtotal.toLocaleString()}</td>
+                    <td className="td td-num td-muted">R {inv.amount_paid.toLocaleString()}</td>
+                    <td className="td font-medium text-right">R {inv.balance_due.toLocaleString()}</td>
+                    <td className="td td-status">
                       <span className={clsx('inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_STYLES[inv.status] ?? STATUS_STYLES.draft)}>
                         {inv.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="td text-right">
                       <div className="inline-flex items-center gap-1">
-                        <button onClick={() => handleDownload(inv)} title="Download PDF" className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <button onClick={() => handleDownload(inv)} title="Download PDF" className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-ledger-ink hover:bg-slate-50">
                           <Download className="h-3.5 w-3.5" /> PDF
                         </button>
                         {!isParent && inv.status !== 'paid' && inv.status !== 'void' && (
-                          <button onClick={() => handleStatus(inv, 'paid')} className="rounded-lg border border-green-300 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50">
+                          <button onClick={() => handleStatus(inv, 'paid')} className="rounded-lg border border-ledger-border px-2.5 py-1.5 text-xs font-medium text-ledger-ink hover:bg-ledger-row-hover">
                             Mark paid
                           </button>
                         )}
                         {!isParent && inv.status !== 'void' && inv.status !== 'draft' && (
-                          <button onClick={() => handleStatus(inv, 'void')} className="rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
+                          <button onClick={() => handleStatus(inv, 'void')} className="rounded-lg border border-ledger-border px-2.5 py-1.5 text-xs font-medium text-ledger-ink hover:bg-ledger-row-hover">
                             Void
                           </button>
                         )}
@@ -412,7 +411,7 @@ export default function InvoicesPage() {
               </tbody>
             </table>
             {invoices.length === 0 && (
-              <p className="py-8 text-center text-sm text-slate-500">
+              <p className="py-8 text-center text-sm text-ledger-muted">
                 {isParent ? 'No invoices for your children yet.' : 'No invoices found. Generate one above.'}
               </p>
             )}
