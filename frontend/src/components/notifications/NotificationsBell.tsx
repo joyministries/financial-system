@@ -7,11 +7,11 @@ import type { AppNotification } from '@/types';
 const POLL_INTERVAL_MS = 30_000;
 
 const categoryDot: Record<string, string> = {
-  payment_received: 'bg-ledger-muted',
-  parent_registered: 'bg-ledger-muted',
-  student_applied: 'bg-ledger-muted',
-  payment_reversed: 'bg-ledger-muted',
-  system: 'bg-ledger-muted',
+  payment_received: 'bg-emerald-500',
+  parent_registered: 'bg-blue-500',
+  student_applied: 'bg-amber-500',
+  payment_reversed: 'bg-rose-500',
+  system: 'bg-slate-400',
 };
 
 function relativeTime(iso: string): string {
@@ -88,24 +88,24 @@ export default function NotificationsBell() {
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-lg p-2 text-ledger-muted transition-colors hover:bg-ledger-row-hover hover:text-ledger-ink"
+        className="relative rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
         aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-[22rem] overflow-hidden rounded-lg border border-ledger-border bg-ledger-surface">
-          <div className="flex items-center justify-between border-b border-ledger-border px-4 py-3">
+        <div className="absolute right-0 top-12 z-50 w-[22rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-ledger-ink">Notifications</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
               {unread > 0 && (
-                <span className="rounded-full bg-ledger-bg px-2 py-0.5 text-[11px] font-bold text-primary-600">
+                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-600">
                   {unread} new
                 </span>
               )}
@@ -116,7 +116,7 @@ export default function NotificationsBell() {
                   setLoading(true);
                   refresh().finally(() => setLoading(false));
                 }}
-                className="rounded-lg p-1.5 text-ledger-muted transition-colors hover:bg-ledger-row-hover hover:text-ledger-ink"
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Refresh"
                 title="Refresh"
               >
@@ -125,7 +125,7 @@ export default function NotificationsBell() {
               {unread > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-ledger-muted transition-colors hover:bg-ledger-row-hover hover:text-ledger-ink"
+                  className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
                   Mark all read
@@ -137,14 +137,14 @@ export default function NotificationsBell() {
           <div className="max-h-[24rem] overflow-y-auto">
             {items.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-                <Inbox className="h-8 w-8 text-ledger-muted" />
-                <p className="text-sm text-ledger-muted">No notifications yet.</p>
-                <p className="text-xs text-ledger-muted">
+                <Inbox className="h-8 w-8 text-slate-300" />
+                <p className="text-sm text-slate-500">No notifications yet.</p>
+                <p className="text-xs text-slate-400">
                   Payments, registrations and reversals will show up here.
                 </p>
               </div>
             ) : (
-              <ul className="divide-y divide-ledger-border">
+              <ul className="divide-y divide-slate-100">
                 {items.map((n) => (
                   <li key={n.id}>
                     <button
@@ -152,7 +152,7 @@ export default function NotificationsBell() {
                       className={clsx(
                         'flex w-full gap-3 px-4 py-3 text-left transition-colors',
                         n.is_read ? 'bg-white' : 'bg-slate-50',
-                        !n.is_read && 'hover:bg-ledger-row-hover'
+                        !n.is_read && 'hover:bg-slate-100'
                       )}
                     >
                       <span
@@ -163,13 +163,13 @@ export default function NotificationsBell() {
                         )}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-ledger-ink">
+                        <span className="block truncate text-sm font-semibold text-slate-900">
                           {n.title}
                         </span>
-                        <span className="mt-0.5 block text-xs leading-relaxed text-ledger-muted">
+                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-600">
                           {n.message}
                         </span>
-                        <span className="mt-1 block text-[11px] text-ledger-muted">
+                        <span className="mt-1 block text-[11px] text-slate-400">
                           {relativeTime(n.created_at)}
                         </span>
                       </span>

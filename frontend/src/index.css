@@ -2,75 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fix: inputs rendered black/dark on machines whose OS uses a dark color
+   scheme. The app is light-themed, so force light scheme + white form
+   controls everywhere regardless of the OS/browser dark mode. */
 @layer base {
   :root {
     color-scheme: light;
-    --bg: #F7F7F5;
-    --surface: #FFFFFF;
-    --border: #E7E5E0;
-    --ink: #1A1D1F;
-    --muted: #6B7280;
-    --accent: #2451B0;
-    --accent-hover: #1D3F8F;
-    --success: #1A7F4E;
-    --warning: #B5730A;
-    --error: #B0261E;
-    --row-hover: #FAFAF9;
   }
 
   html {
-    background-color: var(--bg);
-    color: var(--ink);
+    background-color: #faf9f5;
+    color: #1c1c1f;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
   body {
-    margin: 0;
-    background: var(--bg);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-family: "Inter Tight", Inter, ui-sans-serif, system-ui, sans-serif;
-    font-weight: 600;
-    color: var(--ink);
   }
 
   input,
   select,
   textarea {
     color-scheme: light;
-    background-color: var(--surface) !important;
-    color: var(--ink) !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: var(--muted) !important;
-    opacity: 0.72;
+    color: #9ca3af !important;
+    opacity: 1;
   }
 
   option {
-    background-color: var(--surface);
-    color: var(--ink);
+    background-color: #ffffff;
+    color: #111827;
   }
 
   ::selection {
-    background-color: #DDE8FF;
-    color: var(--ink);
+    background-color: #f2df9a;
+    color: #1c1c1f;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #C8CDD4 transparent;
+    scrollbar-color: #cbd5e1 transparent;
   }
 
   *::-webkit-scrollbar {
@@ -79,173 +57,104 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: #C8CDD4;
+    background-color: #cbd5e1;
     border-radius: 8px;
   }
 
   *::-webkit-scrollbar-track {
     background: transparent;
   }
-
-  button,
-  a,
-  input,
-  select,
-  textarea,
-  [tabindex]:not([tabindex='-1']) {
-    @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600;
-  }
-
-  .num,
-  .money,
-  .count,
-  td,
-  input[type='number'] {
-    font-variant-numeric: tabular-nums;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      scroll-behavior: auto !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Component layer — one canonical definition per pattern.
+   Pages should use these classes instead of re-implementing
+   buttons, inputs, badges and tables ad-hoc.
+   ───────────────────────────────────────────────────────────── */
 @layer components {
+  /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-4 py-2 text-sm font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors
+      disabled:pointer-events-none disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
   }
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-700;
+    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
   }
-  .btn-secondary,
-  .btn-outline {
-    @apply border-ledger-border bg-ledger-surface text-ledger-ink hover:bg-ledger-row-hover active:bg-ledger-bg;
+  .btn-secondary {
+    @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100;
   }
-  .btn-danger,
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+  }
   .btn-success {
-    @apply border-ledger-border bg-ledger-surface text-ledger-ink hover:bg-ledger-row-hover active:bg-ledger-bg;
+    @apply bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800;
   }
   .btn-ghost {
-    @apply text-ledger-muted hover:bg-ledger-row-hover hover:text-ledger-ink;
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
   }
   .btn-sm {
     @apply px-3 py-1.5 text-xs;
   }
 
+  /* Cards */
   .card {
-    @apply rounded-lg border border-ledger-border bg-ledger-surface;
+    @apply rounded-xl border border-slate-200 bg-white shadow-soft;
   }
 
+  /* Forms */
   .input {
-    @apply block w-full rounded-lg border border-ledger-border bg-ledger-surface px-3 py-2 text-sm text-ledger-ink placeholder:text-ledger-muted disabled:cursor-not-allowed disabled:bg-ledger-bg;
+    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
+      placeholder:text-slate-400
+      focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500
+      disabled:cursor-not-allowed disabled:bg-slate-50;
   }
   .label {
-    @apply block text-sm font-medium text-ledger-ink;
+    @apply block text-sm font-medium text-slate-700;
   }
 
+  /* Badges / status pills */
   .badge {
-    @apply inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset;
   }
   .badge-success {
-    color: var(--success);
-    background: color-mix(in srgb, var(--success) 10%, transparent);
-    --tw-ring-color: color-mix(in srgb, var(--success) 18%, transparent);
+    @apply bg-emerald-50 text-emerald-700 ring-emerald-600/20;
   }
   .badge-warning {
-    color: var(--warning);
-    background: color-mix(in srgb, var(--warning) 10%, transparent);
-    --tw-ring-color: color-mix(in srgb, var(--warning) 18%, transparent);
+    @apply bg-amber-50 text-amber-700 ring-amber-600/20;
   }
   .badge-danger {
-    color: var(--error);
-    background: color-mix(in srgb, var(--error) 10%, transparent);
-    --tw-ring-color: color-mix(in srgb, var(--error) 18%, transparent);
+    @apply bg-red-50 text-red-700 ring-red-600/20;
   }
   .badge-info {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
-    --tw-ring-color: color-mix(in srgb, var(--accent) 18%, transparent);
+    @apply bg-primary-50 text-primary-700 ring-primary-600/20;
   }
   .badge-neutral {
-    @apply bg-ledger-bg text-ledger-muted ring-ledger-border;
+    @apply bg-slate-100 text-slate-600 ring-slate-500/20;
   }
 
+  /* Tables */
   .table-wrap {
-    @apply overflow-x-auto rounded-lg border border-ledger-border bg-ledger-surface;
-  }
-  .table-wrap table,
-  .ledger-table {
-    @apply min-w-full border-separate border-spacing-0;
-  }
-  .table-wrap thead,
-  .ledger-table thead {
-    @apply sticky top-0 z-10 bg-ledger-bg;
-  }
-  .table-wrap tbody tr,
-  .ledger-table tbody tr {
-    @apply h-11 transition-colors duration-150 hover:bg-ledger-row-hover;
-  }
-  .table-wrap tbody tr + tr td,
-  .ledger-table tbody tr + tr td {
-    @apply border-t border-ledger-border;
-  }
-  .table-row-selected {
-    box-shadow: inset 2px 0 0 var(--accent);
+    @apply overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-soft;
   }
   .th {
-    @apply px-4 py-3 text-left text-xs font-medium uppercase text-ledger-muted tracking-normal;
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
   }
   .td {
-    @apply px-4 py-2 text-sm text-ledger-ink;
-  }
-  .td-muted {
-    @apply text-ledger-muted;
-  }
-  .td-num,
-  .th-num {
-    @apply text-right tabular-nums;
-  }
-  .td-status,
-  .th-status {
-    @apply text-center;
+    @apply px-4 py-3 text-sm text-slate-700;
   }
 
+  /* Page scaffolding */
   .page-header {
     @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
   }
   .page-title {
-    @apply font-display text-2xl font-semibold tracking-normal text-ledger-ink;
+    @apply text-xl font-bold tracking-tight text-slate-900;
   }
   .page-subtitle {
-    @apply mt-1 text-sm text-ledger-muted;
+    @apply mt-1 text-sm text-slate-500;
   }
   .section-title {
-    @apply font-display text-lg font-semibold text-ledger-ink;
+    @apply text-sm font-semibold text-slate-900;
   }
-
-  .skeleton-row {
-    @apply h-11 border-t border-ledger-border bg-ledger-surface;
-    background-image: linear-gradient(90deg, transparent, rgba(107, 114, 128, 0.08), transparent);
-    background-size: 220px 100%;
-    background-repeat: no-repeat;
-    animation: ledger-skeleton 1.2s ease-in-out infinite;
-  }
-
-  .error-banner {
-    @apply mb-3 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm;
-    border-color: color-mix(in srgb, var(--error) 24%, var(--border));
-    background: color-mix(in srgb, var(--error) 8%, var(--surface));
-    color: var(--error);
-  }
-}
-
-@keyframes ledger-skeleton {
-  from { background-position: -220px 0; }
-  to { background-position: calc(100% + 220px) 0; }
 }

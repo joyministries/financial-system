@@ -73,7 +73,7 @@ export default function FeesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="page-title">Fee Structures</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Fee Structures</h1>
         <button onClick={() => setShowForm(true)} className="btn btn-primary">
           <Plus className="h-4 w-4" /> Add Fee
         </button>
@@ -90,33 +90,33 @@ export default function FeesPage() {
       <Modal open={showForm} onClose={closeForm} title="New Fee Structure">
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="label">Category</label>
+            <label className="block text-sm font-medium text-slate-700">Category</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="input mt-1">
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Annual Amount (R)</label>
+            <label className="block text-sm font-medium text-slate-700">Annual Amount (R)</label>
             <input type="number" step="0.01" min="0.01" value={annual} onChange={(e) => setAnnual(e.target.value)} required className="input mt-1" />
           </div>
           <div>
-            <label className="label">Payment Plan</label>
+            <label className="block text-sm font-medium text-slate-700">Payment Plan</label>
             <div className="mt-1 flex gap-2">
-              <button type="button" onClick={() => setPaymentPlan('monthly')} className={`rounded-lg px-3 py-2 text-sm font-medium ${paymentPlan === 'monthly' ? 'bg-primary-600 text-white' : 'border border-ledger-border text-ledger-ink hover:bg-ledger-bg'}`}>
+              <button type="button" onClick={() => setPaymentPlan('monthly')} className={`rounded-lg px-3 py-2 text-sm font-medium ${paymentPlan === 'monthly' ? 'bg-primary-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                 Monthly installments
               </button>
-              <button type="button" onClick={() => setPaymentPlan('yearly')} className={`rounded-lg px-3 py-2 text-sm font-medium ${paymentPlan === 'yearly' ? 'bg-primary-600 text-white' : 'border border-ledger-border text-ledger-ink hover:bg-ledger-bg'}`}>
+              <button type="button" onClick={() => setPaymentPlan('yearly')} className={`rounded-lg px-3 py-2 text-sm font-medium ${paymentPlan === 'yearly' ? 'bg-primary-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                 Pay yearly (lump sum)
               </button>
             </div>
           </div>
           {paymentPlan === 'monthly' ? (
             <div>
-              <label className="label">Monthly Installment (R)</label>
+              <label className="block text-sm font-medium text-slate-700">Monthly Installment (R)</label>
               <input type="number" step="0.01" min="0.01" value={monthly} onChange={(e) => setMonthly(e.target.value)} required className="input mt-1" />
             </div>
           ) : (
-            <p className="rounded-lg border border-ledger-border bg-ledger-bg px-3 py-2 text-xs text-ledger-muted">
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
               Yearly plan — parents pay the full annual amount once (single schedule in January).
             </p>
           )}
@@ -129,34 +129,34 @@ export default function FeesPage() {
         </form>
       </Modal>
 
-      <div className="table-wrap">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         {loading ? (
-          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-ledger-muted" /></div>
+          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
         ) : (
           <>
-            <table className="ledger-table">
-              <thead className="bg-ledger-bg">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
                 <tr>
-                  <th className="th">Category</th>
-                  <th className="th">Plan</th>
-                  <th className="th">Annual</th>
-                  <th className="th">Monthly</th>
-                  <th className="th th-num">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Plan</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Annual</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Monthly</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="">
+              <tbody className="divide-y divide-slate-200">
                 {fees.map((f) => (
-                  <tr key={f.id} className="hover:bg-ledger-bg">
-                    <td className="td font-medium">{f.category}</td>
-                    <td className="td">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${f.payment_plan === 'yearly' ? 'badge badge-info' : 'badge badge-info'}`}>
+                  <tr key={f.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4 text-sm font-medium text-slate-900">{f.category}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${f.payment_plan === 'yearly' ? 'badge badge-info' : 'bg-purple-100 text-purple-700'}`}>
                         {f.payment_plan === 'yearly' ? 'Yearly' : 'Monthly'}
                       </span>
                     </td>
-                    <td className="td td-muted">R {Number(f.annual_amount).toLocaleString()}</td>
-                    <td className="td td-muted">{f.monthly_installment ? `R ${Number(f.monthly_installment).toLocaleString()}` : <span className="text-ledger-muted">Lump sum</span>}</td>
-                    <td className="td text-right">
-                      <button onClick={() => handleGenerateSchedule(f.id)} className="rounded-lg border border-ledger-border bg-ledger-surface px-3 py-1 text-xs font-medium text-ledger-ink hover:bg-ledger-row-hover">
+                    <td className="px-6 py-4 text-sm text-slate-700">R {Number(f.annual_amount).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-slate-700">{f.monthly_installment ? `R ${Number(f.monthly_installment).toLocaleString()}` : <span className="text-slate-400">Lump sum</span>}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => handleGenerateSchedule(f.id)} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100">
                         <Settings className="mr-1 inline h-3 w-3" /> Generate Schedule
                       </button>
                     </td>
@@ -164,7 +164,7 @@ export default function FeesPage() {
                 ))}
               </tbody>
             </table>
-            {fees.length === 0 && <p className="py-8 text-center text-sm text-ledger-muted">{selectedGrade ? 'No fees for this grade/year.' : 'Select a grade to view fees.'}</p>}
+            {fees.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedGrade ? 'No fees for this grade/year.' : 'Select a grade to view fees.'}</p>}
           </>
         )}
       </div>

@@ -9,6 +9,7 @@ import Pagination from '@/components/Pagination';
 const DEFAULT_PAGE_SIZE = 20;
 
 const isFather = (t: string) => t === 'father' || t === 'primary';
+const isMother = (t: string) => t === 'mother' || t === 'secondary';
 
 /** Human label for the guardian's role on the registration form. */
 function roleLabel(t: string | undefined): string {
@@ -100,14 +101,14 @@ export default function RegistrationsPage() {
                 <UserPlus className="h-4 w-4" />
               </span>
               <div>
-                <h2 className="text-sm font-semibold text-ledger-ink">Pending approvals</h2>
-                <p className="text-xs text-ledger-muted">Awaiting your decision</p>
+                <h2 className="text-sm font-semibold text-slate-900">Pending approvals</h2>
+                <p className="text-xs text-slate-500">Awaiting your decision</p>
               </div>
             </div>
             <span className="badge badge-warning">{pending.length} pending</span>
           </header>
 
-          <ul className="">
+          <ul className="divide-y divide-slate-200">
             {pending.map((s) => {
               const p1 = s.guardians?.find((g) => isFather(g.guardian_type));
               const busy = actingId === s.id;
@@ -115,29 +116,29 @@ export default function RegistrationsPage() {
                 <li key={s.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <p className="text-sm font-semibold text-ledger-ink">
+                      <p className="text-sm font-semibold text-slate-900">
                         {s.first_name} {s.last_name}
                       </p>
                       <span className="badge badge-neutral">{gradeName(s.grade_id)}</span>
                     </div>
-                    <p className="mt-0.5 font-mono text-xs text-ledger-muted">{s.student_number}</p>
+                    <p className="mt-0.5 font-mono text-xs text-slate-400">{s.student_number}</p>
                     {p1 && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-ledger-muted">
-                        <UserCheck className="h-3.5 w-3.5 text-ledger-muted" />
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                        <UserCheck className="h-3.5 w-3.5 text-slate-400" />
                         {p1.full_name}
                         {p1.email && (
                           <span className="hidden items-center gap-1 sm:inline-flex">
-                            <Mail className="h-3 w-3 text-ledger-muted" /> {p1.email}
+                            <Mail className="h-3 w-3 text-slate-400" /> {p1.email}
                           </span>
                         )}
                         {p1.phone && (
                           <span className="hidden items-center gap-1 md:inline-flex">
-                            <Phone className="h-3 w-3 text-ledger-muted" /> {p1.phone}
+                            <Phone className="h-3 w-3 text-slate-400" /> {p1.phone}
                           </span>
                         )}
                       </p>
                     )}
-                    <p className="mt-1 flex items-center gap-1 text-xs text-ledger-muted">
+                    <p className="mt-1 flex items-center gap-1 text-xs text-slate-400">
                       <Clock3 className="h-3 w-3" /> Submitted {timeAgo(s.created_at)}
                     </p>
                   </div>
@@ -168,11 +169,11 @@ export default function RegistrationsPage() {
 
       <div className="table-wrap">
         {loading ? (
-          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-ledger-muted" /></div>
+          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
         ) : (
           <>
-            <table className="ledger-table">
-              <thead className="bg-ledger-bg">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
                 <tr>
                   <th className="th">Registered</th>
                   <th className="th">Student</th>
@@ -180,41 +181,41 @@ export default function RegistrationsPage() {
                   <th className="th">Parents / Guardians</th>
                 </tr>
               </thead>
-              <tbody className="">
+              <tbody className="divide-y divide-slate-200">
                 {students.slice((page - 1) * pageSize, page * pageSize).map((s) => {
                   const guardians = (s.guardians ?? []).filter(
                     (g) => g.full_name || g.first_name || g.last_name || g.phone || g.email,
                   );
                   return (
-                    <tr key={s.id} className="hover:bg-ledger-row-hover">
-                      <td className="td whitespace-nowrap text-ledger-muted">
+                    <tr key={s.id} className="hover:bg-slate-50">
+                      <td className="td whitespace-nowrap text-slate-500">
                         {new Date(s.created_at).toLocaleDateString()}
                       </td>
                       <td className="td">
-                        <p className="font-medium text-ledger-ink">{s.first_name} {s.last_name}</p>
-                        <p className="font-mono text-xs text-ledger-muted">{s.student_number}</p>
+                        <p className="font-medium text-slate-900">{s.first_name} {s.last_name}</p>
+                        <p className="font-mono text-xs text-slate-400">{s.student_number}</p>
                       </td>
-                      <td className="td text-ledger-muted">{gradeName(s.grade_id)}</td>
+                      <td className="td text-slate-500">{gradeName(s.grade_id)}</td>
                       <td className="td">
                         {guardians.length === 0 ? (
-                          <span className="text-ledger-muted">-</span>
+                          <span className="text-slate-400">-</span>
                         ) : (
                           <div className="space-y-2">
                             {guardians.map((g) => (
                                 <div key={g.id} className="flex items-start gap-2.5">
                                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100">
-                                    <UserCheck className="h-3.5 w-3.5 text-ledger-muted" />
+                                    <UserCheck className={clsx('h-3.5 w-3.5', isMother(g.guardian_type) ? 'text-blue-500' : 'text-green-500')} />
                                   </span>
                                   <div className="min-w-0">
-                                    <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-ledger-ink">
+                                    <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-slate-900">
                                       {g.full_name}
                                       {g.guardian_type && (
-                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal uppercase tracking-wide text-ledger-muted">
+                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal uppercase tracking-wide text-slate-500">
                                           {roleLabel(g.guardian_type)}
                                         </span>
                                       )}
                                     </p>
-                                    <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ledger-muted">
+                                    <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
                                       {g.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {g.phone}</span>}
                                       {g.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {g.email}</span>}
                                     </p>
@@ -229,7 +230,7 @@ export default function RegistrationsPage() {
                 })}
               </tbody>
             </table>
-            {students.length === 0 && <p className="py-8 text-center text-sm text-ledger-muted">No registrations yet — they will appear here once parents submit applications.</p>}
+            {students.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No registrations yet.</p>}
             <Pagination
               page={page}
               totalPages={Math.max(1, Math.ceil(students.length / pageSize))}

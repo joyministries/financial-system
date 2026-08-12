@@ -73,7 +73,7 @@ export default function ReceiptsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-ledger-ink">{isParent ? 'My Receipts' : 'Receipts'}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Receipts' : 'Receipts'}</h1>
         {!isParent && (
           <div className="flex gap-2">
             <select
@@ -101,37 +101,39 @@ export default function ReceiptsPage() {
       </div>
 
       {isParent && students.length === 0 && !loading && (
-        <p className="text-sm text-ledger-muted">
+        <p className="text-sm text-slate-500">
           No children on your account yet. Once a child is registered you will see their receipts here.
         </p>
       )}
 
-      <div className="table-wrap">
+      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         {loading || namesLoading ? (
-          <div className="p-0"><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" /></div>
+          <div className="flex h-32 items-center justify-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+          </div>
         ) : (
           <>
-        <table className="ledger-table">
-          <thead className="bg-ledger-bg">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="th">Receipt #</th>
-              <th className="th">Student</th>
-              <th className="th">Amount</th>
-              <th className="th">Method</th>
-              <th className="th">Date</th>
-              <th className="th th-num">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Receipt #</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Method</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="">
+          <tbody className="divide-y divide-slate-200">
             {receipts.map((r) => (
-              <tr key={r.id} className="hover:bg-ledger-row-hover">
-                <td className="td font-mono font-medium">{r.receipt_number}</td>
-                <td className="td">{getStudentName(r.student_id)}</td>
-                <td className="td font-medium">R {r.amount.toLocaleString()}</td>
-                <td className="td td-muted">{r.payment_method}</td>
-                <td className="td td-muted">{new Date(r.created_at).toLocaleDateString()}</td>
-                <td className="td text-right">
-                  <button onClick={() => downloadReceipt(r)} className="inline-flex items-center gap-1 rounded-lg border border-ledger-border px-3 py-1.5 text-xs font-medium text-ledger-ink hover:bg-ledger-row-hover">
+              <tr key={r.id} className="hover:bg-slate-50">
+                <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{r.receipt_number}</td>
+                <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(r.student_id)}</td>
+                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {r.amount.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-slate-500">{r.payment_method}</td>
+                <td className="px-6 py-4 text-sm text-slate-500">{new Date(r.created_at).toLocaleDateString()}</td>
+                <td className="px-6 py-4 text-right">
+                  <button onClick={() => downloadReceipt(r)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
                     <Download className="h-3.5 w-3.5" /> Download
                   </button>
                 </td>
@@ -139,7 +141,7 @@ export default function ReceiptsPage() {
             ))}
           </tbody>
         </table>
-        {receipts.length === 0 && <p className="py-8 text-center text-sm text-ledger-muted">No receipts found.</p>}
+        {receipts.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No receipts found.</p>}
         <Pagination
           page={page}
           totalPages={Math.max(1, Math.ceil(totalCount / pageSize))}
