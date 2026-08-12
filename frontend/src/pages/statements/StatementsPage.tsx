@@ -9,7 +9,7 @@ import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 interface SchoolStatement {
   student_id: string;
@@ -54,8 +54,9 @@ export default function StatementsPage() {
   const [bulking, setBulking] = useState(false);
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  const pagedSchoolStudents = (schoolReport?.students ?? []).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pagedSchoolStudents = (schoolReport?.students ?? []).slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
@@ -493,14 +494,15 @@ export default function StatementsPage() {
               {(!schoolReport || schoolReport.students.length === 0) && (
                 <p className="py-8 text-center text-sm text-slate-500">No students found for this year.</p>
               )}
-              {schoolReport && schoolReport.students.length > PAGE_SIZE && (
+              {schoolReport && schoolReport.students.length > 0 && (
                 <div className="border-t border-slate-100">
                   <Pagination
                     page={page}
-                    totalPages={Math.ceil(schoolReport.students.length / PAGE_SIZE)}
+                    totalPages={Math.max(1, Math.ceil(schoolReport.students.length / pageSize))}
                     total={schoolReport.students.length}
-                    pageSize={PAGE_SIZE}
+                    pageSize={pageSize}
                     onPageChange={setPage}
+                    onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
                   />
                 </div>
               )}

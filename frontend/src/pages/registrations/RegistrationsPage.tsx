@@ -6,7 +6,7 @@ import { Loader2, UserCheck, Phone, Mail, Check, X, Clock3, UserPlus } from 'luc
 import clsx from 'clsx';
 import Pagination from '@/components/Pagination';
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
 
 const isFather = (t: string) => t === 'father' || t === 'primary';
 const isMother = (t: string) => t === 'mother' || t === 'secondary';
@@ -29,6 +29,7 @@ export default function RegistrationsPage() {
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const load = () => {
     setLoading(true);
@@ -175,7 +176,7 @@ export default function RegistrationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {students.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((s) => {
+                {students.slice((page - 1) * pageSize, page * pageSize).map((s) => {
                   const p1 = s.guardians?.find((g) => isFather(g.guardian_type));
                   const p2 = s.guardians?.find((g) => isMother(g.guardian_type));
                   return (
@@ -226,10 +227,11 @@ export default function RegistrationsPage() {
             {students.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No registrations yet.</p>}
             <Pagination
               page={page}
-              totalPages={Math.max(1, Math.ceil(students.length / PAGE_SIZE))}
+              totalPages={Math.max(1, Math.ceil(students.length / pageSize))}
               total={students.length}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
               onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
             />
           </>
         )}

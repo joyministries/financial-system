@@ -9,7 +9,7 @@ import StudentSearchSelect from '@/components/StudentSearchSelect';
 
 const CHARGE_TYPES = ['Excursions', 'School Trips', 'Concerts', 'Uniform', 'Books', 'Sports Fees', 'Registration Fees'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 export default function ChargesPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -22,6 +22,7 @@ export default function ChargesPage() {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Form state
   const [scope, setScope] = useState<'grade' | 'student'>('grade');
@@ -45,7 +46,7 @@ export default function ChargesPage() {
     }
   }, [selectedStudent, year]);
 
-  const pagedCharges = charges.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pagedCharges = charges.slice((page - 1) * pageSize, page * pageSize);
 
   // Students in a grade (grade-first dropdowns: pick a grade, then a student in it).
   const studentsInGrade = (grade: string) =>
@@ -293,10 +294,11 @@ export default function ChargesPage() {
             {charges.length === 0 && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No additional charges.' : 'Select a student.'}</p>}
             <Pagination
               page={page}
-              totalPages={Math.max(1, Math.ceil(charges.length / PAGE_SIZE))}
+              totalPages={Math.max(1, Math.ceil(charges.length / pageSize))}
               total={charges.length}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
               onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
             />
           </>
         )}

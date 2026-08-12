@@ -7,7 +7,7 @@ import type { Grade, MonthlySummaryReport } from '@/types';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const OWING_PAGE_SIZE = 10;
+const DEFAULT_OWING_PAGE_SIZE = 10;
 
 const selectCls =
   'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20';
@@ -22,6 +22,7 @@ export default function DashboardPage() {
   const [trends, setTrends] = useState<{ month: number; total: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [owingPage, setOwingPage] = useState(1);
+  const [owingPageSize, setOwingPageSize] = useState(DEFAULT_OWING_PAGE_SIZE);
 
   useEffect(() => {
     gradesApi.list().then((r) => setGrades(r.data)).catch(() => setGrades([]));
@@ -50,10 +51,10 @@ export default function DashboardPage() {
   useEffect(() => { setOwingPage(1); }, [year, month, gradeId]);
 
   const owingTotal = summary?.students_owing_list.length ?? 0;
-  const owingTotalPages = Math.max(1, Math.ceil(owingTotal / OWING_PAGE_SIZE));
+  const owingTotalPages = Math.max(1, Math.ceil(owingTotal / owingPageSize));
   const owingList = (summary?.students_owing_list ?? []).slice(
-    (owingPage - 1) * OWING_PAGE_SIZE,
-    owingPage * OWING_PAGE_SIZE,
+    (owingPage - 1) * owingPageSize,
+    owingPage * owingPageSize,
   );
 
   const activeGradeName = grades.find((g) => g.id === gradeId)?.name;
@@ -201,13 +202,14 @@ export default function DashboardPage() {
               </tbody>
             </table>
             </div>
-            {owingTotal > OWING_PAGE_SIZE && (
+            {owingTotal > 0 && (
               <Pagination
                 page={owingPage}
                 totalPages={owingTotalPages}
                 total={owingTotal}
-                pageSize={OWING_PAGE_SIZE}
+                pageSize={owingPageSize}
                 onPageChange={setOwingPage}
+                onPageSizeChange={(s) => { setOwingPageSize(s); setOwingPage(1); }}
               />
             )}
           </>
