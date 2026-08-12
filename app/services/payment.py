@@ -67,7 +67,7 @@ class PaymentService:
         stmt = (
             select(Payment)
             .where(Payment.student_id == student_id, *self._month_filter(month, year))
-            .order_by(Payment.payment_date.desc())
+            .order_by(Payment.payment_date.desc(), Payment.id.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -87,7 +87,11 @@ class PaymentService:
             Payment.student_id.in_(student_ids), *self._month_filter(month, year)
         )
         stmt = self._search_join(stmt, search)
-        stmt = stmt.order_by(Payment.payment_date.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(Payment.payment_date.desc(), Payment.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -103,7 +107,7 @@ class PaymentService:
             Payment.status == "pending", *self._month_filter(month, year)
         )
         stmt = self._search_join(stmt, search)
-        stmt = stmt.order_by(Payment.payment_date).limit(limit).offset(offset)
+        stmt = stmt.order_by(Payment.payment_date, Payment.id).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -117,7 +121,11 @@ class PaymentService:
     ) -> list[Payment]:
         stmt = select(Payment).where(*self._month_filter(month, year))
         stmt = self._search_join(stmt, search)
-        stmt = stmt.order_by(Payment.payment_date.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(Payment.payment_date.desc(), Payment.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

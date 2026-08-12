@@ -63,16 +63,20 @@ class Student(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     student_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    grade_id: Mapped[str] = mapped_column(String(36), ForeignKey("grades.id"), nullable=False)
+    last_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True
+    )
+    grade_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("grades.id"), nullable=False, index=True
+    )
     parent_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id"), nullable=True, index=True
     )
     enrollment_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # pending = registered by a parent, awaiting admin approval
     registration_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="approved"
+        String(20), nullable=False, default="approved", index=True
     )  # pending | approved | rejected
     # How the parent prefers to pay for this child's fees:
     # monthly = per-month installments, cumulative = full-year lump sum.
@@ -80,7 +84,7 @@ class Student(Base):
         String(20), nullable=False, default="monthly"
     )  # monthly | cumulative
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

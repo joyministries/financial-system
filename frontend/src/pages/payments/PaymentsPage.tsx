@@ -30,6 +30,7 @@ export default function PaymentsPage() {
   const [filter, setFilter] = useState<'all' | 'pending'>('all');
   const [monthFilter, setMonthFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showReverse, setShowReverse] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState('');
@@ -70,6 +71,17 @@ export default function PaymentsPage() {
   };
 
   useEffect(() => { getStudentNames().then(setNameMap); }, []);
+
+  // Debounce the search box: only trigger a refetch ~350ms after the user
+  // stops typing, not on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   useEffect(() => { load(); }, [filter, monthFilter, search, page, pageSize]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -149,8 +161,8 @@ export default function PaymentsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); }}
               placeholder="Search student…"
               className="input pl-9 w-52"
             />

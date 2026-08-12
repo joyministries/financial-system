@@ -48,11 +48,13 @@ class SmsMessage(Base):
     __tablename__ = "sms_messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    student_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("students.id"))
+    student_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("students.id"), index=True
+    )
     to_phone: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     template: Mapped[str] = mapped_column(String(50), default="manual")
-    status: Mapped[str] = mapped_column(String(20), default="queued")
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     provider: Mapped[str] = mapped_column(String(50), default="smsportal")
     provider_message_id: Mapped[str | None] = mapped_column(String(100))
     provider_status: Mapped[str | None] = mapped_column(String(100))
@@ -60,7 +62,7 @@ class SmsMessage(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -457,7 +457,7 @@ class SmsService:
     ) -> list[SmsMessage]:
         stmt = (
             select(SmsMessage)
-            .order_by(SmsMessage.created_at.desc())
+            .order_by(SmsMessage.created_at.desc(), SmsMessage.id.desc())
             .offset(offset)
             .limit(min(limit, 200))
         )

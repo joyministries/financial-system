@@ -47,7 +47,7 @@ class ReceiptService:
         stmt = (
             select(Receipt)
             .where(Receipt.student_id == student_id)
-            .order_by(Receipt.created_at.desc())
+            .order_by(Receipt.created_at.desc(), Receipt.id.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -81,7 +81,11 @@ class ReceiptService:
         if end_date:
             stmt = stmt.where(Receipt.created_at <= end_date)
 
-        stmt = stmt.order_by(Receipt.created_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(Receipt.created_at.desc(), Receipt.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

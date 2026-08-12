@@ -554,7 +554,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.parent_id == parent_id, Student.is_active == True)  # noqa: E712
-            .order_by(Student.last_name)
+            .order_by(Student.last_name, Student.id)
             .limit(limit)
             .offset(offset)
         )
@@ -575,7 +575,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.grade_id == grade_id, Student.is_active == True)  # noqa: E712
-            .order_by(Student.last_name)
+            .order_by(Student.last_name, Student.id)
             .limit(limit)
             .offset(offset)
         )
@@ -596,7 +596,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.is_active == True)  # noqa: E712
-            .order_by(Student.last_name)
+            .order_by(Student.last_name, Student.id)
             .limit(limit)
             .offset(offset)
         )
@@ -624,7 +624,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.registration_status == "pending")
-            .order_by(Student.created_at.asc())
+            .order_by(Student.created_at.asc(), Student.id.asc())
             .limit(limit)
         )
         result = await self.db.execute(stmt)
@@ -655,6 +655,12 @@ class StudentService:
         if not guardian:
             return None
         for key, value in data.model_dump(exclude_unset=True).items():
+            # guardian_id is the free-text national ID / badge supplied by the
+            # school. It must never be overwritten from a payload — clients can
+            # send the guardian's DB row id in that key, which would store a
+            # UUID in the column and surface as "ID: <uuid>" in tables.
+            if key == "guardian_id":
+                continue
             setattr(guardian, key, value)
         # Keep the denormalized full_name in sync when split names are edited.
         if guardian.first_name and guardian.last_name:
@@ -671,12 +677,21 @@ class StudentService:
         for key, value in payload.items():
             setattr(student, key, value)
         # Update guardian records in the same call (admin edit form sends both).
+        # The client may send either the guardian's DB row id (preferred) or
+        # its free-text guardian_id as the lookup key.
         if guardians_data:
             for gdata in guardians_data:
                 gid = gdata.get("guardian_id")
                 if not gid:
                     continue
-                guardian = next((g for g in student.guardians if g.id == gid), None)
+                guardian = next(
+                    (
+                        g
+                        for g in student.guardians
+                        if g.id == gid or g.guardian_id == gid
+                    ),
+                    None,
+                )
                 if not guardian:
                     continue
                 for key, value in gdata.items():

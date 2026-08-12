@@ -122,7 +122,11 @@ class InvoiceService:
         if status:
             stmt = stmt.where(Invoice.status == status)
 
-        stmt = stmt.order_by(Invoice.created_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(Invoice.created_at.desc(), Invoice.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
