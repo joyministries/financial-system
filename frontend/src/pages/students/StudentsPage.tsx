@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Plus, Pencil, UserX, UserPlus, Copy, Loader2, MessageSquare, Send, Eye, Search } from 'lucide-react';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
+import { isUuid } from '@/lib/isUuid';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -794,7 +795,7 @@ export default function StudentsPage() {
                     <div className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
                       {g.phone && <span>Phone: <span className="font-mono">{g.phone}</span></span>}
                       {g.email && <span>Email: {g.email}</span>}
-                      {g.guardian_id && <span>ID: {g.guardian_id}</span>}
+                      {g.guardian_id && !isUuid(g.guardian_id) && <span>ID: {g.guardian_id}</span>}
                       {g.physical_address && <span>Address: {g.physical_address}</span>}
                       {g.po_box && <span>PO Box: {g.po_box}</span>}
                       {!g.phone && !g.email && !g.guardian_id && !g.physical_address && !g.po_box && (

@@ -5,11 +5,20 @@ import toast from 'react-hot-toast';
 import { Loader2, UserCheck, Phone, Mail, Check, X, Clock3, UserPlus } from 'lucide-react';
 import clsx from 'clsx';
 import Pagination from '@/components/Pagination';
+import { isUuid } from '@/lib/isUuid';
 
 const DEFAULT_PAGE_SIZE = 20;
 
 const isFather = (t: string) => t === 'father' || t === 'primary';
 const isMother = (t: string) => t === 'mother' || t === 'secondary';
+
+/** Human label for the guardian's role on the registration form. */
+function roleLabel(t: string | undefined): string {
+  if (!t) return '';
+  if (t === 'father' || t === 'primary') return 'Father';
+  if (t === 'mother' || t === 'secondary') return 'Mother';
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
 
 function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
@@ -170,15 +179,14 @@ export default function RegistrationsPage() {
                   <th className="th">Registered</th>
                   <th className="th">Student</th>
                   <th className="th">Grade</th>
-                  <th className="th">Father</th>
-                  <th className="th">Contact</th>
-                  <th className="th">Mother</th>
+                  <th className="th">Parents / Guardians</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {students.slice((page - 1) * pageSize, page * pageSize).map((s) => {
-                  const p1 = s.guardians?.find((g) => isFather(g.guardian_type));
-                  const p2 = s.guardians?.find((g) => isMother(g.guardian_type));
+                  const guardians = (s.guardians ?? []).filter(
+                    (g) => g.full_name || g.first_name || g.last_name || g.phone || g.email,
+                  );
                   return (
                     <tr key={s.id} className="hover:bg-slate-50">
                       <td className="td whitespace-nowrap text-slate-500">
@@ -190,34 +198,37 @@ export default function RegistrationsPage() {
                       </td>
                       <td className="td text-slate-500">{gradeName(s.grade_id)}</td>
                       <td className="td">
-                        {p1 ? (
-                          <div>
-                            <p className="flex items-center gap-1.5 font-medium text-slate-900">
-                              <UserCheck className="h-4 w-4 shrink-0 text-green-500" /> {p1.full_name}
-                            </p>
-                            {p1.guardian_id && (
-                              <p className="mt-0.5 truncate font-mono text-xs text-slate-400" title={p1.guardian_id}>
-                                ID: {p1.guardian_id}
-                              </p>
-                            )}
+                        {guardians.length === 0 ? (
+                          <span className="text-slate-400">-</span>
+                        ) : (
+                          <div className="space-y-2">
+                            {guardians.map((g) => {
+                              const idLabel = isUuid(g.guardian_id) ? null : g.guardian_id;
+                              return (
+                                <div key={g.id} className="flex items-start gap-2.5">
+                                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                                    <UserCheck className={clsx('h-3.5 w-3.5', isMother(g.guardian_type) ? 'text-blue-500' : 'text-green-500')} />
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-slate-900">
+                                      {g.full_name}
+                                      {g.guardian_type && (
+                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal uppercase tracking-wide text-slate-500">
+                                          {roleLabel(g.guardian_type)}
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                                      {g.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {g.phone}</span>}
+                                      {g.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {g.email}</span>}
+                                      {idLabel && <span className="font-mono">ID: {idLabel}</span>}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        ) : <span className="text-slate-400">-</span>}
-                      </td>
-                      <td className="td">
-                        <div className="space-y-0.5 text-xs text-slate-500">
-                          {p1?.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {p1.phone}</span>}
-                          {p1?.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {p1.email}</span>}
-                        </div>
-                      </td>
-                      <td className="td">
-                        {p2 ? (
-                          <div>
-                            <p className="flex items-center gap-1.5 font-medium text-slate-900">
-                              <UserCheck className="h-4 w-4 shrink-0 text-blue-500" /> {p2.full_name}
-                            </p>
-                            {p2.phone && <p className="mt-0.5 text-xs text-slate-500">{p2.phone}</p>}
-                          </div>
-                        ) : <span className="text-slate-400">-</span>}
+                        )}
                       </td>
                     </tr>
                   );
