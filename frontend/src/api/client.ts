@@ -23,6 +23,7 @@ import type {
   Student,
   StudentDocument,
   UnreadCountResponse,
+  User,
 } from '@/types';
 
 // Same-origin by default (Vite dev proxy or a reverse proxy on the same host).
@@ -478,6 +479,11 @@ export const notificationsApi = {
   unreadCount: () => api.get<UnreadCountResponse>('/notifications/unread-count'),
   markRead: (id: string) => api.post<AppNotification>(`/notifications/${id}/read`),
   markAllRead: () => api.post<UnreadCountResponse>('/notifications/read-all'),
+};
+
+// ── Users (super_admin) ─────────────────────────────────────
+export const usersApi = {
+  listStaff: () => api.get<User[]>('/users/'),
 };
 
 // ── PayFast (parent) ─────────────────────────────────────────

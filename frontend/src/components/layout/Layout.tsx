@@ -18,6 +18,7 @@ import {
   FilePlus2,
   CalendarDays,
   UserRound,
+  ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -36,6 +37,7 @@ const navigation = [
   { name: 'Statements', href: '/statements', icon: FileText, roles: ['admin', 'finance', 'parent'] },
   { name: 'Invoices', href: '/invoices', icon: FilePlus2, roles: ['admin', 'finance', 'parent'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'finance'] },
+  { name: 'Staff Accounts', href: '/accounts', icon: ShieldCheck, roles: ['super_admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['super_admin'] },
 ];
 

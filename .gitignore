@@ -1,35 +1,74 @@
+# ── Environment / secrets ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.production
+env.txt
+*-env.txt
+
+# ── Python ─────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*$py.class
 *.so
-.env
-.venv/
-venv/
 *.egg-info/
+*.egg
 dist/
 build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Type checking / linting caches
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 
-# Uploaded application documents (birth certificates, transcripts, ...)
+# ── Alembic ────────────────────────────────────────────────────────
+# Local migration artifacts (not the versions themselves)
+alembic/versions/*.pyc
+
+# ── Celery ─────────────────────────────────────────────────────────
+celerybeat-schedule
+celerybeat.pid
+
+# ── Uploaded files (user documents — never commit) ────────────────
 uploads/
 
-# Local development / session artifacts (not part of the product)
-PROGRESS.txt
-financial_see.txt
-celerybeat-schedule
-
-# Local env reference files (contain secrets — never commit)
-env.txt
-frontend-vercel-env.txt
-
-# Frontend
+# ── Frontend ───────────────────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
 frontend/tsconfig.tsbuildinfo
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 
-# Markdown docs — only the root README is tracked
+# Vercel
+frontend/.vercel/
+
+# ── Build artifacts ────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ── OS / editor junk ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# ── Docker ─────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── Local dev notes (not part of the product) ─────────────────────
+PROGRESS.txt
+financial_see.txt
+
+# ── Markdown docs (only root README is tracked) ───────────────────
 *.md
 !/README.md
-.env.production
-env.txt
