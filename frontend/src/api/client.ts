@@ -484,6 +484,23 @@ export const notificationsApi = {
 // ── Users (super_admin) ─────────────────────────────────────
 export const usersApi = {
   listStaff: () => api.get<User[]>('/users/'),
+  create: (data: {
+    email: string;
+    password: string;
+    full_name: string;
+    phone?: string;
+    role: 'admin' | 'finance' | 'super_admin';
+  }) => api.post<User>('/users/', data),
+  update: (id: string, data: {
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    role?: 'admin' | 'finance' | 'super_admin';
+    is_active?: boolean;
+  }) => api.put<User>(`/users/${id}`, data),
+  deactivate: (id: string) => api.delete(`/users/${id}`),
+  resetPassword: (id: string, newPassword: string) =>
+    api.post(`/users/${id}/reset-password`, { new_password: newPassword }),
 };
 
 // ── PayFast (parent) ─────────────────────────────────────────

@@ -141,3 +141,44 @@ class ForgotPasswordResponse(BaseModel):
     # is explicitly enabled for local development (token is then also
     # printed to the backend log). Email delivery is the intended path.
     reset_token: str | None = None
+
+
+# ── Super admin user management ────────────────────────────────
+
+
+class AdminUserCreate(BaseModel):
+    """Super admin creates a new staff account (admin or finance)."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    full_name: SafeFullName
+    phone: str | None = Field(default=None, max_length=50)
+    role: str = Field(..., pattern="^(admin|finance|super_admin)$")
+
+    @field_validator("email")
+    @classmethod
+    def _email_norm(cls, v: str) -> str:
+        return _normalize_email(v)
+
+
+class AdminUserUpdate(BaseModel):
+    """Super admin updates a staff account."""
+
+    full_name: SafeFullName | None = None
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=50)
+    role: str | None = Field(default=None, pattern="^(admin|finance|super_admin)$")
+    is_active: bool | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _email_norm(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return _normalize_email(v)
+
+
+class AdminPasswordReset(BaseModel):
+    """Super admin resets a staff account password."""
+
+    new_password: str = Field(min_length=8, max_length=128)
