@@ -79,6 +79,15 @@ class StatementService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def delete_for_student(self, student_id: str, academic_year: int) -> int:
+        """Delete all statements for a student+year. Returns count deleted."""
+        stmts = await self.list_for_student(student_id, academic_year)
+        count = len(stmts)
+        for s in stmts:
+            await self.db.delete(s)
+        await self.db.flush()
+        return count
+
     async def _total_annual_fees(self, student_id: str, academic_year: int) -> Decimal:
         student = await self.db.get(Student, student_id)
         if not student:

@@ -162,6 +162,36 @@ async def generate_all_statements(
     }
 
 
+@router.post("/statements/regenerate")
+async def regenerate_statements(
+    student_id: str,
+    academic_year: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Delete all existing statements for a student+year and regenerate them.
+
+    This picks up any payments that were verified after the original
+    statements were generated."""
+    service = StatementService(db)
+    deleted = await service.delete_for_student(student_id, academic_year)
+
+    generated = 0
+    for month in range(1, 13):
+        try:
+            await service.generate(student_id, academic_year, month)
+            generated += 1
+        except Exception:
+            pass  # skip months with no schedule
+    await db.commit()
+    return {
+        "student_id": student_id,
+        "academic_year": academic_year,
+        "deleted": deleted,
+        "generated": generated,
+    }
+
+
 @router.get("/student-summary/{student_id}", response_model=StudentSummaryResponse)
 async def get_student_summary(
     student_id: str,
