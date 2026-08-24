@@ -64,8 +64,8 @@ export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
       </div>
 
       {/* Form side */}
-      <div className="flex flex-1 items-start justify-center overflow-y-auto px-4 py-12 lg:items-center">
-        <div className={clsx('w-full animate-fade-up', maxW === 'lg' ? 'max-w-lg' : 'max-w-md')}>
+      <div className="flex flex-1 justify-center overflow-y-auto px-4">
+        <div className={clsx('my-auto w-full py-12 animate-fade-up', maxW === 'lg' ? 'max-w-lg' : 'max-w-md')}>
           {/* Brand — mobile */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <BrandMark className="h-11 w-11 text-xl" />
