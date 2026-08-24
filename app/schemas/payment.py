@@ -58,3 +58,34 @@ class ProofOfPaymentUpload(BaseModel):
 class PaymentVerification(BaseModel):
     payment_id: str
     action: str = Field(pattern="^(approve|reject)$")
+
+
+# ── Edit / reallocation ──────────────────────────────────────────────
+
+
+class PaymentEdit(BaseModel):
+    """Admin can correct payment details (amount, student, method, date, etc.)."""
+
+    student_id: str | None = None
+    amount: Decimal | None = Field(default=None, gt=0)
+    payment_method: str | None = Field(default=None, min_length=1)
+    payment_date: datetime | None = None
+    reference_number: str | None = None
+    notes: str | None = None
+
+
+class PaymentDeallocate(BaseModel):
+    """Remove a single allocation and reverse its effect on the balance/charge."""
+
+    allocation_id: str
+
+
+class PaymentReallocate(BaseModel):
+    """Move the full unallocated portion (or a specific amount) of a payment
+    from one target to another in a single transaction."""
+
+    payment_id: str
+    source_allocation_id: str | None = None
+    target_outstanding_balance_id: str | None = None
+    target_additional_charge_id: str | None = None
+    amount: Decimal = Field(gt=0)

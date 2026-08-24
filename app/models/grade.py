@@ -151,6 +151,49 @@ class Enrollment(Base):
     student: Mapped["Student"] = relationship(back_populates="enrollments")
 
 
+class StudentFeeOverride(Base):
+    """Per-student fee override — allows the admin to give a discount to
+    a specific learner without changing the grade-wide fee.
+
+    When an override exists for a student+grade+year+category, its
+    ``annual_amount`` replaces the grade-level ``FeeStructure.annual_amount``
+    for schedule generation and invoice display.
+
+    ``discount_type``:
+      - ``override``: the ``annual_amount`` on this row replaces the grade fee entirely.
+      - ``percent``:   the ``annual_amount`` is treated as a percentage discount
+                        (e.g. 10 means 10% off the grade fee).
+    """
+
+    __tablename__ = "student_fee_overrides"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    student_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("students.id"), nullable=False, index=True
+    )
+    fee_structure_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("fee_structures.id"), nullable=False, index=True
+    )
+    annual_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    discount_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="override"
+    )  # override | percent
+    reason: Mapped[str | None] = mapped_column(String(255))
+    created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    student: Mapped["Student"] = relationship()
+    fee_structure: Mapped["FeeStructure"] = relationship()
+
+
 from app.models.document import StudentDocument  # noqa: E402, F401
 from app.models.financial import Receipt  # noqa: E402, F401
 from app.models.payment import Payment  # noqa: E402, F401

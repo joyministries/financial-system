@@ -14,6 +14,9 @@ from app.schemas.payment import (
     PaymentAllocationCreate,
     PaymentAllocationResponse,
     PaymentCreate,
+    PaymentDeallocate,
+    PaymentEdit,
+    PaymentReallocate,
     PaymentResponse,
     PaymentReversalCreate,
     PaymentVerification,
@@ -278,3 +281,56 @@ async def upload_proof_of_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     return {"detail": "Proof uploaded"}
+
+
+@router.put("/{payment_id}", response_model=PaymentResponse)
+async def edit_payment(
+    payment_id: str,
+    data: PaymentEdit,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Edit payment details (amount, student, method, date, reference, notes).
+    Changing student_id or amount requires all allocations to be removed first."""
+    service = PaymentService(db)
+    from app.services.audit import AuditService
+
+    payment = await service.edit(payment_id, data)
+    await AuditService(db).log("payment", payment_id, "edit", user.id, new_values=data.model_dump(exclude_unset=True))
+    return payment
+
+
+@router.delete("/allocations/{allocation_id}")
+async def deallocate_payment(
+    allocation_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Remove an allocation and reverse its effect on the balance/charge."""
+    service = PaymentService(db)
+    from app.services.audit import AuditService
+
+    alloc = await service.deallocate(allocation_id)
+    await AuditService(db).log(
+        "payment", alloc.payment_id, "deallocate", user.id,
+        new_values={"allocation_id": allocation_id, "amount": str(alloc.amount_allocated)},
+    )
+    return {"detail": "Allocation removed", "allocation_id": allocation_id}
+
+
+@router.post("/reallocate", response_model=PaymentAllocationResponse)
+async def reallocate_payment(
+    data: PaymentReallocate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Move funds from one allocation target to another on the same payment."""
+    service = PaymentService(db)
+    from app.services.audit import AuditService
+
+    alloc = await service.reallocate(data)
+    await AuditService(db).log(
+        "payment", data.payment_id, "reallocate", user.id,
+        new_values=data.model_dump(exclude_unset=True),
+    )
+    return alloc

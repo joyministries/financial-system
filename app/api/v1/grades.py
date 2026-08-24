@@ -11,6 +11,9 @@ from app.schemas.grade import (
     GradeCreate,
     GradeResponse,
     GradeUpdate,
+    StudentFeeOverrideCreate,
+    StudentFeeOverrideResponse,
+    StudentFeeOverrideUpdate,
 )
 from app.services.audit import AuditService
 from app.services.grade import FeeService, GradeService
@@ -193,3 +196,113 @@ async def generate_monthly_schedule(
     count = len(schedules)
     await audit.log("monthly_schedule", fee.id, "generate", user.id, new_values={"count": count})
     return {"detail": f"Generated {count} monthly schedules"}
+
+
+# ── Per-student fee overrides (discounts) ────────────────────────────
+
+
+@router.post("/fee-overrides", response_model=StudentFeeOverrideResponse)
+async def create_fee_override(
+    data: StudentFeeOverrideCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Set a per-student fee override (discount). The admin can give a
+    specific learner a discounted tuition without changing the grade fee."""
+    from app.models.grade import StudentFeeOverride
+    from app.models.grade import FeeStructure
+
+    # Validate the fee structure exists
+    fee = await db.get(FeeStructure, data.fee_structure_id)
+    if not fee:
+        raise HTTPException(status_code=404, detail="Fee structure not found")
+
+    # Validate the student exists
+    from app.models.grade import Student
+    student = await db.get(Student, data.student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    override = StudentFeeOverride(
+        student_id=data.student_id,
+        fee_structure_id=data.fee_structure_id,
+        annual_amount=data.annual_amount,
+        discount_type=data.discount_type,
+        reason=data.reason,
+        created_by=user.id,
+    )
+    db.add(override)
+    await db.flush()
+    await AuditService(db).log(
+        "student_fee_override", override.id, "create", user.id,
+        new_values={"student_id": data.student_id, "amount": str(data.annual_amount)},
+    )
+    return override
+
+
+@router.get("/fee-overrides", response_model=list[StudentFeeOverrideResponse])
+async def list_fee_overrides(
+    student_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """List fee overrides, optionally filtered by student."""
+    from app.models.grade import StudentFeeOverride
+    from sqlalchemy import select
+
+    stmt = select(StudentFeeOverride).where(StudentFeeOverride.is_active == True)
+    if student_id:
+        stmt = stmt.where(StudentFeeOverride.student_id == student_id)
+    stmt = stmt.order_by(StudentFeeOverride.created_at.desc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+@router.put("/fee-overrides/{override_id}", response_model=StudentFeeOverrideResponse)
+async def update_fee_override(
+    override_id: str,
+    data: StudentFeeOverrideUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Update a fee override (amount, type, reason, active status)."""
+    from app.models.grade import StudentFeeOverride
+
+    override = await db.get(StudentFeeOverride, override_id)
+    if not override:
+        raise HTTPException(status_code=404, detail="Fee override not found")
+
+    if data.annual_amount is not None:
+        override.annual_amount = data.annual_amount
+    if data.discount_type is not None:
+        override.discount_type = data.discount_type
+    if data.reason is not None:
+        override.reason = data.reason
+    if data.is_active is not None:
+        override.is_active = data.is_active
+
+    await db.flush()
+    await AuditService(db).log(
+        "student_fee_override", override_id, "update", user.id,
+        new_values=data.model_dump(exclude_unset=True),
+    )
+    return override
+
+
+@router.delete("/fee-overrides/{override_id}")
+async def delete_fee_override(
+    override_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Soft-delete a fee override (set is_active=False)."""
+    from app.models.grade import StudentFeeOverride
+
+    override = await db.get(StudentFeeOverride, override_id)
+    if not override:
+        raise HTTPException(status_code=404, detail="Fee override not found")
+
+    override.is_active = False
+    await db.flush()
+    await AuditService(db).log("student_fee_override", override_id, "delete", user.id)
+    return {"detail": "Fee override deactivated"}

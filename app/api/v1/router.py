@@ -13,6 +13,7 @@ from app.api.v1.settings import router as settings_router
 from app.api.v1.sms import router as sms_router
 from app.api.v1.students import router as students_router
 from app.api.v1.system import router as system_router
+from app.api.v1.uploads import router as uploads_router
 from app.api.v1.users import router as users_router
 
 api_router = APIRouter()
@@ -30,3 +31,4 @@ api_router.include_router(settings_router)
 api_router.include_router(sms_router)
 api_router.include_router(system_router)
 api_router.include_router(users_router)
+api_router.include_router(uploads_router)

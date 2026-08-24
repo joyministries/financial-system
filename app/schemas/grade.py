@@ -52,3 +52,36 @@ class FeeStructureResponse(BaseModel):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+# ── Per-student fee overrides (discounts) ────────────────────────────
+
+
+class StudentFeeOverrideCreate(BaseModel):
+    """Set a fee override for a specific student on a fee structure."""
+    student_id: str
+    fee_structure_id: str
+    annual_amount: Decimal = Field(ge=0, description="Discounted amount or percent")
+    discount_type: str = Field(default="override", pattern="^(override|percent)$")
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class StudentFeeOverrideUpdate(BaseModel):
+    annual_amount: Decimal | None = Field(default=None, ge=0)
+    discount_type: str | None = Field(default=None, pattern="^(override|percent)$")
+    reason: str | None = Field(default=None, max_length=255)
+    is_active: bool | None = None
+
+
+class StudentFeeOverrideResponse(BaseModel):
+    id: str
+    student_id: str
+    fee_structure_id: str
+    annual_amount: Decimal
+    discount_type: str
+    reason: str | None
+    created_by: str | None
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

@@ -8,7 +8,14 @@ from app.core.money import to_decimal
 from app.models.grade import Student
 from app.models.payment import Payment, PaymentAllocation, PaymentReversal
 from app.models.schedule import AdditionalCharge, OutstandingBalance
-from app.schemas.payment import PaymentAllocationCreate, PaymentCreate, PaymentReversalCreate
+from app.schemas.payment import (
+    PaymentAllocationCreate,
+    PaymentCreate,
+    PaymentDeallocate,
+    PaymentEdit,
+    PaymentReallocate,
+    PaymentReversalCreate,
+)
 
 
 class PaymentService:
@@ -319,3 +326,129 @@ class PaymentService:
         payment.proof_of_payment_url = proof_url
         await self.db.flush()
         return payment
+
+    # ── Edit / reallocate ──────────────────────────────────────────────
+
+    async def edit(self, payment_id: str, data: PaymentEdit) -> Payment:
+        """Admin can correct payment details.  Changing student_id or amount
+        is only allowed when the payment has no allocations yet."""
+        payment = await self.get(payment_id)
+        if not payment:
+            raise NotFoundError("Payment", payment_id)
+
+        # Check if payment has allocations
+        stmt = select(func.count()).select_from(PaymentAllocation).where(
+            PaymentAllocation.payment_id == payment_id
+        )
+        alloc_count = int((await self.db.execute(stmt)).scalar_one())
+
+        if alloc_count > 0:
+            # If changing student or amount, require deallocation first
+            if data.student_id and data.student_id != payment.student_id:
+                raise BusinessRuleError(
+                    "Cannot change student on an allocated payment. "
+                    "Deallocate all allocations first."
+                )
+            if data.amount and data.amount != payment.amount:
+                raise BusinessRuleError(
+                    "Cannot change amount on an allocated payment. "
+                    "Deallocate all allocations first."
+                )
+
+        # Apply allowed fields
+        if data.student_id is not None:
+            payment.student_id = data.student_id
+        if data.amount is not None:
+            payment.amount = data.amount
+        if data.payment_method is not None:
+            payment.payment_method = data.payment_method
+        if data.payment_date is not None:
+            payment.payment_date = data.payment_date
+        if data.reference_number is not None:
+            payment.reference_number = data.reference_number
+        if data.notes is not None:
+            payment.notes = data.notes
+
+        await self.db.flush()
+        return payment
+
+    async def deallocate(self, allocation_id: str) -> PaymentAllocation:
+        """Remove a single allocation and reverse its effect on the balance/charge."""
+        alloc = await self.db.get(PaymentAllocation, allocation_id)
+        if not alloc:
+            raise NotFoundError("PaymentAllocation", allocation_id)
+
+        # Reverse the allocation's effect
+        await self._reverse_allocation(alloc)
+        await self.db.delete(alloc)
+        await self.db.flush()
+        return alloc
+
+    async def reallocate(self, data: PaymentReallocate) -> PaymentAllocation:
+        """Move funds from one allocation target to another on the same payment."""
+        payment = await self.get(data.payment_id)
+        if not payment:
+            raise NotFoundError("Payment", data.payment_id)
+        if payment.status == "reversed":
+            raise BusinessRuleError("Cannot reallocate a reversed payment")
+
+        # If a source allocation is specified, reverse it first
+        if data.source_allocation_id:
+            source_alloc = await self.db.get(PaymentAllocation, data.source_allocation_id)
+            if not source_alloc:
+                raise NotFoundError("PaymentAllocation", data.source_allocation_id)
+            if source_alloc.payment_id != data.payment_id:
+                raise BusinessRuleError("Source allocation does not belong to this payment")
+
+            # Use the amount from the source allocation if not overridden
+            amount = data.amount if data.amount else source_alloc.amount_allocated
+            if amount > source_alloc.amount_allocated:
+                raise BusinessRuleError(
+                    f"Requested amount {amount} exceeds source allocation of "
+                    f"{source_alloc.amount_allocated}"
+                )
+
+            await self._reverse_allocation(source_alloc)
+
+            # If partial deallocation, re-allocate the remainder back
+            remainder = source_alloc.amount_allocated - amount
+            if remainder > 0:
+                await self._allocate_without_check(
+                    payment, source_alloc.outstanding_balance_id,
+                    source_alloc.additional_charge_id, remainder,
+                )
+        else:
+            amount = data.amount
+
+        # Create new allocation
+        new_alloc = await self._allocate_without_check(
+            payment,
+            data.target_outstanding_balance_id,
+            data.target_additional_charge_id,
+            amount,
+        )
+        await self.db.flush()
+        return new_alloc
+
+    async def _allocate_without_check(
+        self,
+        payment: Payment,
+        balance_id: str | None,
+        charge_id: str | None,
+        amount: Decimal,
+    ) -> PaymentAllocation:
+        """Internal: create an allocation with balance/charge updates (no validation)."""
+        allocation = PaymentAllocation(
+            payment_id=payment.id,
+            outstanding_balance_id=balance_id,
+            additional_charge_id=charge_id,
+            amount_allocated=amount,
+        )
+        self.db.add(allocation)
+
+        if balance_id:
+            await self._apply_to_balance(balance_id, amount)
+        if charge_id:
+            await self._apply_to_charge(charge_id, amount)
+
+        return allocation
