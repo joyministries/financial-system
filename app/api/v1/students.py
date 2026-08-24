@@ -1,11 +1,13 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role, verify_student_access
 from app.core.rate_limit import limiter
+from app.models.grade import Grade
 from app.models.user import User
 from app.schemas.common import CountResponse, PageResponse, build_page_response
 from app.schemas.student import (
@@ -51,7 +53,9 @@ async def register_child(
     # Notify the office: a new student application from an existing parent.
     from app.services.notification import NotificationService
 
-    grade_name = student.grade.name if student.grade else "Unknown grade"
+    # Fetch grade name via direct query (can't rely on lazy relationship after flush).
+    grade_result = await db.execute(select(Grade.name).where(Grade.id == data.grade_id))
+    grade_name = grade_result.scalar_one_or_none() or "Unknown grade"
     notification = NotificationService(db)
     await notification.notify_staff(
         title="New student application",
