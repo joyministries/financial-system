@@ -78,13 +78,18 @@ export default function PaymentsPage() {
       .finally(() => setNamesLoading(false));
   }, []);
 
-  // Debounce the search box: only trigger a refetch ~350ms after the user
-  // stops typing, not on every keystroke.
+  // Debounce the search box: only trigger a refetch ~400ms after the user
+  // stops typing, with a minimum of 2 characters to avoid noisy single-char searches.
   useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed.length > 0 && trimmed.length < 2) {
+      // Don't fire search for single characters
+      return;
+    }
     const t = setTimeout(() => {
-      setSearch(searchInput.trim());
+      setSearch(trimmed);
       setPage(1);
-    }, 350);
+    }, 400);
     return () => clearTimeout(t);
   }, [searchInput]);
 
@@ -169,9 +174,12 @@ export default function PaymentsPage() {
               type="text"
               value={searchInput}
               onChange={(e) => { setSearchInput(e.target.value); }}
-              placeholder="Search student…"
-              className="input pl-9 w-52"
+              placeholder="Search student name…"
+              className="input pl-9 w-56"
             />
+            {searchInput.trim().length === 1 && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">Type 2+ chars</span>
+            )}
           </div>
           <select value={filter} onChange={(e) => { setFilter(e.target.value as 'all' | 'pending'); setPage(1); }} className="input">
             <option value="all">All Payments</option>

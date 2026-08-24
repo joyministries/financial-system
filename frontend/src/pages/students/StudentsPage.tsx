@@ -92,13 +92,22 @@ export default function StudentsPage() {
   };
 
   useEffect(() => { gradesApi.list().then((r) => setGrades(r.data)); }, []);
-  useEffect(() => { load(); }, [filterGrade, search, page, pageSize]);
 
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSearch(searchInput.trim());
-    setPage(1);
-  };
+  // Debounced per-letter search — min 2 chars to avoid noisy single-char queries.
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed.length > 0 && trimmed.length < 2) {
+      // Don't fire search for single characters
+      return;
+    }
+    const t = setTimeout(() => {
+      setSearch(trimmed);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => { load(); }, [filterGrade, search, page, pageSize]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -371,7 +380,7 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      <form onSubmit={submitSearch} className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -380,19 +389,21 @@ export default function StudentsPage() {
             placeholder="Search by name or student number…"
             className="input pl-9"
           />
+          {searchInput.trim().length === 1 && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">Type 2+ chars</span>
+          )}
         </div>
         <select value={filterGrade} onChange={(e) => { setFilterGrade(e.target.value); setPage(1); }} className="input w-44">
           <option value="">All Grades</option>
           {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <button type="submit" className="btn btn-primary">Search</button>
         {!loading && (
           <span className="text-sm text-slate-500">
             {totalCount.toLocaleString()} student{totalCount === 1 ? '' : 's'}
-            {search ? ` matching “${search}”` : ''}
+            {search ? ` matching "${search}"` : ''}
           </span>
         )}
-      </form>
+      </div>
 
       <Modal open={showForm} onClose={closeForm} title={editingId ? 'Edit Student' : 'New Student'}>
         <form onSubmit={handleSubmit} className="space-y-4">
