@@ -340,3 +340,32 @@ async def change_password(
     audit = AuditService(db)
     await audit.log("user", user.id, "change_password", user.id)
     return {"detail": "Password changed"}
+
+
+# ── Push token management ───────────────────────────
+
+
+@router.post("/push-token")
+async def register_push_token(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Store the Expo Push Token for this user's device."""
+    push_token = data.get("push_token", "")
+    if not push_token:
+        raise HTTPException(status_code=400, detail="push_token is required")
+    user.push_token = push_token
+    await db.flush()
+    return {"detail": "Push token registered"}
+
+
+@router.delete("/push-token")
+async def remove_push_token(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Remove the stored push token (called on logout)."""
+    user.push_token = None
+    await db.flush()
+    return {"detail": "Push token removed"}
