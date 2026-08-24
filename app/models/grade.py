@@ -92,8 +92,8 @@ class Student(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    grade: Mapped["Grade"] = relationship(back_populates="students")
-    parent: Mapped["User | None"] = relationship()
+    grade: Mapped["Grade"] = relationship(back_populates="students", lazy="selectin")
+    parent: Mapped["User | None"] = relationship(lazy="selectin")
     guardians: Mapped[list["StudentGuardian"]] = relationship(
         back_populates="student", cascade="all, delete-orphan", lazy="selectin"
     )

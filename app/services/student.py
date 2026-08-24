@@ -88,6 +88,7 @@ class StudentService:
             grade_id=data.grade_id,
             parent_guardian=parent_guardian,
             other_guardian=other_guardian,
+            payment_preference=data.payment_preference or "monthly",
         )
 
     async def register_with_parent(
@@ -151,6 +152,7 @@ class StudentService:
         grade_id: str,
         parent_guardian: StudentGuardian,
         other_guardian: StudentGuardian | None = None,
+        payment_preference: str = "monthly",
     ) -> Student:
         """Shared core for pending student applications: generates the student
         number, links the registering parent as guardian + parent_id, and
@@ -174,6 +176,7 @@ class StudentService:
             parent_id=parent.id,
             enrollment_date=datetime.now(UTC),
             registration_status="pending",
+            payment_preference=payment_preference,
             guardians=guardians,
         )
         self.db.add(student)

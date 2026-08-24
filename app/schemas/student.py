@@ -81,6 +81,7 @@ class ChildRegisterCreate(BaseModel):
     first_name: SafeName
     last_name: SafeName
     grade_id: str
+    payment_preference: str | None = Field(default=None, pattern="^(monthly|cumulative)$")
     # Registering parent's guardian details for this child (optional).
     # Name always comes from the parent's account; the rest is editable
     # by the person registering. email overrides the account email on the
