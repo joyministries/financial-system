@@ -20,9 +20,9 @@ const HIGHLIGHTS = [
  */
 export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50">
       {/* Brand panel — desktop only */}
-      <div className="relative hidden w-[46%] overflow-hidden bg-[#131d3c] lg:flex lg:flex-col lg:justify-between lg:p-12">
+      <div className="relative hidden h-screen w-[46%] overflow-hidden bg-[#131d3c] lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_280px_at_85%_-10%,rgba(212,175,55,0.16),transparent),radial-gradient(600px_420px_at_0%_110%,rgba(59,99,194,0.28),transparent)]" />
 
         <div className="relative flex items-center gap-3">
@@ -64,7 +64,7 @@ export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
       </div>
 
       {/* Form side */}
-      <div className="flex flex-1 items-center justify-center px-4 py-12">
+      <div className="flex flex-1 items-start justify-center overflow-y-auto px-4 py-12 lg:items-center">
         <div className={clsx('w-full animate-fade-up', maxW === 'lg' ? 'max-w-lg' : 'max-w-md')}>
           {/* Brand — mobile */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">

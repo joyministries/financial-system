@@ -412,18 +412,18 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout maxW="lg">
-      <div className="rounded-2xl bg-white p-8 shadow-card">
-          <div className="mb-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
-              <GraduationCap className="h-6 w-6 text-primary-600" />
+      <div className="rounded-2xl bg-white p-6 shadow-card">
+          <div className="mb-4 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100">
+              <GraduationCap className="h-5 w-5 text-primary-600" />
             </div>
-            <h1 className="mt-3 text-2xl font-bold text-slate-900">Parent Registration</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Apply for your child(ren) in one step — student IDs are generated automatically.
+            <h1 className="mt-2 text-xl font-bold text-slate-900">Parent Registration</h1>
+            <p className="mt-1 text-xs text-slate-500">
+              Apply for your child(ren) — student IDs are generated automatically.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Students applying for */}
             <section>
               <div className="mb-3 flex items-center justify-between">
@@ -541,7 +541,7 @@ export default function RegisterPage() {
 
             {/* Parent account */}
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 2. Your Details (Parent Account)
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -653,7 +653,7 @@ export default function RegisterPage() {
 
             {/* Relationship */}
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 3. Your Relationship to the Child
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -774,7 +774,7 @@ export default function RegisterPage() {
 
             {/* Documents */}
             <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
                 4. Supporting Documents
               </h2>
               <p className="text-xs text-slate-500">
