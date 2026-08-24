@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "School Finance",
+    "slug": "school-finance-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#132043"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.schoolfinance.parent",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera access is needed to scan documents.",
+        "NSPhotoLibraryUsageDescription": "Photo library access is needed to upload documents."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#132043"
+      },
+      "package": "com.schoolfinance.parent",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#C08A34",
+          "sounds": ["./assets/notification.wav"]
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
