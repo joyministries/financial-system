@@ -6,6 +6,7 @@ import { studentsApi, financialApi } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { Student, StudentSummary } from '../../types';
+import useNotifications from '../../hooks/useNotifications';
 
 /** Spec: avatar accent ring colors cycle */
 const AVATAR_COLORS = ['#4A7AE5', '#D2A24C', '#1E9E64', '#E3486D'];
@@ -16,6 +17,7 @@ const money = (n: number) =>
 export default function ParentDashboard() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
+  const unreadCount = useNotifications();
   const [students, setStudents] = useState<Student[]>([]);
   const [summaries, setSummaries] = useState<Record<string, StudentSummary>>({});
   const [refreshing, setRefreshing] = useState(false);

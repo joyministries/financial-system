@@ -70,6 +70,7 @@ export default function AppHeader({
   const useFlat = options?.headerFlat ?? flat;
   const useInitials = options?.headerShowInitials ?? showInitials;
   const bellHandler = options?.headerOnBellPress || onBellPress;
+  const badgeCount = options?.headerUnreadCount ?? unreadCount;
 
   const initials = user
     ? (user.full_name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U')
@@ -88,9 +89,9 @@ export default function AppHeader({
         : showBell && !useInitials ? (
           <TouchableOpacity style={styles.bell} onPress={bellHandler} activeOpacity={0.7}>
             <Ionicons name="notifications-outline" size={22} color={colors.white} />
-            {unreadCount > 0 && (
+            {badgeCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                <Text style={styles.badgeText}>{badgeCount > 99 ? '99+' : badgeCount}</Text>
               </View>
             )}
           </TouchableOpacity>

@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { paymentsApi, studentsApi } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 import { Student, Payment } from '../../types';
+import useNotifications from '../../hooks/useNotifications';
 
 const METHOD_ICONS: Record<string, { icon: string; bg: string; fg: string }> = {
   bank_transfer: { icon: 'business-outline', bg: '#E8EAF0', fg: colors.primary },
@@ -28,6 +29,7 @@ const money = (n: number) =>
 
 export default function PaymentsScreen() {
   const navigation = useNavigation<any>();
+  const unreadCount = useNotifications();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [refreshing, setRefreshing] = useState(false);

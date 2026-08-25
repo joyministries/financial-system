@@ -6,6 +6,7 @@ import { financialApi, studentsApi } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 import { Student, Statement } from '../../types';
 import { downloadFile } from '../../utils/download';
+import useNotifications from '../../hooks/useNotifications';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const money = (n: number) =>
@@ -16,6 +17,7 @@ type StatusFilter = typeof STATUS_FILTERS[number];
 
 export default function StatementsScreen() {
   const navigation = useNavigation<any>();
+  const unreadCount = useNotifications();
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [statements, setStatements] = useState<Statement[]>([]);

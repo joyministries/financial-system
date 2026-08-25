@@ -6,6 +6,7 @@ import { financialApi, studentsApi } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 import { Student, Receipt } from '../../types';
 import { downloadFile } from '../../utils/download';
+import useNotifications from '../../hooks/useNotifications';
 
 const money = (n: number) =>
   `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -15,6 +16,7 @@ type DateFilter = typeof DATE_FILTERS[number];
 
 export default function ReceiptsScreen() {
   const navigation = useNavigation<any>();
+  const unreadCount = useNotifications();
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [refreshing, setRefreshing] = useState(false);

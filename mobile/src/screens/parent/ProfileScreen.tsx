@@ -4,10 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, radii, fonts } from '../../theme';
+import useNotifications from '../../hooks/useNotifications';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout } = useAuth();
+  const unreadCount = useNotifications();
 
   useEffect(() => {
     navigation.setOptions({
