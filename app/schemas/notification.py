@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NotificationResponse(BaseModel):
@@ -29,3 +29,15 @@ class NotificationListResponse(BaseModel):
 
 class UnreadCountResponse(BaseModel):
     count: int
+
+
+class BroadcastNotificationCreate(BaseModel):
+    """Admin sends a notification to all parents (in-app + push)."""
+    title: str = Field(min_length=1, max_length=255)
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class BroadcastNotificationResponse(BaseModel):
+    in_app_count: int
+    push_sent: int
+    push_failed: int

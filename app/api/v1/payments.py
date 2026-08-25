@@ -197,6 +197,7 @@ async def verify_payment(
         # Notify the parent (fire-and-forget after the response; the SMS/email
         # providers must never block the office).
         from app.services.email import send_payment_receipt_email_async
+        from app.services.push import send_push_to_user
         from app.services.sms import send_payment_receipt_sms_async
 
         background_tasks.add_task(
@@ -207,6 +208,13 @@ async def verify_payment(
             send_payment_receipt_email_async, payment.student_id, payment.amount,
             receipt.receipt_number, payment.payment_date,
         )
+        # Push notification to the parent.
+        if payment.allocated_by:
+            background_tasks.add_task(
+                send_push_to_user, db, payment.allocated_by,
+                "Payment verified",
+                f"Your payment of R{payment.amount:,.2f} has been verified. Receipt {receipt.receipt_number}.",
+            )
         return {"detail": "Payment verified", "receipt_number": receipt.receipt_number}
 
     if data.action == "reject":

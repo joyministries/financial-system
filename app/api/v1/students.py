@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,6 +168,7 @@ async def list_pending_registrations(
 @router.post("/{student_id}/approve", response_model=StudentResponse)
 async def approve_registration(
     student_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin")),
 ):
@@ -178,12 +179,35 @@ async def approve_registration(
     audit = AuditService(db)
     name = f"{student.first_name} {student.last_name}"
     await audit.log("student", student.id, "approve", user.id, new_values={"name": name})
+
+    # In-app notification to the parent.
+    from app.services.notification import NotificationService
+    notification = NotificationService(db)
+    await notification.notify_user(
+        user_id=student.parent_id,
+        title="Registration approved",
+        message=f"{name}'s registration has been approved. They are now enrolled.",
+        category="student_applied",
+        entity_type="student",
+        entity_id=student.id,
+    )
+
+    # Push to the parent's device.
+    from app.services.push import send_push_to_user
+    background_tasks.add_task(
+        send_push_to_user, db, student.parent_id,
+        "Registration approved",
+        f"{name}'s registration has been approved. They are now enrolled.",
+    )
+
+    await db.commit()
     return student
 
 
 @router.post("/{student_id}/reject", response_model=StudentResponse)
 async def reject_registration(
     student_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin")),
 ):
@@ -194,6 +218,28 @@ async def reject_registration(
     audit = AuditService(db)
     name = f"{student.first_name} {student.last_name}"
     await audit.log("student", student.id, "reject", user.id, new_values={"name": name})
+
+    # In-app notification to the parent.
+    from app.services.notification import NotificationService
+    notification = NotificationService(db)
+    await notification.notify_user(
+        user_id=student.parent_id,
+        title="Registration not approved",
+        message=f"{name}'s registration was not approved. Please contact the school for more information.",
+        category="student_applied",
+        entity_type="student",
+        entity_id=student.id,
+    )
+
+    # Push to the parent's device.
+    from app.services.push import send_push_to_user
+    background_tasks.add_task(
+        send_push_to_user, db, student.parent_id,
+        "Registration not approved",
+        f"{name}'s registration was not approved. Please contact the school.",
+    )
+
+    await db.commit()
     return student
 
 

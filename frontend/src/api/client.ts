@@ -479,6 +479,8 @@ export const notificationsApi = {
   unreadCount: () => api.get<UnreadCountResponse>('/notifications/unread-count'),
   markRead: (id: string) => api.post<AppNotification>(`/notifications/${id}/read`),
   markAllRead: () => api.post<UnreadCountResponse>('/notifications/read-all'),
+  broadcast: (data: { title: string; message: string }) =>
+    api.post<{ in_app_count: number; push_sent: number; push_failed: number }>('/notifications/broadcast', data),
 };
 
 // ── Users (super_admin) ─────────────────────────────────────

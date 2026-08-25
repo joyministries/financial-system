@@ -19,6 +19,7 @@ import {
   CalendarDays,
   UserRound,
   ShieldCheck,
+  Bell,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Statements', href: '/statements', icon: FileText, roles: ['admin', 'finance', 'parent'] },
   { name: 'Invoices', href: '/invoices', icon: FilePlus2, roles: ['admin', 'finance', 'parent'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'finance'] },
+  { name: 'Send Notification', href: '/send-notification', icon: Bell, roles: ['admin'] },
   { name: 'Staff Accounts', href: '/accounts', icon: ShieldCheck, roles: ['super_admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['super_admin'] },
 ];
@@ -183,9 +185,9 @@ export default function Layout() {
             <Menu className="h-5 w-5" />
           </button>
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">{activeName}</h2>
-          {!isParent && (
-            <div className="ml-auto flex items-center gap-3">
-              <NotificationsBell />
+          <div className="ml-auto flex items-center gap-3">
+            <NotificationsBell />
+            {!isParent && (
               <div className="hidden items-center gap-2 text-sm text-slate-500 sm:flex">
                 <CalendarDays className="h-4 w-4 text-slate-400" />
                 <span className="font-medium text-slate-600">
@@ -197,8 +199,8 @@ export default function Layout() {
                   })}
                 </span>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">

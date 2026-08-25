@@ -128,7 +128,7 @@ async def _send_push(
                 # Check for errors (e.g., invalid token)
                 errors = result.get("data", {}).get("errors", [])
                 for err in errors:
-                    if err.get("code") === "InvalidCredentials":
+                    if err.get("code") == "InvalidCredentials":
                         logger.warning("Push token invalid, should be removed: %s", push_token[:20])
                 return False
             logger.warning("Expo push returned %s: %s", resp.status_code, resp.text[:200])
@@ -150,7 +150,7 @@ async def _send_batch(messages: list[dict]) -> int:
                 result = resp.json()
                 data = result.get("data", [])
                 if isinstance(data, list):
-                    return sum(1 for item in data if item.get("status") === "ok")
+                    return sum(1 for item in data if item.get("status") == "ok")
                 return len(messages)  # Assume all ok if no per-message breakdown
             logger.warning("Expo batch push returned %s", resp.status_code)
             return 0

@@ -195,6 +195,7 @@ async def payfast_itn(
 
             # Notify the parent (background, after response): SMS + email receipt.
             from app.services.email import send_payment_receipt_email_async
+            from app.services.push import send_push_to_user
             from app.services.sms import send_payment_receipt_sms_async
 
             background_tasks.add_task(
@@ -205,6 +206,13 @@ async def payfast_itn(
                 send_payment_receipt_email_async, payment.student_id, payment.amount,
                 receipt.receipt_number, payment.payment_date,
             )
+            # Push to the parent's device.
+            if payment.allocated_by:
+                background_tasks.add_task(
+                    send_push_to_user, db, payment.allocated_by,
+                    "Payment received",
+                    f"Your payment of R{payment.amount:,.2f} for {student_name} was received (receipt {receipt.receipt_number}).",
+                )
         return {"status": "ok"}
 
     if status in (pf.STATUS_FAILED, pf.STATUS_CANCELLED):

@@ -22,6 +22,7 @@ import ProfilePage from '@/pages/profile/ProfilePage';
 import SettingsPage from '@/pages/settings/SettingsPage';
 import RegistrationsPage from '@/pages/registrations/RegistrationsPage';
 import UserAccountsPage from '@/pages/users/UserAccountsPage';
+import SendNotificationPage from '@/pages/notifications/SendNotificationPage';
 import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
 import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
 
@@ -85,6 +86,9 @@ function AppRoutes() {
         } />
         <Route path="/settings" element={
           user?.role === 'super_admin' ? <SettingsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
+        } />
+        <Route path="/send-notification" element={
+          user?.role === 'admin' || user?.role === 'super_admin' ? <SendNotificationPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
         } />
         <Route path="/accounts" element={
           user?.role === 'super_admin' ? <UserAccountsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />

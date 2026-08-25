@@ -51,6 +51,62 @@ class NotificationService:
         await self.db.flush()
         return notifications
 
+    async def notify_parents(
+        self,
+        *,
+        title: str,
+        message: str,
+        category: str = "system",
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+    ) -> int:
+        """Create one notification per active parent user. Returns count created."""
+        stmt = select(User.id).where(User.role == "parent", User.is_active == True)  # noqa: E712
+        result = await self.db.execute(stmt)
+        parent_ids = result.scalars().all()
+        if not parent_ids:
+            return 0
+
+        notifications = [
+            Notification(
+                user_id=uid,
+                title=title,
+                message=message,
+                category=category,
+                entity_type=entity_type,
+                entity_id=entity_id,
+            )
+            for uid in parent_ids
+        ]
+        self.db.add_all(notifications)
+        await self.db.flush()
+        return len(notifications)
+
+    async def notify_user(
+        self,
+        *,
+        user_id: str | None,
+        title: str,
+        message: str,
+        category: str = "system",
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+    ) -> Notification | None:
+        """Create a single in-app notification for one user. Returns None if user_id is None."""
+        if not user_id:
+            return None
+        notification = Notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            category=category,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        self.db.add(notification)
+        await self.db.flush()
+        return notification
+
     async def list_for_user(
         self, user_id: str, limit: int = 50, offset: int = 0, unread_only: bool = False
     ) -> tuple[list[Notification], int, int]:
