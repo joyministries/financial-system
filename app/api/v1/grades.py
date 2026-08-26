@@ -5,6 +5,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.user import User
 from app.schemas.grade import (
+    BulkFeeOverrideCreate,
     FeeStructureCreate,
     FeeStructureResponse,
     FeeStructureUpdate,
@@ -306,3 +307,73 @@ async def delete_fee_override(
     await db.flush()
     await AuditService(db).log("student_fee_override", override_id, "delete", user.id)
     return {"detail": "Fee override deactivated"}
+
+
+@router.post("/fee-overrides/bulk", response_model=list[StudentFeeOverrideResponse])
+async def bulk_create_fee_overrides(
+    data: BulkFeeOverrideCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Apply the same discount to multiple students at once. Skips students
+    that already have an active override for the same fee structure."""
+    from app.models.grade import FeeStructure, Student, StudentFeeOverride
+    from sqlalchemy import select
+
+    # Validate fee structure
+    fee = await db.get(FeeStructure, data.fee_structure_id)
+    if not fee:
+        raise HTTPException(status_code=404, detail="Fee structure not found")
+
+    # Find which students already have an active override for this fee
+    existing_stmt = select(StudentFeeOverride.student_id).where(
+        StudentFeeOverride.fee_structure_id == data.fee_structure_id,
+        StudentFeeOverride.is_active == True,  # noqa: E712
+        StudentFeeOverride.student_id.in_(data.student_ids),
+    )
+    existing_ids = set((await db.execute(existing_stmt)).scalars().all())
+
+    created = []
+    skipped = []
+    for sid in data.student_ids:
+        if sid in existing_ids:
+            skipped.append(sid)
+            continue
+        student = await db.get(Student, sid)
+        if not student:
+            skipped.append(sid)
+            continue
+        override = StudentFeeOverride(
+            student_id=sid,
+            fee_structure_id=data.fee_structure_id,
+            annual_amount=data.annual_amount,
+            discount_type=data.discount_type,
+            reason=data.reason,
+            created_by=user.id,
+        )
+        db.add(override)
+        created.append(sid)
+
+    await db.flush()
+
+    # Fetch the created overrides to return them
+    if created:
+        result_stmt = select(StudentFeeOverride).where(
+            StudentFeeOverride.student_id.in_(created),
+            StudentFeeOverride.fee_structure_id == data.fee_structure_id,
+            StudentFeeOverride.is_active == True,  # noqa: E712
+        )
+        overrides = list((await db.execute(result_stmt)).scalars().all())
+    else:
+        overrides = []
+
+    await AuditService(db).log(
+        "student_fee_override", "bulk", "create", user.id,
+        new_values={
+            "student_ids": created,
+            "skipped": skipped,
+            "fee_structure_id": data.fee_structure_id,
+            "amount": str(data.annual_amount),
+        },
+    )
+    return overrides

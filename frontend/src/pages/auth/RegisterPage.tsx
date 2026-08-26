@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authApi, documentsApi, feesApi, gradesApi } from '@/api/client';
+import { useAuth } from '@/contexts/AuthContext';
 import type {
   FeeStructure,
   Grade,
@@ -98,6 +99,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<ParentRegisterResponse | null>(null);
   const navigate = useNavigate();
+  const { loginWithToken } = useAuth();
 
   useEffect(() => {
     gradesApi
@@ -226,7 +228,7 @@ export default function RegisterPage() {
       const data = res.data;
       // Log the parent in immediately so the uploaded documents attach to
       // their child and the dashboard is accessible right away.
-      localStorage.setItem('token', data.access_token);
+      await loginWithToken(data.access_token);
       setDocStudentId(data.students[0]?.id || '');
       setSubmitted(data);
       if (queue.length && data.students[0]) {
@@ -400,7 +402,7 @@ export default function RegisterPage() {
             )}
 
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/')}
               className="btn btn-primary mt-6 w-full"
             >
               Go to my dashboard

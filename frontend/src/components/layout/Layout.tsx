@@ -20,6 +20,7 @@ import {
   UserRound,
   ShieldCheck,
   Bell,
+  Percent,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'Fees', href: '/fees', icon: CreditCard, roles: ['admin', 'finance'] },
   { name: 'Students', href: '/students', icon: Users, roles: ['admin', 'finance'] },
   { name: 'Additional Charges', href: '/charges', icon: Coins, roles: ['admin', 'finance'] },
+  { name: 'Discounts', href: '/discounts', icon: Percent, roles: ['admin', 'finance'] },
   { name: 'Payments', href: '/payments', icon: Wallet, roles: ['admin', 'finance'] },
   { name: 'Receipts', href: '/receipts', icon: Receipt, roles: ['admin', 'finance', 'parent'] },
   { name: 'Statements', href: '/statements', icon: FileText, roles: ['admin', 'finance', 'parent'] },

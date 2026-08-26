@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, Info } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import AuthLayout from '@/components/auth/AuthLayout';
 
 export default function LoginPage() {
@@ -90,14 +90,6 @@ export default function LoginPage() {
             Create a parent account
           </Link>
         </div>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50/60 p-4 text-xs text-primary-800">
-        <p className="flex items-center gap-1 font-semibold">
-          <Info className="h-3.5 w-3.5" /> Temporary development logins
-        </p>
-        <p className="mt-1">Admin: admin@school.com / changeme</p>
-        <p>Parent portal: parent.demo@school.com / changeme</p>
       </div>
     </AuthLayout>
   );

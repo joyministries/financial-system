@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { authApi } from '../api/client';
+import { authApi, setOnAuthExpired } from '../api/client';
 import { registerForPushNotifications, unregisterPushToken } from '../services/notifications';
 import type { User } from '../types';
 
@@ -19,6 +19,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Register the 401-expired handler so the API interceptor can force-logout.
+  useEffect(() => {
+    setOnAuthExpired(() => {
+      setToken(null);
+      setUser(null);
+    });
+    return () => setOnAuthExpired(null);
+  }, []);
 
   useEffect(() => {
     (async () => {

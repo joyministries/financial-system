@@ -73,6 +73,15 @@ class StudentFeeOverrideUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class BulkFeeOverrideCreate(BaseModel):
+    """Apply the same discount to multiple students at once."""
+    student_ids: list[str] = Field(min_length=1, max_length=100)
+    fee_structure_id: str
+    annual_amount: Decimal = Field(ge=0, description="Discounted amount or percent")
+    discount_type: str = Field(default="override", pattern="^(override|percent)$")
+    reason: str | None = Field(default=None, max_length=255)
+
+
 class StudentFeeOverrideResponse(BaseModel):
     id: str
     student_id: str

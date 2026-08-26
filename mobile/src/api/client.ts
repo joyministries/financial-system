@@ -23,6 +23,12 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Called by AuthContext to force-logout when a 401 is received mid-session.
+let onAuthExpired: (() => void) | null = null;
+export function setOnAuthExpired(handler: (() => void) | null) {
+  onAuthExpired = handler;
+}
+
 // Attach token + handle 401
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('token');
@@ -39,6 +45,8 @@ api.interceptors.response.use(
     const isLogin = typeof url === 'string' && url.includes('/auth/login');
     if (error.response?.status === 401 && !isLogin) {
       await SecureStore.deleteItemAsync('token');
+      // Notify AuthContext so it clears user state and redirects to login
+      if (onAuthExpired) onAuthExpired();
     }
     return Promise.reject(error);
   }

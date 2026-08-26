@@ -23,14 +23,12 @@ import SettingsPage from '@/pages/settings/SettingsPage';
 import RegistrationsPage from '@/pages/registrations/RegistrationsPage';
 import UserAccountsPage from '@/pages/users/UserAccountsPage';
 import SendNotificationPage from '@/pages/notifications/SendNotificationPage';
+import DiscountsPage from '@/pages/discounts/DiscountsPage';
 import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
 import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
 
 function AppRoutes() {
   const { user } = useAuth();
-
-  const isFinanceUser = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'finance';
-  const isParent = user?.role === 'parent';
 
   return (
     <Routes>
@@ -47,52 +45,29 @@ function AppRoutes() {
         }
       >
         {/* Parent-only routes */}
-        <Route path="/parent" element={<ParentDashboard />} />
+        <Route path="/parent" element={<ProtectedRoute roles={['parent']}><ParentDashboard /></ProtectedRoute>} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/receipts" element={<ReceiptsPage />} />
-        <Route path="/statements" element={<StatementsPage />} />
-
-        {/* Parents + staff: invoices (read-only for parents) */}
-        <Route path="/invoices" element={
-          isFinanceUser || isParent ? <InvoicesPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
+        <Route path="/receipts" element={<ProtectedRoute roles={['admin', 'finance', 'parent']}><ReceiptsPage /></ProtectedRoute>} />
+        <Route path="/statements" element={<ProtectedRoute roles={['admin', 'finance', 'parent']}><StatementsPage /></ProtectedRoute>} />
+        <Route path="/invoices" element={<ProtectedRoute roles={['admin', 'finance', 'parent']}><InvoicesPage /></ProtectedRoute>} />
 
         {/* Root: redirect parents to portal */}
         <Route path="/" element={
-          isParent ? <Navigate to="/parent" replace /> : <DashboardPage />
+          user?.role === 'parent' ? <Navigate to="/parent" replace /> : <DashboardPage />
         } />
 
         {/* Admin/Finance-only routes */}
-        <Route path="/grades" element={
-          isFinanceUser ? <GradesPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/fees" element={
-          isFinanceUser ? <FeesPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/students" element={
-          isFinanceUser ? <StudentsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/payments" element={
-          isFinanceUser ? <PaymentsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/charges" element={
-          isFinanceUser ? <ChargesPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/registrations" element={
-          user?.role === 'admin' || user?.role === 'super_admin' ? <RegistrationsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/reports" element={
-          isFinanceUser ? <ReportsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/settings" element={
-          user?.role === 'super_admin' ? <SettingsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/send-notification" element={
-          user?.role === 'admin' || user?.role === 'super_admin' ? <SendNotificationPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
-        <Route path="/accounts" element={
-          user?.role === 'super_admin' ? <UserAccountsPage /> : <Navigate to={isParent ? "/parent" : "/"} replace />
-        } />
+        <Route path="/grades" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><GradesPage /></ProtectedRoute>} />
+        <Route path="/fees" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><FeesPage /></ProtectedRoute>} />
+        <Route path="/students" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><StudentsPage /></ProtectedRoute>} />
+        <Route path="/payments" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><PaymentsPage /></ProtectedRoute>} />
+        <Route path="/charges" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><ChargesPage /></ProtectedRoute>} />
+        <Route path="/discounts" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><DiscountsPage /></ProtectedRoute>} />
+        <Route path="/registrations" element={<ProtectedRoute roles={['admin', 'super_admin']}><RegistrationsPage /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><ReportsPage /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute roles={['super_admin']}><SettingsPage /></ProtectedRoute>} />
+        <Route path="/send-notification" element={<ProtectedRoute roles={['admin', 'super_admin']}><SendNotificationPage /></ProtectedRoute>} />
+        <Route path="/accounts" element={<ProtectedRoute roles={['super_admin']}><UserAccountsPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );

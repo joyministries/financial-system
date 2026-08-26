@@ -142,6 +142,45 @@ export const feesApi = {
   generateSchedule: (feeId: string) => api.post(`/grades/fees/${feeId}/generate-schedule`),
 };
 
+// ── Fee Overrides (Discounts) ─────────────────────────────
+export interface FeeOverride {
+  id: string;
+  student_id: string;
+  fee_structure_id: string;
+  annual_amount: number;
+  discount_type: 'override' | 'percent';
+  reason: string | null;
+  created_by: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export const discountsApi = {
+  list: (studentId?: string) =>
+    api.get<FeeOverride[]>('/grades/fee-overrides', { params: studentId ? { student_id: studentId } : {} }),
+  create: (data: {
+    student_id: string;
+    fee_structure_id: string;
+    annual_amount: number;
+    discount_type: 'override' | 'percent';
+    reason?: string;
+  }) => api.post<FeeOverride>('/grades/fee-overrides', data),
+  update: (id: string, data: {
+    annual_amount?: number;
+    discount_type?: 'override' | 'percent';
+    reason?: string;
+    is_active?: boolean;
+  }) => api.put<FeeOverride>(`/grades/fee-overrides/${id}`, data),
+  remove: (id: string) => api.delete(`/grades/fee-overrides/${id}`),
+  bulk: (data: {
+    student_ids: string[];
+    fee_structure_id: string;
+    annual_amount: number;
+    discount_type: 'override' | 'percent';
+    reason?: string;
+  }) => api.post<FeeOverride[]>('/grades/fee-overrides/bulk', data),
+};
+
 // ── Students ──────────────────────────────────────────────
 export const studentsApi = {
   list: (params?: { grade_id?: string; parent_id?: string; search?: string; limit?: number; offset?: number }) =>

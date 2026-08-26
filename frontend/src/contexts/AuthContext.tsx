@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
+  loginWithToken: (accessToken: string) => Promise<void>;
   register: (data: { email: string; password: string; full_name: string; role: string }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -41,6 +42,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(meRes.data);
   };
 
+  const loginWithToken = async (accessToken: string) => {
+    localStorage.setItem('token', accessToken);
+    setToken(accessToken);
+    try {
+      const meRes = await authApi.me();
+      setUser(meRes.data);
+    } catch {
+      // Token was accepted by the register endpoint but /me failed — clear it
+      localStorage.removeItem('token');
+      setToken(null);
+    }
+  };
+
   const register = async (data: { email: string; password: string; full_name: string; role: string }) => {
     await authApi.register(data);
   };
@@ -61,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, loginWithToken, register, logout, refreshUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
