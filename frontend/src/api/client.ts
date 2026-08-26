@@ -341,6 +341,15 @@ export const paymentsApi = {
     api.post('/payments/reverse', { payment_id: paymentId, reason }),
   uploadProof: (paymentId: string, proofUrl: string) =>
     api.post('/payments/upload-proof', { payment_id: paymentId, proof_url: proofUrl }),
+  edit: (paymentId: string, data: {
+    student_id?: string;
+    amount?: string | number;
+    payment_method?: string;
+    payment_date?: string;
+    reference_number?: string;
+    notes?: string;
+  }) => api.put(`/payments/${paymentId}`, data),
+  delete: (paymentId: string) => api.delete(`/payments/${paymentId}`),
 };
 
 // ── Financial ─────────────────────────────────────────────

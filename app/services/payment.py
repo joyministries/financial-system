@@ -452,3 +452,30 @@ class PaymentService:
             await self._apply_to_charge(charge_id, amount)
 
         return allocation
+
+    async def void(self, payment_id: str, user_id: str, reason: str = "Deleted by admin") -> PaymentReversal:
+        """Void (delete) a payment — reverses allocations and sets status to reversed."""
+        payment = await self.get(payment_id)
+        if not payment:
+            raise NotFoundError("Payment", payment_id)
+        if payment.status == "reversed":
+            raise BusinessRuleError("Payment is already reversed/voided")
+
+        reversal = PaymentReversal(
+            payment_id=payment_id,
+            reversed_by=user_id,
+            reason=reason,
+        )
+        self.db.add(reversal)
+        payment.status = "reversed"
+
+        stmt = select(PaymentAllocation).where(PaymentAllocation.payment_id == payment_id)
+        result = await self.db.execute(stmt)
+        allocations = result.scalars().all()
+
+        for alloc in allocations:
+            await self._reverse_allocation(alloc)
+            await self.db.delete(alloc)
+
+        await self.db.flush()
+        return reversal

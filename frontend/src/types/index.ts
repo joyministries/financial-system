@@ -177,7 +177,7 @@ export interface Payment {
   payment_method: string;
   payment_date: string;
   reference_number: string | null;
-  status: 'pending' | 'verified' | 'rejected' | 'reversed';
+  status: 'pending' | 'verified' | 'rejected' | 'reversed' | 'voided';
   allocated_by: string | null;
   notes: string | null;
   created_at: string;

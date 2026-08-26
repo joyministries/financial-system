@@ -129,6 +129,27 @@ async def count_payments(
     return CountResponse(total=await service.count_all(month=month, year=year, search=search))
 
 
+# ── Void (delete) a payment — MUST be before /{payment_id} ────────
+
+
+@router.delete("/{payment_id}")
+async def void_payment(
+    payment_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Void (delete) a payment. Reverses any allocations and marks it as reversed."""
+    from app.services.audit import AuditService
+
+    service = PaymentService(db)
+    reversal = await service.void(payment_id, user.id)
+
+    audit = AuditService(db)
+    await audit.log("payment", payment_id, "void", user.id, new_values={"reason": "Deleted by admin"})
+
+    return {"detail": "Payment voided", "reversal_id": reversal.id}
+
+
 @router.get("/{payment_id}", response_model=PaymentResponse)
 async def get_payment(
     payment_id: str,
