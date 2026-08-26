@@ -3,7 +3,7 @@ import { paymentsApi } from '@/api/client';
 import { getStudentNames } from '@/lib/studentNames';
 import type { Payment } from '@/types';
 import toast from 'react-hot-toast';
-import { Plus, Check, XCircle, RotateCcw, Loader2, Search, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Check, XCircle, RotateCcw, Loader2, Search, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
