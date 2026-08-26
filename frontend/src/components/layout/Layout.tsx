@@ -41,6 +41,7 @@ const navigation = [
   { name: 'Invoices', href: '/invoices', icon: FilePlus2, roles: ['admin', 'finance', 'parent'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'finance'] },
   { name: 'Send Notification', href: '/send-notification', icon: Bell, roles: ['admin'] },
+  { name: 'Notification History', href: '/notification-history', icon: Bell, roles: ['admin', 'finance'] },
   { name: 'Staff Accounts', href: '/accounts', icon: ShieldCheck, roles: ['super_admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['super_admin'] },
 ];
@@ -50,6 +51,7 @@ const parentNavigation = [
   { name: 'Invoices', href: '/invoices', icon: FilePlus2 },
   { name: 'Receipts', href: '/receipts', icon: Receipt },
   { name: 'Statements', href: '/statements', icon: FileText },
+  { name: 'Notifications', href: '/notification-history', icon: Bell },
   { name: 'Profile', href: '/profile', icon: UserRound },
 ];
 

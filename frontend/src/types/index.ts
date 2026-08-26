@@ -451,3 +451,29 @@ export interface NotificationListResponse {
 export interface UnreadCountResponse {
   count: number;
 }
+
+export interface NotificationHistoryItem {
+  id: string;
+  user_id: string;
+  recipient_name: string | null;
+  recipient_email: string | null;
+  recipient_role: string | null;
+  title: string;
+  message: string;
+  category: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationHistoryResponse {
+  items: NotificationHistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next_page: boolean;
+  has_previous_page: boolean;
+}

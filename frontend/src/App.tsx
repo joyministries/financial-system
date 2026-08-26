@@ -23,6 +23,7 @@ import SettingsPage from '@/pages/settings/SettingsPage';
 import RegistrationsPage from '@/pages/registrations/RegistrationsPage';
 import UserAccountsPage from '@/pages/users/UserAccountsPage';
 import SendNotificationPage from '@/pages/notifications/SendNotificationPage';
+import NotificationHistoryPage from '@/pages/notifications/NotificationHistoryPage';
 import DiscountsPage from '@/pages/discounts/DiscountsPage';
 import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
 import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
@@ -67,6 +68,7 @@ function AppRoutes() {
         <Route path="/reports" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><ReportsPage /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute roles={['super_admin']}><SettingsPage /></ProtectedRoute>} />
         <Route path="/send-notification" element={<ProtectedRoute roles={['admin', 'super_admin']}><SendNotificationPage /></ProtectedRoute>} />
+        <Route path="/notification-history" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance', 'parent']}><NotificationHistoryPage /></ProtectedRoute>} />
         <Route path="/accounts" element={<ProtectedRoute roles={['super_admin']}><UserAccountsPage /></ProtectedRoute>} />
       </Route>
     </Routes>

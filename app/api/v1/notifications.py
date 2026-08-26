@@ -1,14 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import require_role
+from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.common import build_page_response
 from app.schemas.notification import (
     BroadcastNotificationCreate,
     BroadcastNotificationResponse,
+    NotificationHistoryItem,
+    NotificationHistoryResponse,
     NotificationListResponse,
     NotificationResponse,
     UnreadCountResponse,
@@ -80,6 +84,85 @@ async def mark_all_read(
     service = NotificationService(db)
     updated = await service.mark_all_read(user.id)
     return UnreadCountResponse(count=updated)
+
+
+@router.get("/history", response_model=NotificationHistoryResponse)
+async def notification_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    category: str | None = None,
+    recipient_role: str | None = None,
+    search: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance", "parent")),
+):
+    """Notification history.
+
+    Admin/finance see ALL notifications across all users.
+    Parents see only their own notifications.
+    """
+    # Build base query — join with User to get recipient info
+    base = select(
+        Notification,
+        User.full_name.label("recipient_name"),
+        User.email.label("recipient_email"),
+        User.role.label("recipient_role"),
+    ).join(User, Notification.user_id == User.id)
+
+    # Parents can only see their own
+    if user.role == "parent":
+        base = base.where(Notification.user_id == user.id)
+
+    # Optional filters
+    if category:
+        base = base.where(Notification.category == category)
+    if recipient_role:
+        base = base.where(User.role == recipient_role)
+    if search:
+        search_pattern = f"%{search}%"
+        base = base.where(
+            (Notification.title.ilike(search_pattern))
+            | (Notification.message.ilike(search_pattern))
+            | (User.full_name.ilike(search_pattern))
+            | (User.email.ilike(search_pattern))
+        )
+
+    # Count
+    count_stmt = select(func.count()).select_from(base.subquery())
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    # Page
+    stmt = base.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(limit).offset(offset)
+    rows = (await db.execute(stmt)).all()
+
+    items = []
+    for notif, rec_name, rec_email, rec_role in rows:
+        items.append(NotificationHistoryItem(
+            id=notif.id,
+            user_id=notif.user_id,
+            recipient_name=rec_name,
+            recipient_email=rec_email,
+            recipient_role=rec_role,
+            title=notif.title,
+            message=notif.message,
+            category=notif.category,
+            entity_type=notif.entity_type,
+            entity_id=notif.entity_id,
+            is_read=notif.is_read,
+            read_at=notif.read_at,
+            created_at=notif.created_at,
+        ))
+
+    page = build_page_response(items, total, limit, offset)
+    return NotificationHistoryResponse(
+        items=page.items,
+        total=page.total,
+        page=page.page,
+        page_size=page.page_size,
+        total_pages=page.total_pages,
+        has_next_page=page.has_next_page,
+        has_previous_page=page.has_previous_page,
+    )
 
 
 @router.post("/broadcast", response_model=BroadcastNotificationResponse)

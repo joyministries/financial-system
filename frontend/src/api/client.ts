@@ -7,6 +7,7 @@ import type {
   Grade,
   GuardianInput,
   Invoice,
+  NotificationHistoryResponse,
   NotificationListResponse,
   NotificationSettings,
   PageResponse,
@@ -520,6 +521,13 @@ export const notificationsApi = {
   markAllRead: () => api.post<UnreadCountResponse>('/notifications/read-all'),
   broadcast: (data: { title: string; message: string }) =>
     api.post<{ in_app_count: number; push_sent: number; push_failed: number }>('/notifications/broadcast', data),
+  history: (params?: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    recipient_role?: string;
+    search?: string;
+  }) => api.get<NotificationHistoryResponse>('/notifications/history', { params }),
 };
 
 // ── Users (super_admin) ─────────────────────────────────────
