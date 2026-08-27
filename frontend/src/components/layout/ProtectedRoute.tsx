@@ -13,7 +13,14 @@ export function ProtectedRoute({ children, roles }: { children: React.ReactNode;
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
+
+  if (roles && !roles.includes(user.role)) {
+    // super_admin inherits all admin/finance permissions (matches sidebar logic)
+    const isSuperAdminBypass = user.role === 'super_admin' && (
+      roles.includes('admin') || roles.includes('finance')
+    );
+    if (!isSuperAdminBypass) return <Navigate to="/" replace />;
+  }
 
   return <>{children}</>;
 }

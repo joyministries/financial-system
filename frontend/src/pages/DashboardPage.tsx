@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { gradesApi, reportsApi } from '@/api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DollarSign, AlertTriangle, Users, TrendingUp } from 'lucide-react';
+import { DollarSign, AlertTriangle, Users, TrendingUp, Eye, EyeOff } from 'lucide-react';
 import Pagination from '@/components/Pagination';
 import type { Grade, MonthlySummaryReport } from '@/types';
 
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [owingPage, setOwingPage] = useState(1);
   const [owingPageSize, setOwingPageSize] = useState(DEFAULT_OWING_PAGE_SIZE);
+  const [hideAmounts, setHideAmounts] = useState(true);
 
   useEffect(() => {
     gradesApi.list().then((r) => setGrades(r.data)).catch(() => setGrades([]));
@@ -62,19 +63,21 @@ export default function DashboardPage() {
   const stats = [
     {
       label: 'Income Received',
-      value: summary ? `R ${summary.total_income.toLocaleString()}` : '—',
+      value: hideAmounts ? '••••••' : (summary ? `R ${summary.total_income.toLocaleString()}` : '—'),
       sub: 'verified payments this month',
       icon: DollarSign,
       gradient: 'from-emerald-500 to-teal-600',
       ring: 'ring-emerald-100',
+      sensitive: true,
     },
     {
       label: 'Outstanding',
-      value: summary ? `R ${summary.outstanding_total.toLocaleString()}` : '—',
+      value: hideAmounts ? '••••••' : (summary ? `R ${summary.outstanding_total.toLocaleString()}` : '—'),
       sub: 'owed up to this month',
       icon: AlertTriangle,
       gradient: 'from-red-500 to-rose-600',
       ring: 'ring-red-100',
+      sensitive: true,
     },
     {
       label: 'Students Owing',
@@ -83,6 +86,7 @@ export default function DashboardPage() {
       icon: Users,
       gradient: 'from-amber-500 to-orange-600',
       ring: 'ring-amber-100',
+      sensitive: false,
     },
     {
       label: 'Payments',
@@ -91,6 +95,7 @@ export default function DashboardPage() {
       icon: TrendingUp,
       gradient: 'from-primary-500 to-primary-700',
       ring: 'ring-primary-100',
+      sensitive: false,
     },
   ];
 
@@ -143,20 +148,31 @@ export default function DashboardPage() {
         {stats.map((s) => (
           <div
             key={s.label}
-            className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
           >
             <div className="flex items-center gap-4">
               <div
-                className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow-soft ring-4 ${s.ring}`}
+                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-white shadow-soft ring-4 ${s.ring}`}
               >
-                <s.icon className="h-6 w-6" />
+                <s.icon className="h-5 w-5" />
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-500">{s.label}</p>
-                <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-slate-900">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-xs font-medium text-slate-500">{s.label}</p>
+                  {s.sensitive && (
+                    <button
+                      onClick={() => setHideAmounts((v) => !v)}
+                      className="rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                      title={hideAmounts ? 'Show amounts' : 'Hide amounts'}
+                    >
+                      {hideAmounts ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </button>
+                  )}
+                </div>
+                <p className="mt-0.5 truncate text-lg font-bold tracking-tight text-slate-900">
                   {s.value}
                 </p>
-                <p className="truncate text-xs text-slate-400">{s.sub}</p>
+                <p className="truncate text-[11px] text-slate-400">{s.sub}</p>
               </div>
             </div>
           </div>
