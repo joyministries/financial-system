@@ -12,7 +12,7 @@ import useNotifications from '../../hooks/useNotifications';
 const AVATAR_COLORS = ['#4A7AE5', '#D2A24C', '#1E9E64', '#E3486D'];
 
 const money = (n: number) =>
-  `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ParentDashboard() {
   const { user } = useAuth();
@@ -169,7 +169,7 @@ export default function ParentDashboard() {
                 <Ionicons name="checkmark-circle" size={16} color={colors.success} />
               </View>
               <Text style={styles.statLabel}>Outstanding</Text>
-              <Text style={[styles.statAmount, { color: colors.success }]}>R 0</Text>
+              <Text style={[styles.statAmount, { color: colors.success }]}>{money(0)}</Text>
             </View>
           )}
           {/* Active students */}

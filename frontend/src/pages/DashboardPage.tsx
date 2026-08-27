@@ -63,7 +63,7 @@ export default function DashboardPage() {
   const stats = [
     {
       label: 'Income Received',
-      value: hideAmounts ? '••••••' : (summary ? `R ${summary.total_income.toLocaleString()}` : '—'),
+      value: hideAmounts ? '••••••' : (summary ? `R ${Number(summary.total_income).toLocaleString()}` : '—'),
       sub: 'verified payments this month',
       icon: DollarSign,
       gradient: 'from-emerald-500 to-teal-600',
@@ -72,7 +72,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Outstanding',
-      value: hideAmounts ? '••••••' : (summary ? `R ${summary.outstanding_total.toLocaleString()}` : '—'),
+      value: hideAmounts ? '••••••' : (summary ? `R ${Number(summary.outstanding_total).toLocaleString()}` : '—'),
       sub: 'owed up to this month',
       icon: AlertTriangle,
       gradient: 'from-red-500 to-rose-600',
@@ -212,7 +212,7 @@ export default function DashboardPage() {
                     <td className="px-6 py-4 text-sm font-semibold text-slate-900">{s.name}</td>
                     <td className="px-6 py-4 font-mono text-sm text-slate-500">{s.student_number}</td>
                     <td className="px-6 py-4 text-sm text-slate-500">{s.grade}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-red-600">R {s.balance.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-right text-sm font-semibold text-red-600">R {Number(s.balance).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

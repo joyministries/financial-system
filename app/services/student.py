@@ -246,10 +246,21 @@ class StudentService:
             )
 
     async def _generate_student_number(self) -> str:
-        while True:
-            candidate = f"REG-{datetime.now(UTC).year}-{secrets.token_hex(3).upper()}"
-            if not await self.get_by_number(candidate):
-                return candidate
+        """Generate the next sequential student number.
+
+        Looks at the highest *numeric* student number already in the system
+        and increments it by 1.  This ensures every new student gets a
+        continuing admission number (e.g. 2087, 2088, …).
+        """
+        # Fetch all student numbers and find the highest numeric one.
+        result = await self.db.execute(select(Student.student_number))
+        max_num = 0
+        for (sn,) in result.all():
+            try:
+                max_num = max(max_num, int(sn))
+            except (ValueError, TypeError):
+                continue
+        return str(max_num + 1)
 
     async def create(self, data: StudentCreate) -> Student:
         # Unique student number guard (DB unique index is the backstop).
