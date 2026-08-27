@@ -157,6 +157,16 @@ export interface RegistrationFeeResponse {
   paid: boolean;
 }
 
+export interface NextDueDateResponse {
+  student_id: string;
+  student_name: string;
+  next_due_date: string | null;
+  next_month: number | null;
+  next_amount_due: number;
+  next_description: string;
+  total_outstanding: number;
+}
+
 export interface AdditionalCharge {
   id: string;
   student_id: string;

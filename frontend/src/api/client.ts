@@ -380,6 +380,8 @@ export const financialApi = {
     api.get(`/financial/balance-engine/total-due/${studentId}?academic_year=${year}`),
   getStudentSummary: (studentId: string, year: number) =>
     api.get(`/financial/student-summary/${studentId}?academic_year=${year}`),
+  getNextDueDate: (studentId: string) =>
+    api.get(`/financial/next-due-date/${studentId}`),
 };
 
 // ── Invoices ──────────────────────────────────────────────

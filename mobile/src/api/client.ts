@@ -11,6 +11,7 @@ import type {
   Statement,
   Invoice,
   RegistrationFeeResponse,
+  NextDueDateResponse,
   PageResponse,
   User,
   GuardianInput,
@@ -140,6 +141,10 @@ export const financialApi = {
     `${API_BASE}/financial/receipts/${encodeURIComponent(receiptNumber)}/download`,
   statementDownloadUrl: (studentId: string, year: number, month: number) =>
     `${API_BASE}/financial/statements/${encodeURIComponent(studentId)}/download?academic_year=${year}&month=${month}`,
+  generateStatement: (studentId: string, year: number, month: number) =>
+    api.post<Statement>('/financial/statements/generate', { student_id: studentId, academic_year: year, month }),
+  nextDueDate: (studentId: string) =>
+    api.get<NextDueDateResponse>(`/financial/next-due-date/${studentId}`),
 };
 
 // ── Invoices ──────────────────────────────────────

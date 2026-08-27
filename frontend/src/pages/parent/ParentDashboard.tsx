@@ -6,7 +6,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import Modal from '@/components/Modal';
 import type {
-  Student, Payment, Grade, FeeStructure, AdditionalCharge, StudentSummary, Receipt, Statement, StudentDocument, Invoice, RegistrationFeeResponse,
+  Student, Payment, Grade, FeeStructure, AdditionalCharge, StudentSummary, Receipt, Statement, StudentDocument, Invoice, RegistrationFeeResponse, NextDueDateResponse,
 } from '@/types';
 import toast from 'react-hot-toast';
 import {
@@ -59,6 +59,7 @@ export default function ParentDashboard() {
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [summaries, setSummaries] = useState<Record<string, StudentSummary>>({});
   const [regFees, setRegFees] = useState<Record<string, RegistrationFeeResponse>>({});
+  const [nextDueDates, setNextDueDates] = useState<Record<string, NextDueDateResponse>>({});
   const [recentPayments, setRecentPayments] = useState<Payment[]>([]);
   const [paymentMonth, setPaymentMonth] = useState('');
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,20 @@ export default function ParentDashboard() {
       const regFeeMap: Record<string, RegistrationFeeResponse> = {};
       regFeeResults.forEach((r) => { regFeeMap[r.id] = r.fee; });
       setRegFees(regFeeMap);
+
+      // Load next due dates for active approved students
+      const dueDatePromises = students
+        .filter((s: Student) => s.is_active && s.registration_status === 'approved')
+        .map(async (s: Student) => {
+          try {
+            const r = await financialApi.getNextDueDate(s.id);
+            return { id: s.id, data: r.data };
+          } catch { return { id: s.id, data: null }; }
+        });
+      const dueDateResults = await Promise.all(dueDatePromises);
+      const dueDateMap: Record<string, NextDueDateResponse> = {};
+      dueDateResults.forEach((r) => { if (r.data) dueDateMap[r.id] = r.data; });
+      setNextDueDates(dueDateMap);
 
       if (students.length > 0) {
         const payRes = await paymentsApi.list({ student_id: students[0].id });
@@ -659,6 +674,19 @@ export default function ParentDashboard() {
                     R {money(due)}
                   </span>
                 </div>
+
+                {nextDueDates[child.id]?.next_due_date && (
+                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <CalendarDays className="h-4 w-4 shrink-0 text-amber-600" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-amber-800 truncate">{nextDueDates[child.id].next_description}</p>
+                      <p className="text-xs text-amber-600">
+                        Due {new Date(nextDueDates[child.id].next_due_date!).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                        {' · '}R {money(nextDueDates[child.id].next_amount_due)}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {due > 0 && (
                   <button

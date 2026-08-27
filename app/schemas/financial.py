@@ -83,3 +83,13 @@ class MonthlySummaryResponse(BaseModel):
     outstanding_total: Decimal
     students_owing: int
     students_owing_list: list[MonthlyOwingStudent]
+
+
+class NextDueDateResponse(BaseModel):
+    student_id: str
+    student_name: str
+    next_due_date: datetime | None
+    next_month: int | None
+    next_amount_due: Decimal
+    next_description: str
+    total_outstanding: Decimal

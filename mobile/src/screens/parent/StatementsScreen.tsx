@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { financialApi, studentsApi } from '../../api/client';
@@ -88,6 +88,24 @@ export default function StatementsScreen() {
     await downloadFile(url, `statement-${MONTHS[stmt.month - 1]}-${stmt.academic_year}.pdf`);
   };
 
+  const [generating, setGenerating] = useState(false);
+  const handleGenerate = async () => {
+    if (!selectedStudent) return;
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    setGenerating(true);
+    try {
+      await financialApi.generateStatement(selectedStudent.id, year, month);
+      Alert.alert('Success', `Statement for ${MONTHS[month - 1]} ${year} generated.`);
+      await loadStatements();
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to generate statement.';
+      Alert.alert('Error', msg);
+    }
+    setGenerating(false);
+  };
+
   return (
     <View style={styles.root}>
       {/* Child selector tabs */}
@@ -153,6 +171,21 @@ export default function StatementsScreen() {
               </View>
             </View>
           </View>
+        )}
+
+        {/* Generate Statement button */}
+        {selectedStudent && (
+          <TouchableOpacity
+            style={styles.generateBtn}
+            activeOpacity={0.8}
+            onPress={handleGenerate}
+            disabled={generating}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={colors.white} />
+            <Text style={styles.generateBtnText}>
+              {generating ? 'Generating...' : `Generate ${MONTHS[new Date().getMonth()]} Statement`}
+            </Text>
+          </TouchableOpacity>
         )}
 
         {/* Monthly statement cards */}
@@ -320,6 +353,25 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 11,
     fontWeight: '700',
+  },
+
+  /* Generate statement button */
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    marginHorizontal: spacing.lg,
+    marginBottom: 14,
+    paddingVertical: 12,
+    borderRadius: radii.sm,
+  },
+  generateBtnText: {
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.white,
   },
 
   /* Statement card */

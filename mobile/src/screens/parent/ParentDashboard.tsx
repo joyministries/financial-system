@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { studentsApi, financialApi } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { Student, StudentSummary } from '../../types';
+import { Student, StudentSummary, RegistrationFeeResponse, NextDueDateResponse } from '../../types';
 import useNotifications from '../../hooks/useNotifications';
 
 /** Spec: avatar accent ring colors cycle */
@@ -20,6 +20,8 @@ export default function ParentDashboard() {
   const unreadCount = useNotifications();
   const [students, setStudents] = useState<Student[]>([]);
   const [summaries, setSummaries] = useState<Record<string, StudentSummary>>({});
+  const [regFees, setRegFees] = useState<Record<string, RegistrationFeeResponse>>({});
+  const [nextDueDates, setNextDueDates] = useState<NextDueDateResponse[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const firstName = useMemo(() => {
@@ -43,15 +45,35 @@ export default function ParentDashboard() {
       const items = res.data?.items || [];
       setStudents(items);
       const sumMap: Record<string, StudentSummary> = {};
+      const regMap: Record<string, RegistrationFeeResponse> = {};
       await Promise.all(
         items.map(async (s: Student) => {
           try {
             const r = await financialApi.studentSummary(s.id, currentYear);
             sumMap[s.id] = r.data;
           } catch { /* no summary */ }
+          try {
+            const rf = await studentsApi.registrationFee(s.id);
+            regMap[s.id] = rf.data;
+          } catch { /* no reg fee */ }
         })
       );
       setSummaries(sumMap);
+      setRegFees(regMap);
+
+      // Load next due dates for active approved students
+      const dueDates: NextDueDateResponse[] = [];
+      await Promise.all(
+        items
+          .filter((s: Student) => s.is_active && s.registration_status === 'approved')
+          .map(async (s: Student) => {
+            try {
+              const r = await financialApi.nextDueDate(s.id);
+              dueDates.push(r.data);
+            } catch { /* no due date */ }
+          })
+      );
+      setNextDueDates(dueDates);
     } catch { /* silent */ }
   }, []);
 
@@ -79,6 +101,26 @@ export default function ParentDashboard() {
       studentName: `${firstOwingChild.first_name} ${firstOwingChild.last_name}`,
       studentNumber: firstOwingChild.student_number,
       balance: s?.total_outstanding || 0,
+    });
+  };
+
+  /** Students with unpaid registration fees */
+  const unpaidRegFeeStudents = useMemo(() => {
+    return students.filter(s => {
+      const rf = regFees[s.id];
+      return rf && rf.configured && !rf.paid;
+    });
+  }, [students, regFees]);
+
+  const handlePayRegFee = (student: Student) => {
+    const rf = regFees[student.id];
+    if (!rf) return;
+    navigation.navigate('PayOnline', {
+      studentId: student.id,
+      studentName: `${student.first_name} ${student.last_name}`,
+      studentNumber: student.student_number,
+      balance: rf.amount,
+      itemName: 'Registration Fee',
     });
   };
 
@@ -147,6 +189,70 @@ export default function ParentDashboard() {
             <Text style={styles.statAmount}>{pendingCount}</Text>
           </View>
         </View>
+
+        {/* ── Next Due Date Cards ── */}
+        {nextDueDates.filter(d => d.next_due_date).length > 0 && (
+          <View style={styles.dueDateSection}>
+            <View style={styles.dueDateSectionHeader}>
+              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+              <Text style={styles.dueDateSectionTitle}>Upcoming Payments</Text>
+            </View>
+            {nextDueDates.filter(d => d.next_due_date).map(d => {
+              const dueDate = new Date(d.next_due_date!);
+              const dateStr = dueDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+              const isOverdue = dueDate < new Date();
+              return (
+                <TouchableOpacity
+                  key={d.student_id}
+                  style={styles.dueDateCard}
+                  activeOpacity={0.8}
+                  onPress={() => navigation.navigate('PayOnline', {
+                    studentId: d.student_id,
+                    studentName: d.student_name,
+                    balance: d.next_amount_due,
+                  })}
+                >
+                  <View style={[styles.dueDateDot, { backgroundColor: isOverdue ? colors.danger : colors.warning }]} />
+                  <View style={styles.dueDateInfo}>
+                    <Text style={styles.dueDateStudent}>{d.student_name}</Text>
+                    <Text style={styles.dueDateDesc}>{d.next_description}</Text>
+                  </View>
+                  <View style={styles.dueDateRight}>
+                    <Text style={[styles.dueDateDate, isOverdue && { color: colors.danger }]}>{dateStr}</Text>
+                    <Text style={styles.dueDateAmount}>{money(d.next_amount_due)}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Registration Fee Banner ── */}
+        {unpaidRegFeeStudents.length > 0 && (
+          <View style={styles.regFeeBanner}>
+            <View style={styles.regFeeBannerHeader}>
+              <Ionicons name="document-text-outline" size={18} color={colors.warning} />
+              <Text style={styles.regFeeBannerTitle}>Registration Fees Due</Text>
+            </View>
+            {unpaidRegFeeStudents.map(s => (
+              <TouchableOpacity
+                key={s.id}
+                style={styles.regFeeItem}
+                activeOpacity={0.8}
+                onPress={() => handlePayRegFee(s)}
+              >
+                <View style={styles.regFeeItemLeft}>
+                  <Text style={styles.regFeeItemName}>{s.first_name} {s.last_name}</Text>
+                  <Text style={styles.regFeeItemAmount}>{money(regFees[s.id]?.amount || 0)}</Text>
+                </View>
+                <View style={styles.regFeePayBtn}>
+                  <Ionicons name="card-outline" size={14} color={colors.white} />
+                  <Text style={styles.regFeePayBtnText}>Pay</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* ── Section header ── */}
         <View style={styles.sectionHeader}>
@@ -303,6 +409,131 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.white,
+  },
+
+  /* Registration fee banner */
+  regFeeBanner: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radii.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  regFeeBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  regFeeBannerTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.warning,
+  },
+  regFeeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.white,
+    borderRadius: radii.sm,
+    padding: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  regFeeItemLeft: { flex: 1 },
+  regFeeItemName: {
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  regFeeItemAmount: {
+    fontFamily: fonts.mono,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.warning,
+    marginTop: 2,
+  },
+  regFeePayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.warning,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radii.sm,
+  },
+  regFeePayBtnText: {
+    fontFamily: fonts.heading,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.white,
+  },
+
+  /* Next due date section */
+  dueDateSection: {
+    marginHorizontal: spacing.lg,
+    marginBottom: 16,
+  },
+  dueDateSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  dueDateSectionTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dueDateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dueDateDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 12,
+  },
+  dueDateInfo: { flex: 1 },
+  dueDateStudent: {
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dueDateDesc: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  dueDateRight: { alignItems: 'flex-end' },
+  dueDateDate: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  dueDateAmount: {
+    fontFamily: fonts.monoSemi,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 2,
   },
 
   /* Section */

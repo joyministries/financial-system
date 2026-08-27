@@ -28,6 +28,7 @@ export default function RegisterChildScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [gradeId, setGradeId] = useState('');
+  const [guardianId, setGuardianId] = useState('');
   const [paymentPref, setPaymentPref] = useState<'monthly' | 'cumulative'>('monthly');
 
   // Contact info
@@ -70,6 +71,7 @@ export default function RegisterChildScreen() {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         grade_id: gradeId,
+        guardian_id: guardianId.trim() || undefined,
         payment_preference: paymentPref,
         relationship,
         phone: phone.trim() || undefined,
@@ -113,6 +115,7 @@ export default function RegisterChildScreen() {
           <Text style={styles.sectionLabel}>CHILD INFORMATION</Text>
           <Input label="First Name" value={firstName} onChangeText={setFirstName} placeholder="e.g. James" autoCapitalize="words" />
           <Input label="Last Name" value={lastName} onChangeText={setLastName} placeholder="e.g. Smith" autoCapitalize="words" />
+          <Input label="Guardian ID Number" value={guardianId} onChangeText={setGuardianId} placeholder="e.g. National ID or Passport" autoCapitalize="characters" />
 
           {/* Grade picker from API */}
           <Text style={[styles.sectionLabel, { marginTop: 16 }]}>GRADE LEVEL</Text>

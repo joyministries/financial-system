@@ -25,6 +25,7 @@ import ProfileScreen from '../screens/parent/ProfileScreen';
 import EditProfileScreen from '../screens/parent/EditProfileScreen';
 import ChangePasswordScreen from '../screens/parent/ChangePasswordScreen';
 import NotificationsScreen from '../screens/parent/NotificationsScreen';
+import InvoicesScreen from '../screens/parent/InvoicesScreen';
 import LoadingScreen from '../components/LoadingScreen';
 
 const Stack = createNativeStackNavigator();
@@ -44,7 +45,7 @@ function AuthNavigator() {
 const TAB_ICONS: Record<string, { focused: string; default: string }> = {
   Dashboard: { focused: 'home', default: 'home-outline' },
   PaymentsTab: { focused: 'wallet', default: 'wallet-outline' },
-  ReceiptsTab: { focused: 'receipt', default: 'receipt-outline' },
+  InvoicesTab: { focused: 'receipt', default: 'receipt-outline' },
   StatementsTab: { focused: 'document-text', default: 'document-text-outline' },
   ProfileTab: { focused: 'person', default: 'person-outline' },
 };
@@ -78,7 +79,7 @@ function ParentTabs() {
     >
       <Tab.Screen name="Dashboard" component={ParentDashboard} options={{ title: 'Home' }} />
       <Tab.Screen name="PaymentsTab" component={PaymentsScreen} options={{ title: 'Payments' }} />
-      <Tab.Screen name="ReceiptsTab" component={ReceiptsScreen} options={{ title: 'Receipts' }} />
+      <Tab.Screen name="InvoicesTab" component={InvoicesScreen} options={{ title: 'Invoices' }} />
       <Tab.Screen name="StatementsTab" component={StatementsScreen} options={{ title: 'Statements' }} />
       <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: 'Profile' }} />
     </Tab.Navigator>

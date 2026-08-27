@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.common import PageResponse, build_page_response
 from app.schemas.financial import (
     MonthlySummaryResponse,
+    NextDueDateResponse,
     ReceiptResponse,
     StatementGenerateRequest,
     StatementResponse,
@@ -204,6 +205,88 @@ async def get_student_summary(
         await verify_student_access(student_id, user, db)
     service = StudentSummaryService(db)
     return await service.summarize(student_id, academic_year)
+
+
+@router.get("/next-due-date/{student_id}", response_model=NextDueDateResponse)
+async def get_next_due_date(
+    student_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return the next upcoming payment due date for a student.
+
+    Looks at outstanding_balances with status 'pending' or 'partial' to find
+    the next month that needs payment, based on the due_date of the linked
+    monthly_schedule.
+    """
+    if user.role == "parent":
+        await verify_student_access(student_id, user, db)
+
+    from datetime import UTC, datetime
+    from app.models.grade import Student
+    from app.models.schedule import MonthlySchedule, OutstandingBalance
+
+    student = await db.get(Student, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    now = datetime.now(UTC)
+    current_year = now.year
+    current_month = now.month
+
+    # Find next unpaid outstanding balance (pending or partial), ordered by due_date
+    stmt = (
+        select(OutstandingBalance)
+        .join(MonthlySchedule, OutstandingBalance.monthly_schedule_id == MonthlySchedule.id)
+        .where(
+            OutstandingBalance.student_id == student_id,
+            OutstandingBalance.status.in_(["pending", "partial"]),
+        )
+        .order_by(MonthlySchedule.due_date.asc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    next_balance = result.scalar_one_or_none()
+
+    # Compute total outstanding
+    total_stmt = (
+        select(OutstandingBalance)
+        .where(OutstandingBalance.student_id == student_id)
+    )
+    total_result = await db.execute(total_stmt)
+    all_balances = total_result.scalars().all()
+    total_outstanding = sum(
+        float(b.balance or 0) for b in all_balances
+    )
+
+    if not next_balance:
+        return NextDueDateResponse(
+            student_id=student_id,
+            student_name=f"{student.first_name} {student.last_name}",
+            next_due_date=None,
+            next_month=None,
+            next_amount_due=0,
+            next_description="All caught up!",
+            total_outstanding=total_outstanding,
+        )
+
+    schedule = await db.get(MonthlySchedule, next_balance.monthly_schedule_id)
+    MONTHS = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ]
+    month_name = MONTHS[schedule.month - 1] if schedule.month <= 12 else f"Month {schedule.month}"
+    description = f"{month_name} {schedule.academic_year} installment"
+
+    return NextDueDateResponse(
+        student_id=student_id,
+        student_name=f"{student.first_name} {student.last_name}",
+        next_due_date=schedule.due_date,
+        next_month=schedule.month,
+        next_amount_due=float(next_balance.balance or 0),
+        next_description=description,
+        total_outstanding=total_outstanding,
+    )
 
 
 @router.get("/statements/{student_id}", response_model=list[StatementResponse])
