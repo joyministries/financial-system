@@ -130,7 +130,17 @@ function ParentNavigator() {
 }
 
 export default function AppNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, mustChangePassword, clearMustChangePassword, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
+
+  // Force password change for users with temporary passwords
+  if (user && mustChangePassword) {
+    return (
+      <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+        <AuthStack.Screen name="ForcePasswordChange" component={ChangePasswordScreen} />
+      </AuthStack.Navigator>
+    );
+  }
+
   return user ? <ParentNavigator /> : <AuthNavigator />;
 }

@@ -5,6 +5,7 @@ import type { User } from '@/types';
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  mustChangePassword: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithToken: (accessToken: string) => Promise<void>;
   register: (data: { email: string; password: string; full_name: string; role: string }) => Promise<void>;
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await authApi.login(email, password);
     localStorage.setItem('token', res.data.access_token);
     setToken(res.data.access_token);
+    setMustChangePassword(res.data.must_change_password || false);
     const meRes = await authApi.me();
     setUser(meRes.data);
   };
@@ -63,19 +66,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
+    setMustChangePassword(false);
   };
 
   const refreshUser = async () => {
     try {
       const res = await authApi.me();
       setUser(res.data);
+      if (!res.data.must_change_password) {
+        setMustChangePassword(false);
+      }
     } catch {
       // Keep the existing cached user if the refresh fails.
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, loginWithToken, register, logout, refreshUser, isLoading }}>
+    <AuthContext.Provider value={{ user, token, mustChangePassword, login, loginWithToken, register, logout, refreshUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -13,11 +13,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { authApi } from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/Button';
 import { colors, spacing, radii, fonts } from '../../theme';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<any>();
+  const { clearMustChangePassword } = useAuth();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -56,7 +58,7 @@ export default function ChangePasswordScreen() {
         new_password: newPassword,
       });
       Alert.alert('Success', 'Your password has been changed.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+        { text: 'OK', onPress: () => { clearMustChangePassword(); navigation.goBack(); } },
       ]);
     } catch (err: any) {
       const detail = err?.response?.data?.detail;

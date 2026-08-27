@@ -18,6 +18,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="parent")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     push_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

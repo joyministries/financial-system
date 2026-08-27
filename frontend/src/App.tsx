@@ -27,9 +27,20 @@ import NotificationHistoryPage from '@/pages/notifications/NotificationHistoryPa
 import DiscountsPage from '@/pages/discounts/DiscountsPage';
 import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
 import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
+import ForcePasswordChangePage from '@/pages/auth/ForcePasswordChangePage';
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, mustChangePassword } = useAuth();
+
+  // Force password change for users with temporary passwords
+  if (user && mustChangePassword) {
+    return (
+      <Routes>
+        <Route path="/force-password-change" element={<ForcePasswordChangePage />} />
+        <Route path="*" element={<Navigate to="/force-password-change" replace />} />
+      </Routes>
+    );
+  }
 
   return (
     <Routes>

@@ -56,7 +56,7 @@ api.interceptors.response.use(
 // ── Auth ──────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post<{ access_token: string }>('/auth/login', { email, password }),
+    api.post<{ access_token: string; must_change_password?: boolean }>('/auth/login', { email, password }),
   me: () => api.get<User>('/auth/me'),
   updateProfile: (data: { full_name?: string; email?: string; phone?: string }) =>
     api.put<User>('/auth/me', data),

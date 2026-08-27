@@ -5,6 +5,7 @@ export interface User {
   phone?: string | null;
   role: 'admin' | 'finance' | 'parent' | 'super_admin';
   is_active: boolean;
+  must_change_password?: boolean;
 }
 
 export interface GuardianInput {

@@ -188,7 +188,7 @@ async def login(
 
     audit = AuditService(db)
     await audit.log("user", user.id, "login", user.id, new_values={"email": user.email})
-    return Token(access_token=token)
+    return Token(access_token=token, must_change_password=user.must_change_password or False)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -317,6 +317,7 @@ async def reset_password(
             if not user:
                 raise BusinessRuleError("User no longer exists")
             user.hashed_password = hash_password(data.new_password)
+            user.must_change_password = False
             token.used = True
             audit = AuditService(db)
             await audit.log("user", user.id, "reset_password", user.id)
@@ -335,6 +336,7 @@ async def change_password(
         raise BusinessRuleError("Current password is incorrect")
 
     user.hashed_password = hash_password(data.new_password)
+    user.must_change_password = False
     await db.flush()
 
     audit = AuditService(db)

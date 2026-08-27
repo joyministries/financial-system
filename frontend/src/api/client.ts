@@ -92,7 +92,7 @@ uploadApi.interceptors.response.use(
 // ── Auth ──────────────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post<{ access_token: string }>('/auth/login', { email, password }),
+    api.post<{ access_token: string; must_change_password?: boolean }>('/auth/login', { email, password }),
   register: (data: { email: string; password: string; full_name: string; role: string }) =>
     api.post('/auth/register', data),
   registerParent: (data: ParentRegisterPayload) =>

@@ -7,9 +7,11 @@ import type { User } from '../types';
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  mustChangePassword: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  clearMustChangePassword: () => void;
   isLoading: boolean;
 }
 
@@ -18,6 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Register the 401-expired handler so the API interceptor can force-logout.
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tok = res.data.access_token;
     await SecureStore.setItemAsync('token', tok);
     setToken(tok);
+    setMustChangePassword(res.data.must_change_password || false);
     const meRes = await authApi.me();
     setUser(meRes.data);
     // Register push token after login (fire-and-forget)
@@ -69,11 +73,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await authApi.me();
       setUser(res.data);
+      if (!res.data.must_change_password) {
+        setMustChangePassword(false);
+      }
     } catch { /* keep cached */ }
   };
 
+  const clearMustChangePassword = () => {
+    setMustChangePassword(false);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, refreshUser, isLoading }}>
+    <AuthContext.Provider value={{ user, token, mustChangePassword, login, logout, refreshUser, clearMustChangePassword, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

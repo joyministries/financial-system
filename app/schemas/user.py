@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     phone: str | None = None
     role: str
     is_active: bool
+    must_change_password: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -104,6 +105,7 @@ class ParentRegisterResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    must_change_password: bool = False
 
 
 class LoginRequest(BaseModel):
