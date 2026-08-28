@@ -37,7 +37,7 @@ export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
 
         <div className="relative">
           <h2 className="max-w-md text-3xl font-bold leading-tight text-white">
-            Fees, payments and statements —{' '}
+            Fees, payments and statements {' '}
             <span className="text-accent-300">all in one place.</span>
           </h2>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-300">
