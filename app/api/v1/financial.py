@@ -132,32 +132,33 @@ async def generate_all_statements(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
-    """Generate a statement for the selected month for approved students.
+    """Generate statements accumulatively from month 1 up to the selected month.
     When grade_id is provided, only students in that grade are processed.
-    Existing statements are kept — only missing ones are created."""
+    Existing statements are skipped — only missing ones are created."""
     service = StatementService(db)
     stmt = select(Student).where(Student.registration_status == "approved")
     if grade_id:
         stmt = stmt.where(Student.grade_id == grade_id)
-    students = await db.execute(stmt)
+    students = (await db.execute(stmt)).scalars().all()
     generated = 0
     skipped = 0
     failed = 0
     errors: list[str] = []
-    for student in students.scalars().all():
-        try:
-            if await service.get(student.id, academic_year, month):
-                skipped += 1
-                continue
-            await service.generate(student.id, academic_year, month)
-            generated += 1
-        except Exception as exc:  # noqa: BLE001 - one student must not abort the run
-            failed += 1
-            errors.append(f"{student.id}: {exc}")
+    for student in students:
+        for m in range(1, month + 1):
+            try:
+                if await service.get(student.id, academic_year, m):
+                    skipped += 1
+                    continue
+                await service.generate(student.id, academic_year, m)
+                generated += 1
+            except Exception as exc:  # noqa: BLE001 - one student must not abort the run
+                failed += 1
+                errors.append(f"{student.id} m{m}: {exc}")
     await db.commit()
     return {
         "academic_year": academic_year,
-        "month": month,
+        "up_to_month": month,
         "generated": generated,
         "skipped": skipped,
         "failed": failed,

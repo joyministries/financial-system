@@ -142,7 +142,7 @@ export default function StatementsPage() {
     setBulking(true);
     try {
       const res = await financialApi.generateAllStatements(year, bulkMonth as number, bulkGrade || undefined);
-      toast.success(`${bulkGrade ? 'Grade' : 'Whole school'}: ${res.data.generated} generated, ${res.data.skipped} already existed`);
+      toast.success(`${bulkGrade ? 'Grade' : 'Whole school'}: ${res.data.generated} generated (months 1–${bulkMonth}), ${res.data.skipped} already existed`);
       loadSchoolReport();
     } catch {
       toast.error('Bulk generation failed');
