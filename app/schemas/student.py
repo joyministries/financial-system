@@ -153,6 +153,7 @@ class GuardianUpdate(BaseModel):
 
 
 class StudentUpdate(BaseModel):
+    student_number: str | None = Field(default=None, min_length=1, max_length=50)
     first_name: SafeNameOptional = None
     last_name: SafeNameOptional = None
     grade_id: str | None = None

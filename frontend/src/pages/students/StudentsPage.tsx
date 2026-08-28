@@ -115,6 +115,7 @@ export default function StudentsPage() {
     try {
       if (editingId) {
         await studentsApi.update(editingId, {
+          student_number: studentNum || undefined,
           first_name: firstName,
           last_name: lastName,
           grade_id: gradeId,
@@ -247,6 +248,7 @@ export default function StudentsPage() {
 
   const handleEdit = (s: Student) => {
     setEditingId(s.id);
+    setStudentNum(s.student_number);
     setFirstName(s.first_name);
     setLastName(s.last_name);
     setGradeId(s.grade_id);
@@ -411,7 +413,7 @@ export default function StudentsPage() {
             <>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Student Number</label>
-                <input value={studentNum || (students.find((s) => s.id === editingId)?.student_number || '')} disabled className="input mt-1 font-mono" />
+                <input value={studentNum} onChange={(e) => setStudentNum(e.target.value)} required className="input mt-1 font-mono" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -320,17 +320,21 @@ export default function StatementsPage() {
           </div>
 
           {/* Balance summary strip */}
-          <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Opening Balance</p>
               <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.opening_balance.toLocaleString()}</p>
             </div>
             <div className="bg-slate-50 px-6 py-4">
-              <p className="text-[11px] uppercase tracking-wider text-slate-500">Closing Balance</p>
-              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.closing_balance.toLocaleString()}</p>
+              <p className="text-[11px] uppercase tracking-wider text-slate-500">Total Charged</p>
+              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {(selectedStatement.total_installments + selectedStatement.total_additional_charges).toLocaleString()}</p>
             </div>
-            <div className="bg-[#131d3c] px-6 py-4">
-              <p className="text-[11px] uppercase tracking-wider text-slate-300">Amount Due</p>
+            <div className="bg-emerald-50 px-6 py-4">
+              <p className="text-[11px] uppercase tracking-wider text-emerald-700">Total Paid</p>
+              <p className="mt-1 font-mono text-lg font-bold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</p>
+            </div>
+            <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due</p>
               <p className="mt-1 font-mono text-lg font-bold text-white">R {selectedStatement.current_amount_due.toLocaleString()}</p>
             </div>
           </div>
@@ -370,13 +374,20 @@ export default function StatementsPage() {
           )}
 
           {/* Statement footer */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <span className="text-slate-500">Total annual fees: <span className="font-semibold text-slate-800">R {selectedStatement.total_fees.toLocaleString()}</span></span>
-              <span className="text-slate-500">Payments received: <span className="font-semibold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</span></span>
-              <span className="text-slate-500">Due date: <span className="font-semibold text-slate-800">{new Date(selectedStatement.due_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>
+          <div className="border-t border-slate-200 bg-slate-50 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <span className="text-slate-500">Total annual fees: <span className="font-semibold text-slate-800">R {selectedStatement.total_fees.toLocaleString()}</span></span>
+                <span className="text-slate-500">Payments this month: <span className="font-semibold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</span></span>
+                <span className="text-slate-500">Due date: <span className="font-semibold text-slate-800">{new Date(selectedStatement.due_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>
+              </div>
+              <p className="text-xs text-slate-400">Thank you for banking with Lambton Christian School</p>
             </div>
-            <p className="text-xs text-slate-400">Thank you for banking with Lambton Christian School</p>
+            {selectedStatement.total_payments > 0 && (
+              <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
+                <span className="font-medium">Payment received:</span> R {selectedStatement.total_payments.toLocaleString()} has been credited to this account for {MONTHS[selectedStatement.month - 1]}.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -394,7 +405,8 @@ export default function StatementsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Installment</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Payments</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Closing Balance</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Balance</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Generated</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
             </tr>
@@ -404,8 +416,13 @@ export default function StatementsPage() {
               <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedStatement(s)}>
                 <td className="px-6 py-4 text-sm font-medium text-slate-900">{MONTHS[s.month - 1]}</td>
                 <td className="px-6 py-4 text-sm text-slate-700">R {s.total_installments.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-green-600">R {s.total_payments.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {s.closing_balance.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-emerald-600 font-medium">R {s.total_payments.toLocaleString()}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${s.closing_balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>R {s.closing_balance.toLocaleString()}</td>
+                <td className="px-6 py-4">
+                  <span className={`badge ${s.closing_balance > 0 ? 'badge-danger' : 'badge-success'}`}>
+                    {s.closing_balance > 0 ? 'Outstanding' : 'Paid'}
+                  </span>
+                </td>
                 <td className="px-6 py-4 text-sm text-slate-500">{new Date(s.generated_at).toLocaleDateString()}</td>
                 <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => downloadStatement(s)} className="btn btn-secondary btn-sm">

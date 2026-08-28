@@ -204,6 +204,7 @@ export const studentsApi = {
     parent_2?: GuardianInput;
   }) => api.post('/students/', data),
   update: (id: string, data: {
+    student_number?: string;
     first_name?: string;
     last_name?: string;
     grade_id?: string;

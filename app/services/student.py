@@ -688,6 +688,15 @@ class StudentService:
             return None
         payload = data.model_dump(exclude_unset=True)
         guardians_data = payload.pop("guardians", None)
+
+        # Check uniqueness if student_number is being changed.
+        new_number = payload.get("student_number")
+        if new_number and new_number != student.student_number:
+            existing = await self.get_by_number(new_number)
+            if existing:
+                from app.core.exceptions import ConflictError
+                raise ConflictError(f"Student number '{new_number}' is already in use")
+
         for key, value in payload.items():
             setattr(student, key, value)
         # Update guardian records in the same call (admin edit form sends both).
