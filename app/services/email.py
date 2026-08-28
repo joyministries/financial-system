@@ -160,6 +160,11 @@ class EmailService:
         from_email = config.get("from_email") or ""
         from_name = config.get("from_name") or SCHOOL_NAME
 
+        logger.info(
+            "SMTP send: host=%s port=%d from=%s to=%s auth=%s",
+            host, port, from_email, to_email, "yes" if username else "no",
+        )
+
         message = EmailMessage()
         message["Subject"] = subject
         message["From"] = f"{from_name} <{from_email}>"
@@ -169,7 +174,7 @@ class EmailService:
 
         if port == 465:
             with smtplib.SMTP_SSL(host, port, timeout=30) as server:
-                if username:
+                if username and password:
                     server.login(username, password)
                 server.send_message(message)
             return
@@ -179,7 +184,7 @@ class EmailService:
             if config.get("use_tls", True):
                 server.starttls()
                 server.ehlo()
-            if username:
+            if username and password:
                 server.login(username, password)
             server.send_message(message)
 

@@ -827,7 +827,8 @@ function EmailTools({ ready }: { ready: boolean }) {
       const res = await settingsApi.testEmail(testEmail.trim());
       toast.success(res.data.detail);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? 'Test email failed');
+      const detail = err?.response?.data?.detail ?? 'Test email failed';
+      toast.error(detail, { duration: 6000 });
     } finally {
       setTesting(false);
     }

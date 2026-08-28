@@ -196,5 +196,10 @@ async def send_test_email(
     except EmailNotConfiguredError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"SMTP error: {exc}") from exc
+        import logging
+        logging.getLogger(__name__).exception("Test email failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"SMTP error: {type(exc).__name__}: {exc}",
+        ) from exc
     return EmailTestResponse(detail="Test email sent")

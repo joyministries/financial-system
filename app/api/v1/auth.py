@@ -146,10 +146,10 @@ async def register_parent(
         await email_svc.send_admin_registration_notification(
             user.full_name, user.email, student_names
         )
-    except EmailNotConfiguredError:
-        logger.info("Registration emails skipped — email channel not configured")
-    except Exception:  # noqa: BLE001
-        logger.exception("Registration email failed for %s", user.email)
+    except EmailNotConfiguredError as exc:
+        logger.info("Registration emails skipped: %s", exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Registration email failed for %s: %s", user.email, exc)
 
     token = create_access_token(subject=user.id, expires_delta=_token_expiry("parent"))
 
