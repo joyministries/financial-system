@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.money import to_decimal
@@ -568,6 +569,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.parent_id == parent_id, Student.is_active == True)  # noqa: E712
+            .options(selectinload(Student.guardians))
             .order_by(Student.last_name, Student.id)
             .limit(limit)
             .offset(offset)
@@ -589,6 +591,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.grade_id == grade_id, Student.is_active == True)  # noqa: E712
+            .options(selectinload(Student.guardians))
             .order_by(Student.last_name, Student.id)
             .limit(limit)
             .offset(offset)
@@ -610,6 +613,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.is_active == True)  # noqa: E712
+            .options(selectinload(Student.guardians))
             .order_by(Student.last_name, Student.id)
             .limit(limit)
             .offset(offset)
@@ -628,6 +632,7 @@ class StudentService:
     async def list_recent(self, limit: int = 20) -> list[Student]:
         stmt = (
             select(Student)
+            .options(selectinload(Student.guardians))
             .order_by(Student.created_at.desc())
             .limit(limit)
         )
@@ -638,6 +643,7 @@ class StudentService:
         stmt = (
             select(Student)
             .where(Student.registration_status == "pending")
+            .options(selectinload(Student.guardians))
             .order_by(Student.created_at.asc(), Student.id.asc())
             .limit(limit)
         )
