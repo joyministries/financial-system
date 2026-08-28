@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -13,6 +13,7 @@ from app.schemas.setting import (
     SmsSettingsIn,
     SmsSettingsOut,
 )
+from app.services.email import EmailNotConfiguredError, EmailService
 from app.services.setting import SettingService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -172,3 +173,28 @@ async def set_payfast_base_url(
     await svc.set_plain("payfast_base_url", payload.value, user.id)
     await db.commit()
     return {"payfast_base_url": payload.value.strip()}
+
+
+# ── test email ────────────────────────────────────────────────
+class EmailTestRequest(BaseModel):
+    to_email: str = Field(min_length=3, max_length=254)
+
+
+class EmailTestResponse(BaseModel):
+    detail: str
+
+
+@router.post("/email/test", response_model=EmailTestResponse)
+async def send_test_email(
+    payload: EmailTestRequest,
+    user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> EmailTestResponse:
+    """Send the fixed test message to verify the SMTP channel works."""
+    try:
+        await EmailService(db).send_test_email(payload.to_email)
+    except EmailNotConfiguredError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"SMTP error: {exc}") from exc
+    return EmailTestResponse(detail="Test email sent")

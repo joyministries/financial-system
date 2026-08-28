@@ -26,6 +26,9 @@ import {
   Wallet,
 } from 'lucide-react';
 
+const emailReady = (e: EmailSettings | null) =>
+  !!e?.enabled && !!e?.host && !!e?.from_email && (e.password_set || !!e.password);
+
 const inputCls =
   'input mt-1 disabled:text-slate-400';
 
@@ -477,6 +480,7 @@ export default function SettingsPage() {
                 </button>
               </form>
             )}
+            {email && <EmailTools ready={emailReady(email)} />}
           </div>
 
           {/* ── SMS ──────────────────────────────────────────── */}
@@ -809,6 +813,65 @@ export default function SettingsPage() {
   );
 }
 
+function EmailTools({ ready }: { ready: boolean }) {
+  const [testEmail, setTestEmail] = useState('');
+  const [testing, setTesting] = useState(false);
+
+  const runTest = async () => {
+    if (!testEmail.trim()) {
+      toast.error('Enter the email address to receive the test email');
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await settingsApi.testEmail(testEmail.trim());
+      toast.success(res.data.detail);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'Test email failed');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 border-t border-slate-100 pt-5">
+      <h4 className="text-sm font-semibold text-slate-900">Email tools</h4>
+      <p className="mt-1 text-xs text-slate-500">
+        Verify the SMTP channel by sending a test email.
+      </p>
+
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <div className="min-w-[260px] flex-1">
+          <label className="block text-sm font-medium text-slate-700">Email address</label>
+          <input
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+            placeholder="admin@school.com"
+            className={inputCls}
+            disabled={!ready}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={testing || !ready}
+          className="btn btn-primary"
+        >
+          <Send className="h-4 w-4" />
+          {testing ? 'Sending…' : 'Send test email'}
+        </button>
+      </div>
+
+      {!ready && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          <AlertCircle className="h-4 w-4" />
+          Configure and save SMTP credentials above before testing.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SmsTools({ ready }: { ready: boolean }) {
   const [testPhone, setTestPhone] = useState('');
   const [testing, setTesting] = useState(false);
@@ -951,7 +1014,7 @@ function SmsTools({ ready }: { ready: boolean }) {
                         }`}
                       >
                         {m.status}
-                        {m.cost ? ` · R${m.cost.toFixed(2)}` : ''}
+                        {m.cost != null ? ` · R${Number(m.cost).toFixed(2)}` : ''}
                       </span>
                     </div>
                     <p className="mt-0.5 truncate text-xs text-slate-600" title={m.content}>

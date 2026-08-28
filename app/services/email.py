@@ -184,6 +184,130 @@ class EmailService:
             server.send_message(message)
 
 
+    # ── welcome email ───────────────────────────────────────────
+    async def send_welcome_email(self, user: User, student_names: str) -> bool:
+        """Send a welcome email to a newly registered parent.
+
+        Returns True when an email was dispatched, False when skipped.
+        """
+        config = await self.get_config()
+        if not user.email:
+            return False
+
+        name = user.full_name.split(" ", 1)[0] if user.full_name else "Parent"
+        subject = f"Welcome to {SCHOOL_NAME} — registration received"
+
+        text = (
+            f"Dear {name},\n\n"
+            f"Thank you for registering with {SCHOOL_NAME}.\n\n"
+            f"We have received your application for {student_names}. "
+            f"Your account is now active and you can log in to the parent portal "
+            f"to view fees, make payments and track your child's progress.\n\n"
+            f"If you have any questions, please contact the finance office.\n\n"
+            f"Kind regards,\n{SCHOOL_NAME}"
+        )
+        html = (
+            f"<html><body style='font-family:Arial,sans-serif;color:#1f2937;'>"
+            f"<h2 style='color:#1d4ed8;margin-bottom:4px;'>{SCHOOL_NAME}</h2>"
+            f"<p style='color:#6b7280;font-size:13px;margin-top:0;'>Welcome</p>"
+            f"<p>Dear {name},</p>"
+            f"<p>Thank you for registering with <b>{SCHOOL_NAME}</b>.</p>"
+            f"<p>We have received your application for <b>{student_names}</b>. "
+            f"Your account is now active and you can log in to the parent portal "
+            f"to view fees, make payments and track your child's progress.</p>"
+            f"<p>If you have any questions, please contact the finance office.</p>"
+            f"<p>Kind regards,<br>{SCHOOL_NAME}</p>"
+            f"</body></html>"
+        )
+
+        await self._smtp_send(config, user.email, subject, text, html)
+        logger.info("Welcome email sent to %s", user.email)
+        return True
+
+    async def send_admin_registration_notification(
+        self, parent_name: str, parent_email: str, student_names: str
+    ) -> bool:
+        """Notify all admin/super_admin users about a new parent registration.
+
+        Returns True when emails were dispatched, False when skipped.
+        """
+        config = await self.get_config()
+
+        from sqlalchemy import select as sa_select
+
+        admins = (
+            await self.db.execute(
+                sa_select(User).where(
+                    User.role.in_(["admin", "super_admin"]),
+                    User.is_active == True,  # noqa: E712
+                )
+            )
+        ).scalars().all()
+
+        if not admins:
+            return False
+
+        subject = f"New parent registration — {parent_name}"
+        text = (
+            f"A new parent has registered on {SCHOOL_NAME}.\n\n"
+            f"Parent: {parent_name} ({parent_email})\n"
+            f"Students: {student_names}\n\n"
+            f"Please review and approve the application in the admin dashboard."
+        )
+        html = (
+            f"<html><body style='font-family:Arial,sans-serif;color:#1f2937;'>"
+            f"<h2 style='color:#1d4ed8;margin-bottom:4px;'>{SCHOOL_NAME}</h2>"
+            f"<p style='color:#6b7280;font-size:13px;margin-top:0;'>New registration</p>"
+            f"<p>A new parent has registered on {SCHOOL_NAME}.</p>"
+            f"<table cellpadding='6' style='border-collapse:collapse;margin:16px 0;'>"
+            f"<tr><td style='border:1px solid #e5e7eb;color:#6b7280;'>Parent</td>"
+            f"<td style='border:1px solid #e5e7eb;font-weight:bold;'>{parent_name}</td></tr>"
+            f"<tr><td style='border:1px solid #e5e7eb;color:#6b7280;'>Email</td>"
+            f"<td style='border:1px solid #e5e7eb;'>{parent_email}</td></tr>"
+            f"<tr><td style='border:1px solid #e5e7eb;color:#6b7280;'>Students</td>"
+            f"<td style='border:1px solid #e5e7eb;font-weight:bold;'>{student_names}</td></tr>"
+            f"</table>"
+            f"<p>Please review and approve the application in the admin dashboard.</p>"
+            f"</body></html>"
+        )
+
+        sent = 0
+        for admin in admins:
+            if admin.email:
+                try:
+                    await self._smtp_send(config, admin.email, subject, text, html)
+                    sent += 1
+                except Exception:  # noqa: BLE001
+                    logger.exception("Admin notification email failed for %s", admin.email)
+
+        logger.info("Admin registration notification sent to %d admin(s)", sent)
+        return sent > 0
+
+    # ── test email ─────────────────────────────────────────────
+    async def send_test_email(self, to_email: str) -> None:
+        """Send a fixed test message to verify the SMTP channel end-to-end."""
+        config = await self.get_config()
+        subject = f"Test email — {SCHOOL_NAME}"
+        text = (
+            f"Hello,\n\n"
+            f"This is a test email from {SCHOOL_NAME}.\n\n"
+            f"If you received this, the email channel is working correctly.\n\n"
+            f"{SCHOOL_NAME} Finance Office"
+        )
+        html = (
+            f"<html><body style='font-family:Arial,sans-serif;color:#1f2937;'>"
+            f"<h2 style='color:#1d4ed8;margin-bottom:4px;'>{SCHOOL_NAME}</h2>"
+            f"<p style='color:#6b7280;font-size:13px;margin-top:0;'>Test email</p>"
+            f"<p>Hello,</p>"
+            f"<p>This is a test email from <b>{SCHOOL_NAME}</b>.</p>"
+            f"<p>If you received this, the email channel is working correctly.</p>"
+            f"<p>{SCHOOL_NAME} Finance Office</p>"
+            f"</body></html>"
+        )
+        await self._smtp_send(config, to_email, subject, text, html)
+        logger.info("Test email sent to %s", to_email)
+
+
 async def send_payment_receipt_email_async(
     student_id: str,
     amount: Decimal,

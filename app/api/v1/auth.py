@@ -137,6 +137,20 @@ async def register_parent(
         entity_id=students[0].id if students else None,
     )
 
+    # Send welcome email to the parent and notification email to admins.
+    from app.services.email import EmailNotConfiguredError, EmailService
+
+    try:
+        email_svc = EmailService(db)
+        await email_svc.send_welcome_email(user, student_names)
+        await email_svc.send_admin_registration_notification(
+            user.full_name, user.email, student_names
+        )
+    except EmailNotConfiguredError:
+        logger.info("Registration emails skipped — email channel not configured")
+    except Exception:  # noqa: BLE001
+        logger.exception("Registration email failed for %s", user.email)
+
     token = create_access_token(subject=user.id, expires_delta=_token_expiry("parent"))
 
     # When a registration fee is configured, create a portal payment link for

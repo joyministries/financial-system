@@ -492,6 +492,8 @@ export const settingsApi = {
     api_secret?: string | null;
     sender_id: string;
   }) => api.put<SmsSettings>('/settings/notifications/sms', data),
+  testEmail: (to_email: string) =>
+    api.post<{ detail: string }>('/settings/email/test', { to_email }),
   getReminders: () => api.get<ReminderSettings>('/settings/reminders'),
   updateReminders: (data: {
     enabled: boolean;
