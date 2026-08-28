@@ -173,20 +173,88 @@ class EmailService:
         message.add_alternative(html, subtype="html")
 
         if port == 465:
-            with smtplib.SMTP_SSL(host, port, timeout=30) as server:
-                if username and password:
-                    server.login(username, password)
-                server.send_message(message)
-            return
-
-        with smtplib.SMTP(host, port, timeout=30) as server:
+            server = smtplib.SMTP_SSL(host, port, timeout=30)
+        else:
+            server = smtplib.SMTP(host, port, timeout=30)
             server.ehlo()
             if config.get("use_tls", True):
                 server.starttls()
                 server.ehlo()
+
+        try:
             if username and password:
                 server.login(username, password)
             server.send_message(message)
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+    async def _smtp_send_batch(
+        self,
+        config: dict,
+        recipients: list[tuple[str, str, str, str, str]],
+    ) -> int:
+        """Send multiple emails over a single SMTP connection.
+
+        Each tuple is (to_email, subject, text, html). Returns the count
+        of successfully sent emails.
+        """
+        return await asyncio.to_thread(
+            self._smtp_send_batch_sync, config, recipients
+        )
+
+    @staticmethod
+    def _smtp_send_batch_sync(
+        config: dict,
+        recipients: list[tuple[str, str, str, str, str]],
+    ) -> int:
+        host = config.get("host") or ""
+        port = int(config.get("port") or 587)
+        username = config.get("username") or ""
+        password = config.get("password") or ""
+        from_email = config.get("from_email") or ""
+        from_name = config.get("from_name") or SCHOOL_NAME
+
+        logger.info(
+            "SMTP batch: host=%s port=%d from=%s recipients=%d",
+            host, port, from_email, len(recipients),
+        )
+
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=30)
+        else:
+            server = smtplib.SMTP(host, port, timeout=30)
+            server.ehlo()
+            if config.get("use_tls", True):
+                server.starttls()
+                server.ehlo()
+
+        try:
+            if username and password:
+                server.login(username, password)
+
+            sent = 0
+            for to_email, subject, text, html in recipients:
+                try:
+                    message = EmailMessage()
+                    message["Subject"] = subject
+                    message["From"] = f"{from_name} <{from_email}>"
+                    message["To"] = to_email
+                    message.set_content(text)
+                    message.add_alternative(html, subtype="html")
+                    server.send_message(message)
+                    sent += 1
+                except Exception:
+                    logger.exception("Failed to send email to %s", to_email)
+
+            return sent
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
 
 
     # ── welcome email ───────────────────────────────────────────
@@ -276,15 +344,16 @@ class EmailService:
             f"</body></html>"
         )
 
-        sent = 0
-        for admin in admins:
-            if admin.email:
-                try:
-                    await self._smtp_send(config, admin.email, subject, text, html)
-                    sent += 1
-                except Exception:  # noqa: BLE001
-                    logger.exception("Admin notification email failed for %s", admin.email)
+        recipients = [
+            (admin.email, subject, text, html)
+            for admin in admins
+            if admin.email
+        ]
 
+        if not recipients:
+            return False
+
+        sent = await self._smtp_send_batch(config, recipients)
         logger.info("Admin registration notification sent to %d admin(s)", sent)
         return sent > 0
 
