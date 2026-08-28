@@ -128,16 +128,18 @@ async def generate_statement(
 async def generate_all_statements(
     academic_year: int,
     month: int,
+    grade_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
-    """Generate a statement for the selected month for EVERY approved student
-    (whole-school run). Existing statements are kept — only missing ones are
-    created."""
+    """Generate a statement for the selected month for approved students.
+    When grade_id is provided, only students in that grade are processed.
+    Existing statements are kept — only missing ones are created."""
     service = StatementService(db)
-    students = await db.execute(
-        select(Student).where(Student.registration_status == "approved")
-    )
+    stmt = select(Student).where(Student.registration_status == "approved")
+    if grade_id:
+        stmt = stmt.where(Student.grade_id == grade_id)
+    students = await db.execute(stmt)
     generated = 0
     skipped = 0
     failed = 0

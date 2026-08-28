@@ -52,6 +52,7 @@ export default function StatementsPage() {
   const [schoolReport, setSchoolReport] = useState<SchoolStatementReport | null>(null);
   const [loadingSchool, setLoadingSchool] = useState(false);
   const [bulkMonth, setBulkMonth] = useState<number | ''>(1);
+  const [bulkGrade, setBulkGrade] = useState<string>('');
   const [bulking, setBulking] = useState(false);
   const [nameMap, setNameMap] = useState<Map<string, { name: string; student_number: string }>>(new Map());
   const [page, setPage] = useState(1);
@@ -140,8 +141,8 @@ export default function StatementsPage() {
     if (!bulkMonth) return toast.error('Select a month');
     setBulking(true);
     try {
-      const res = await financialApi.generateAllStatements(year, bulkMonth as number);
-      toast.success(`Whole school: ${res.data.generated} generated, ${res.data.skipped} already existed`);
+      const res = await financialApi.generateAllStatements(year, bulkMonth as number, bulkGrade || undefined);
+      toast.success(`${bulkGrade ? 'Grade' : 'Whole school'}: ${res.data.generated} generated, ${res.data.skipped} already existed`);
       loadSchoolReport();
     } catch {
       toast.error('Bulk generation failed');
@@ -464,13 +465,17 @@ export default function StatementsPage() {
 
           <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-slate-500">Generate statements for the whole school:</span>
+              <span className="text-sm font-medium text-slate-500">Generate statements:</span>
+              <select value={bulkGrade} onChange={(e) => setBulkGrade(e.target.value)} className="input w-48">
+                <option value="">All grades (whole school)</option>
+                {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
               <select value={bulkMonth} onChange={(e) => setBulkMonth(parseInt(e.target.value))} className="input w-44">
                 <option value="">Select month…</option>
                 {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
               </select>
               <button onClick={handleBulkGenerate} disabled={bulking || !bulkMonth} className="btn btn-primary">
-                <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate All'}
+                <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate'}
               </button>
             </div>
           </div>

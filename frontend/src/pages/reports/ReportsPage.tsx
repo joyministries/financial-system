@@ -154,40 +154,28 @@ export default function ReportsPage() {
               </span>
             )}
           </div>
-          {outstanding.students.length > 0 && (
-            <>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={outstanding.students.map((s) => ({ name: s.name, outstanding: s.outstanding }))}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
-                <Bar dataKey="outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="border-b border-slate-300 px-4 py-2 text-left font-medium">Student No.</th>
-                    <th className="border-b border-slate-300 px-4 py-2 text-left font-medium">Student</th>
-                    <th className="border-b border-slate-300 px-4 py-2 text-right font-medium">Outstanding</th>
-                  </tr>
-                </thead>
-                <tbody className="font-mono">
-                  {outstanding.students.map((s, i) => (
-                    <tr key={i} className="text-[13px]">
-                      <td className="px-4 py-2 text-slate-600">{s.student_number || '—'}</td>
-                      <td className="px-4 py-2 text-slate-800">{s.name}</td>
-                      <td className="px-4 py-2 text-right font-medium text-red-600">R {s.outstanding.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {loading ? (
+            <div className="flex h-64 items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
             </div>
-            </>
+          ) : outstanding.students.length > 0 ? (
+          <>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={outstanding.students.map((s) => ({ name: s.student_number ? `${s.student_number} — ${s.name}` : s.name, outstanding: s.outstanding }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" interval={0} angle={-35} textAnchor="end" height={100} tick={{ fontSize: 11 }} />
+              <YAxis />
+              <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
+              <Bar dataKey="outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <p className="text-sm text-slate-500">Total outstanding: <span className="font-semibold text-red-600">R {outstanding.students.reduce((sum, s) => sum + s.outstanding, 0).toLocaleString()}</span></p>
+          </div>
+          </>
+          ) : (
+          <p className="py-8 text-center text-sm text-slate-500">No outstanding fees.</p>
           )}
-          {outstanding.students.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No outstanding fees.</p>}
         </div>
       )}
 

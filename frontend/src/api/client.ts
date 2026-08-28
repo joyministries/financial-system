@@ -369,8 +369,8 @@ export const financialApi = {
     `/financial/receipts/${encodeURIComponent(receiptNumber)}/download`,
   generateStatement: (data: { student_id: string; academic_year: number; month: number }) =>
     api.post('/financial/statements/generate', data),
-  generateAllStatements: (academic_year: number, month: number) =>
-    api.post(`/financial/statements/generate-all?academic_year=${academic_year}&month=${month}`),
+  generateAllStatements: (academic_year: number, month: number, grade_id?: string) =>
+    api.post(`/financial/statements/generate-all?academic_year=${academic_year}&month=${month}${grade_id ? `&grade_id=${grade_id}` : ''}`),
   listStatements: (studentId: string, year: number) =>
     api.get(`/financial/statements/${studentId}?academic_year=${year}`),
   statementDownloadUrl: (studentId: string, year: number, month: number) =>
