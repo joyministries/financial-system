@@ -82,7 +82,7 @@ export default function RegisterPage() {
   const [relationship, setRelationship] = useState<'father' | 'mother'>('father');
 
   // Other parent (optional)
-  const [showOtherParent, setShowOtherParent] = useState(false);
+  const [showOtherParent, setShowOtherParent] = useState(true);
   const [otherFirst, setOtherFirst] = useState('');
   const [otherLast, setOtherLast] = useState('');
   const [otherPhone, setOtherPhone] = useState('');
@@ -690,7 +690,7 @@ export default function RegisterPage() {
                   {relationship === 'father' ? 'Mother' : 'Father'} details {showOtherParent ? '(added)' : ''}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {showOtherParent ? 'Click to remove' : 'Optional — only one parent is required'}
+                  {showOtherParent ? 'Click to remove' : 'Add second parent details'}
                 </span>
               </button>
 
