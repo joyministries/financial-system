@@ -9,7 +9,6 @@ they are designed to be called from FastAPI BackgroundTasks where the
 request session is already closed.
 """
 import logging
-from typing import Optional
 
 import httpx
 from sqlalchemy import select
@@ -28,8 +27,8 @@ async def send_push_to_user(
     user_id: str,
     title: str,
     body: str,
-    data: Optional[dict] = None,
-    category: Optional[str] = None,
+    data: dict | None = None,
+    category: str | None = None,
 ) -> bool:
     """Send a push notification to a specific user.
 
@@ -60,8 +59,8 @@ async def send_push_to_users(
     user_ids: list[str],
     title: str,
     body: str,
-    data: Optional[dict] = None,
-    category: Optional[str] = None,
+    data: dict | None = None,
+    category: str | None = None,
 ) -> int:
     """Send a push notification to multiple users. Returns count of successful sends."""
     try:
@@ -99,8 +98,8 @@ async def send_push_to_role(
     role: str,
     title: str,
     body: str,
-    data: Optional[dict] = None,
-    category: Optional[str] = None,
+    data: dict | None = None,
+    category: str | None = None,
 ) -> int:
     """Send a push notification to all active users with a given role."""
     try:
@@ -126,7 +125,7 @@ async def _send_push(
     title: str,
     body: str,
     data: dict,
-    category: Optional[str] = None,
+    category: str | None = None,
 ) -> bool:
     """Send a single push notification via Expo."""
     payload = {

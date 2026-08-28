@@ -76,3 +76,11 @@ financial_see.txt
 # ── Markdown docs (only root README is tracked) ───────────────────
 *.md
 !/README.md
+
+# AI Surface baseline
+.ai-surface-baseline.json
+
+# Loop engineering
+opencode_loop.sh
+.opencode_loop_session
+.opencode_loop_logs/

@@ -11,7 +11,6 @@ from app.models.schedule import AdditionalCharge, OutstandingBalance
 from app.schemas.payment import (
     PaymentAllocationCreate,
     PaymentCreate,
-    PaymentDeallocate,
     PaymentEdit,
     PaymentReallocate,
     PaymentReversalCreate,

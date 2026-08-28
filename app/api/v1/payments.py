@@ -14,7 +14,6 @@ from app.schemas.payment import (
     PaymentAllocationCreate,
     PaymentAllocationResponse,
     PaymentCreate,
-    PaymentDeallocate,
     PaymentEdit,
     PaymentReallocate,
     PaymentResponse,

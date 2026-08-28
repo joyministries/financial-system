@@ -226,6 +226,7 @@ async def get_next_due_date(
         await verify_student_access(student_id, user, db)
 
     from datetime import UTC, datetime
+
     from app.models.grade import Student
     from app.models.schedule import MonthlySchedule, OutstandingBalance
 
@@ -233,9 +234,7 @@ async def get_next_due_date(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    now = datetime.now(UTC)
-    current_year = now.year
-    current_month = now.month
+    datetime.now(UTC)
 
     # Find next unpaid outstanding balance (pending or partial), ordered by due_date
     stmt = (

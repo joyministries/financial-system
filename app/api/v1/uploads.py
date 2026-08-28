@@ -5,14 +5,12 @@ import io
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_role
-from app.core.exceptions import BusinessRuleError
-from app.core.money import to_decimal
 from app.models.grade import Grade, Student
 from app.models.user import User
 from app.services.audit import AuditService
@@ -83,7 +81,7 @@ async def bulk_upload_students(
         grade_name = _clean(row.get("grade_name"))
         grade_id = _clean(row.get("grade_id"))
         student_number = _clean(row.get("student_number"))
-        parent_email = _clean(row.get("parent_email"))
+        _clean(row.get("parent_email"))
 
         if not first or not last:
             errors.append(f"Row {i}: first_name and last_name are required")

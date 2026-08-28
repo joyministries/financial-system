@@ -35,8 +35,7 @@ async def create_fee_override(
 ):
     """Set a per-student fee override (discount). The admin can give a
     specific learner a discounted tuition without changing the grade fee."""
-    from app.models.grade import StudentFeeOverride
-    from app.models.grade import FeeStructure
+    from app.models.grade import FeeStructure, StudentFeeOverride
 
     # Validate the fee structure exists
     fee = await db.get(FeeStructure, data.fee_structure_id)
@@ -73,10 +72,11 @@ async def list_fee_overrides(
     user: User = Depends(require_role("admin", "finance")),
 ):
     """List fee overrides, optionally filtered by student."""
-    from app.models.grade import StudentFeeOverride
     from sqlalchemy import select
 
-    stmt = select(StudentFeeOverride).where(StudentFeeOverride.is_active == True)
+    from app.models.grade import StudentFeeOverride
+
+    stmt = select(StudentFeeOverride).where(StudentFeeOverride.is_active)
     if student_id:
         stmt = stmt.where(StudentFeeOverride.student_id == student_id)
     stmt = stmt.order_by(StudentFeeOverride.created_at.desc())
@@ -142,8 +142,9 @@ async def bulk_create_fee_overrides(
 ):
     """Apply the same discount to multiple students at once. Skips students
     that already have an active override for the same fee structure."""
-    from app.models.grade import FeeStructure, Student, StudentFeeOverride
     from sqlalchemy import select
+
+    from app.models.grade import FeeStructure, Student, StudentFeeOverride
 
     # Validate fee structure
     fee = await db.get(FeeStructure, data.fee_structure_id)
