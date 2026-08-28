@@ -41,7 +41,7 @@ export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
             <span className="text-accent-300">all in one place.</span>
           </h2>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-300">
-            Lambton Christian School's finance portal keeps parents and staff in sync — pay fees online,
+            Lambton Christian School's finance portal keeps parents and staff in sync, pay fees online,
             download receipts and statements, and follow every rand of the academic year.
           </p>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-3">
