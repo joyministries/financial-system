@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { creditNotesApi, studentsApi } from '@/api/client';
 import type { CreditNote, Student } from '@/types';
 import toast from 'react-hot-toast';
-import { FileMinus2, Plus, XCircle, Loader2 } from 'lucide-react';
+import { Plus, HandCoins, FileX2 } from 'lucide-react';
+import clsx from 'clsx';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
 
-// A credit note is issued when a student/parent sells books or items to the
-// school. The admin decides the credit value, which reduces the student's fee.
 const CREDIT_TYPES = [
   'Books Sold to School',
   'Items Sold to School',
@@ -21,10 +20,10 @@ const CREDIT_TYPES = [
 const DEFAULT_PAGE_SIZE = 50;
 
 const STATUS_STYLES: Record<string, string> = {
-  issued: 'bg-green-100 text-green-700',
-  partial: 'bg-blue-100 text-blue-700',
-  applied: 'bg-slate-100 text-slate-600',
-  voided: 'bg-red-100 text-red-700',
+  issued: 'badge badge-success',
+  partial: 'badge badge-info',
+  applied: 'badge badge-neutral',
+  voided: 'badge badge-danger',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,7 +43,6 @@ export default function CreditNotesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  // Form state
   const [studentId, setStudentId] = useState('');
   const [creditType, setCreditType] = useState('Books Sold to School');
   const [description, setDescription] = useState('');
@@ -55,8 +53,6 @@ export default function CreditNotesPage() {
     studentsApi.list({ limit: 200 }).then((r) => setStudents(r.data.items));
   }, []);
 
-  // Load credit notes: for the selected student if one is chosen,
-  // otherwise the full admin list.
   useEffect(() => {
     setLoading(true);
     setPage(1);
@@ -93,7 +89,7 @@ export default function CreditNotesPage() {
   const closeForm = () => {
     setShowForm(false);
     setStudentId('');
-    setCreditType('Book Sale');
+    setCreditType('Books Sold to School');
     setDescription('');
     setAmount('');
     setAutoApply(true);
@@ -147,39 +143,35 @@ export default function CreditNotesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Credit Notes</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Issue a credit when a student or parent sells books/items to the school. The admin sets
-            the credit value, which reduces the student's outstanding fees.
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-slate-900">Credit Notes</h1>
+        <div className="flex gap-2">
+          <StudentSearchSelect
+            value={selectedStudent}
+            onChange={setSelectedStudent}
+            placeholder="Search student…"
+          />
+          <button
+            onClick={() => setShowForm(true)}
+            className="btn btn-primary whitespace-nowrap"
+          >
+            <Plus className="h-4 w-4" /> Issue Credit Note
+          </button>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn btn-primary">
-          <Plus className="h-4 w-4" /> Issue Credit Note
-        </button>
       </div>
 
-      <div className="flex gap-4">
-        <StudentSearchSelect
-          value={selectedStudent}
-          onChange={setSelectedStudent}
-          placeholder="Search student by name or number…"
-        />
-        {!selectedStudent && (
-          <p className="text-sm text-slate-500">Showing all students. Pick one to filter.</p>
-        )}
-      </div>
-
+      {/* ── Issue credit note modal ─────────────────────── */}
       <Modal open={showForm} onClose={closeForm} title="Issue Credit Note">
         <form onSubmit={handleIssue} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700">Student</label>
-            <StudentSearchSelect
-              value={studentId}
-              onChange={setStudentId}
-              placeholder="Search student by name or number…"
-            />
+            <div className="mt-1">
+              <StudentSearchSelect
+                value={studentId}
+                onChange={setStudentId}
+                placeholder="Search student by name or number…"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Credit Type</label>
@@ -206,16 +198,19 @@ export default function CreditNotesPage() {
           </label>
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={submitting} className="btn btn-primary">
-              {submitting ? 'Issuing...' : 'Issue Credit Note'}
+              {submitting ? 'Issuing…' : 'Issue Credit Note'}
             </button>
             <button type="button" onClick={closeForm} className="btn btn-secondary">Cancel</button>
           </div>
         </form>
       </Modal>
 
+      {/* ── Table ──────────────────────────────────────── */}
       <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
         {loading ? (
-          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+          <div className="flex h-32 items-center justify-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+          </div>
         ) : (
           <>
             <table className="min-w-full divide-y divide-slate-200">
@@ -237,40 +232,44 @@ export default function CreditNotesPage() {
                     <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.credit_number}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{studentName(c.student_id)}</td>
                     <td className="px-6 py-4 text-sm text-slate-500">{c.credit_type}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{c.description}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">R {Number(c.amount).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">R {Number(c.remaining_amount).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500 max-w-[200px] truncate">{c.description}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-slate-900 text-right">R {Number(c.amount).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500 text-right">R {Number(c.remaining_amount).toLocaleString()}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[c.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                      <span className={clsx('inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_STYLES[c.status] ?? 'badge badge-neutral')}>
                         {STATUS_LABELS[c.status] ?? c.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {c.status === 'issued' && (
-                        <button
-                          onClick={() => handleApply(c.id)}
-                          className="rounded p-1 text-slate-400 hover:text-green-600"
-                          title="Apply against outstanding"
-                        >
-                          <FileMinus2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      {(c.status === 'issued' || c.status === 'partial') && (
-                        <button
-                          onClick={() => handleVoid(c.id)}
-                          className="rounded p-1 text-slate-400 hover:text-red-600 ml-1"
-                          title="Void credit note"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {c.status === 'issued' && (
+                          <button
+                            onClick={() => handleApply(c.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-green-300 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                            title="Apply against outstanding"
+                          >
+                            <HandCoins className="h-3.5 w-3.5" /> Apply
+                          </button>
+                        )}
+                        {(c.status === 'issued' || c.status === 'partial') && (
+                          <button
+                            onClick={() => handleVoid(c.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                            title="Void credit note"
+                          >
+                            <FileX2 className="h-3.5 w-3.5" /> Void
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {allCredits.length === 0 && !loading && (
-              <p className="py-8 text-center text-sm text-slate-500">No credit notes found.</p>
+              <p className="py-8 text-center text-sm text-slate-500">
+                {selectedStudent ? 'No credit notes for this student.' : 'No credit notes found.'}
+              </p>
             )}
             <Pagination
               page={page}

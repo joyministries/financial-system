@@ -940,37 +940,38 @@ export default function StudentsPage() {
             </div>
 
             {/* ── Fee override (per-student fee) ─────────────── */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-900">Fee Override</h4>
-                  <p className="text-xs text-slate-500">
-                    Set a custom fee for this student only, without changing the grade fee.
-                  </p>
-                </div>
-                <span className="badge badge-info">{viewOverrides.length > 0 ? `${viewOverrides.length} override${viewOverrides.length === 1 ? '' : 's'} active` : 'Grade fee applies'}</span>
+            <div>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-slate-900">Fee Override</h4>
+                <span className="badge badge-info">
+                  {viewOverrides.length > 0
+                    ? `${viewOverrides.length} override${viewOverrides.length === 1 ? '' : 's'}`
+                    : 'Grade fee applies'}
+                </span>
               </div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Set a custom fee for this student only, without changing the grade fee.
+              </p>
 
               {viewLoading ? (
                 <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+              ) : viewFees.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-400">No fee structures set for this grade yet.</p>
               ) : (
-                <div className="mt-3 space-y-3">
-                  {viewFees.length === 0 && (
-                    <p className="text-sm text-slate-400">No fee structures set for this grade yet.</p>
-                  )}
-
+                <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
                   {viewFees.map((fee) => {
                     const override = viewOverrides.find((o) => o.fee_structure_id === fee.id && o.is_active);
                     const formOpen = ovrFormFeeId === fee.id;
                     return (
-                      <div key={fee.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div key={fee.id} className="px-4 py-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <p className="text-sm font-medium text-slate-900">{fee.category}</p>
                             <p className="text-xs text-slate-500">
                               {override ? (
                                 <>
-                                  Paying <span className="font-semibold text-emerald-700">
+                                  Paying{' '}
+                                  <span className="font-semibold text-emerald-700">
                                     R {Number(override.annual_amount).toLocaleString()}
                                   </span>
                                   {' '}{override.discount_type === 'percent' ? `${override.annual_amount}% off` : 'per year (override)'}
@@ -988,7 +989,7 @@ export default function StudentsPage() {
                             {override && (
                               <button
                                 onClick={() => removeFeeOverride(override.id)}
-                                className="rounded-lg bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                                className="rounded-lg border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
                               >
                                 Clear
                               </button>
@@ -1000,7 +1001,7 @@ export default function StudentsPage() {
                                 setOvrFormAmount(override ? String(Number(override.annual_amount)) : '');
                                 setOvrFormReason(override?.reason || '');
                               }}
-                              className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                              className="rounded-lg border border-blue-300 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
                             >
                               {override ? 'Edit' : 'Set'}
                             </button>
