@@ -17,6 +17,7 @@ import StatementsPage from '@/pages/statements/StatementsPage';
 import InvoicesPage from '@/pages/invoices/InvoicesPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import ChargesPage from '@/pages/charges/ChargesPage';
+import CreditNotesPage from '@/pages/credits/CreditNotesPage';
 import ParentDashboard from '@/pages/parent/ParentDashboard';
 import ProfilePage from '@/pages/profile/ProfilePage';
 import SettingsPage from '@/pages/settings/SettingsPage';
@@ -74,6 +75,7 @@ function AppRoutes() {
         <Route path="/students" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><StudentsPage /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><PaymentsPage /></ProtectedRoute>} />
         <Route path="/charges" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><ChargesPage /></ProtectedRoute>} />
+        <Route path="/credit-notes" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><CreditNotesPage /></ProtectedRoute>} />
         <Route path="/discounts" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><DiscountsPage /></ProtectedRoute>} />
         <Route path="/registrations" element={<ProtectedRoute roles={['admin', 'super_admin']}><RegistrationsPage /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><ReportsPage /></ProtectedRoute>} />

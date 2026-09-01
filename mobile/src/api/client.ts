@@ -6,6 +6,7 @@ import type {
   Grade,
   FeeStructure,
   AdditionalCharge,
+  CreditNote,
   StudentSummary,
   Receipt,
   Statement,
@@ -113,6 +114,12 @@ export const feesApi = {
 export const chargesApi = {
   list: (studentId: string, year: number) =>
     api.get<AdditionalCharge[]>(`/charges/student/${studentId}?academic_year=${year}`),
+};
+
+// ── Credit Notes ──────────────────────────────────
+export const creditNotesApi = {
+  listForStudent: (studentId: string) =>
+    api.get<CreditNote[]>(`/credit-notes/student/${studentId}`),
 };
 
 // ── Payments ──────────────────────────────────────

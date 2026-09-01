@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   AdminStudentRegisterResponse,
   AppNotification,
+  CreditNote,
   EmailSettings,
   FeeStructure,
   Grade,
@@ -315,6 +316,25 @@ export const chargesApi = {
   delete: (id: string) => api.delete(`/charges/${id}`),
 };
 
+// ── Credit Notes ──────────────────────────────────────────
+export const creditNotesApi = {
+  issue: (data: {
+    student_id: string;
+    credit_type: string;
+    description: string;
+    amount: string | number;
+    auto_apply?: boolean;
+  }) => api.post<CreditNote>('/credit-notes/', data),
+  listForStudent: (studentId: string) =>
+    api.get<CreditNote[]>(`/credit-notes/student/${studentId}`),
+  listAll: (params?: { limit?: number; offset?: number }) =>
+    api.get<CreditNote[]>('/credit-notes/', { params }),
+  get: (id: string) => api.get<CreditNote>(`/credit-notes/${id}`),
+  apply: (id: string) => api.post<CreditNote>(`/credit-notes/${id}/apply`),
+  void: (id: string, reason: string) =>
+    api.post<CreditNote>(`/credit-notes/${id}/void`, { reason }),
+};
+
 // ── Payments ──────────────────────────────────────────────
 export const paymentsApi = {
   list: (params?: { student_id?: string; status?: string; month?: number; year?: number; limit?: number; offset?: number }) =>
@@ -375,6 +395,8 @@ export const financialApi = {
     api.get(`/financial/statements/${studentId}?academic_year=${year}`),
   statementDownloadUrl: (studentId: string, year: number, month: number) =>
     `/financial/statements/${encodeURIComponent(studentId)}/download?academic_year=${year}&month=${month}`,
+  gradeSummaryDownloadUrl: (gradeId: string, year: number, month: number) =>
+    `/financial/statements/grade-summary/${encodeURIComponent(gradeId)}/download?academic_year=${year}&month=${month}`,
   triggerRollover: (year: number) =>
     api.post(`/financial/balance-engine/rollover?academic_year=${year}`),
   getTotalDue: (studentId: string, year: number) =>

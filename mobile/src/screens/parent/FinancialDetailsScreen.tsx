@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { financialApi, invoicesApi, studentsApi } from '../../api/client';
+import { financialApi, invoicesApi, studentsApi, creditNotesApi } from '../../api/client';
 import LoadingScreen from '../../components/LoadingScreen';
 import { colors, spacing, radii, fonts } from '../../theme';
-import { Student, StudentSummary, Invoice } from '../../types';
+import { Student, StudentSummary, Invoice, CreditNote } from '../../types';
 import { downloadFile } from '../../utils/download';
 
 const MONTHS = [
@@ -32,11 +32,13 @@ export default function FinancialDetailsScreen({ route }: any) {
     receipts: any[];
     statements: any[];
     invoices: Invoice[];
+    creditNotes: CreditNote[];
   }>({
     summary: null,
     receipts: [],
     statements: [],
     invoices: [],
+    creditNotes: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,16 +53,18 @@ export default function FinancialDetailsScreen({ route }: any) {
     try {
       setLoading(true);
       setError(null);
-      const [summaryRes, statementsRes, invoicesRes] = await Promise.all([
+      const [summaryRes, statementsRes, invoicesRes, creditsRes] = await Promise.all([
         financialApi.getStudentSummary(student.id, currentYear),
         financialApi.listStatements(student.id, currentYear),
         invoicesApi.list({ student_id: student.id, limit: 100 }).catch(() => ({ data: { items: [] } })),
+        creditNotesApi.listForStudent(student.id).catch(() => ({ data: [] })),
       ]);
       setData({
         summary: summaryRes.data,
         receipts: [],
         statements: Array.isArray(statementsRes.data) ? statementsRes.data : [],
         invoices: invoicesRes.data.items || [],
+        creditNotes: Array.isArray(creditsRes.data) ? creditsRes.data : [],
       });
     } catch (err: any) {
       console.error('Failed to load financial details:', err);
@@ -162,6 +166,33 @@ export default function FinancialDetailsScreen({ route }: any) {
                 </Text>
               </View>
             </View>
+
+            {data.creditNotes.length > 0 && (
+              <View style={styles.creditSection}>
+                <View style={styles.creditHeader}>
+                  <Ionicons name="pricetag-outline" size={16} color={colors.accent} />
+                  <Text style={styles.creditTitle}>Credit Notes</Text>
+                </View>
+                {data.creditNotes
+                  .filter((c) => c.status !== 'voided')
+                  .map((c) => (
+                    <View key={c.id} style={styles.creditCard}>
+                      <View style={styles.creditRow}>
+                        <Text style={styles.creditType}>{c.credit_type}</Text>
+                        <Text style={styles.creditAmount}>
+                          −{money(Number(c.amount))}
+                        </Text>
+                      </View>
+                      <Text style={styles.creditDesc}>{c.description}</Text>
+                      <Text style={styles.creditMeta}>
+                        {c.credit_number} · {new Date(c.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })} ·{' '}
+                        {c.status === 'applied' ? 'Applied to fees' : c.status === 'partial' ? 'Partially applied' : 'Issued'}
+                      </Text>
+                    </View>
+                  ))}
+                {data.creditNotes.filter((c) => c.status !== 'voided').length === 0 && null}
+              </View>
+            )}
 
             {(summary?.months ?? []).map((row: any, idx: number) => {
               const monthIdx = row.month - 1;
@@ -403,6 +434,15 @@ const styles = StyleSheet.create({
   summaryCard: { flex: 1, alignItems: 'center', padding: spacing.sm, borderRadius: radii.md, gap: 2 },
   summaryLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
   summaryValue: { fontSize: 13, fontWeight: '700' },
+  creditSection: { marginTop: spacing.md, gap: spacing.sm },
+  creditHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  creditTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  creditCard: { backgroundColor: colors.accentSoft, borderRadius: radii.md, padding: spacing.md, gap: 4 },
+  creditRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  creditType: { fontSize: 14, fontWeight: '700', color: colors.text },
+  creditAmount: { fontSize: 14, fontWeight: '700', color: colors.success },
+  creditDesc: { fontSize: 13, color: colors.textMuted },
+  creditMeta: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   monthCard: { backgroundColor: colors.white, borderRadius: radii.md, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   monthCardCurrent: { borderColor: colors.accent, borderWidth: 1.5 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },

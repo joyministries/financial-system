@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.charges import router as charges_router
+from app.api.v1.credits import router as credits_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.financial import router as financial_router
 from app.api.v1.grades import router as grades_router
@@ -21,6 +22,7 @@ api_router.include_router(auth_router)
 api_router.include_router(grades_router)
 api_router.include_router(students_router)
 api_router.include_router(charges_router)
+api_router.include_router(credits_router)
 api_router.include_router(payments_router)
 api_router.include_router(payfast_router)
 api_router.include_router(financial_router)

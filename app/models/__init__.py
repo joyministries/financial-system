@@ -1,5 +1,6 @@
 from app.core.database import Base
 from app.models.audit import AuditLog
+from app.models.credit import CreditNote
 from app.models.document import StudentDocument
 from app.models.financial import Receipt, Statement
 from app.models.grade import Enrollment, FeeStructure, Grade, Student, StudentGuardian
@@ -14,6 +15,7 @@ from app.models.user import PasswordResetToken, User
 __all__ = [
     "Base",
     "AuditLog",
+    "CreditNote",
     "StudentDocument",
     "Receipt",
     "Statement",

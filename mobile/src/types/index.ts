@@ -81,6 +81,22 @@ export interface AdditionalCharge {
   created_at: string;
 }
 
+export interface CreditNote {
+  id: string;
+  credit_number: string;
+  student_id: string;
+  credit_type: string;
+  description: string;
+  amount: number;
+  status: 'issued' | 'partial' | 'applied' | 'voided';
+  remaining_amount: number;
+  issued_by: string;
+  voided_by: string | null;
+  void_reason: string | null;
+  voided_at: string | null;
+  created_at: string;
+}
+
 export interface Payment {
   id: string;
   student_id: string;
