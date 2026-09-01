@@ -151,6 +151,15 @@ export default function StatementsPage() {
     }
   };
 
+  const downloadGradeSummary = () => {
+    if (!bulkGrade || !bulkMonth) return toast.error('Select a grade and month first');
+    const url = financialApi.gradeSummaryDownloadUrl(bulkGrade, year, bulkMonth as number);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `grade-summary-${bulkGrade}-${year}-${bulkMonth}.pdf`;
+    a.click();
+  };
+
   const exportCsv = () => {
     if (!schoolReport) return;
     const rows = [
@@ -477,6 +486,11 @@ export default function StatementsPage() {
               <button onClick={handleBulkGenerate} disabled={bulking || !bulkMonth} className="btn btn-primary">
                 <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate'}
               </button>
+              {bulkGrade && bulkMonth && (
+                <button onClick={downloadGradeSummary} className="btn btn-secondary">
+                  <Download className="h-4 w-4" /> Grade Summary PDF
+                </button>
+              )}
             </div>
           </div>
 

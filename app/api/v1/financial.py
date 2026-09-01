@@ -1,4 +1,6 @@
 
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +24,7 @@ from app.schemas.financial import (
     StudentSummaryResponse,
 )
 from app.services.balance import BalanceEngine
-from app.services.pdf import build_receipt_pdf, build_statement_pdf, pdf_response
+from app.services.pdf import build_grade_summary_pdf, build_receipt_pdf, build_statement_pdf, pdf_response
 from app.services.receipt import ReceiptService
 from app.services.report import ReportService
 from app.services.statement import StatementService
@@ -164,6 +166,52 @@ async def generate_all_statements(
         "failed": failed,
         "errors": errors[:20],
     }
+
+
+@router.get("/statements/grade-summary/{grade_id}/download")
+async def download_grade_summary(
+    grade_id: str,
+    academic_year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Download a grade-level summary PDF showing all students, payments and balances."""
+    from app.models.grade import Grade
+
+    grade = await db.get(Grade, grade_id)
+    grade_name = grade.name if grade else "Unknown Grade"
+
+    service = StatementService(db)
+    students = (
+        await db.execute(
+            select(Student)
+            .where(Student.grade_id == grade_id)
+            .where(Student.registration_status == "approved")
+            .options(selectinload(Student.guardians))
+            .order_by(Student.last_name, Student.first_name)
+        )
+    ).scalars().all()
+
+    student_data = []
+    for s in students:
+        stmt = await service.get(s.id, academic_year, month)
+        if stmt:
+            paid = stmt.total_paid
+            bal = stmt.closing_balance
+        else:
+            paid = Decimal("0")
+            bal = Decimal("0")
+        student_data.append({
+            "name": f"{s.first_name} {s.last_name}",
+            "student_number": s.student_number or "",
+            "total_paid": paid,
+            "balance": bal,
+            "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
+        })
+
+    pdf = build_grade_summary_pdf(grade_name, academic_year, month, student_data)
+    return pdf_response(pdf, f"grade-summary-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf")
 
 
 @router.post("/statements/regenerate")

@@ -668,6 +668,163 @@ def build_statement_pdf(
     return doc.build()
 
 
+def build_grade_summary_pdf(
+    grade_name: str,
+    academic_year: int,
+    month: int,
+    students: list[dict],
+) -> bytes:
+    """Build a grade-level summary PDF showing every student's payments and balance.
+
+    Each dict in *students* must have:
+        name, student_number, total_paid, balance, status
+    """
+    doc = _Document("GRADE STATEMENT SUMMARY")
+
+    # ── Header ──────────────────────────────────────────────
+    header_title = Paragraph(
+        f'<font color="#FFFFFF"><b>Lambton Christian School</b></font>',
+        _NORMAL,
+    )
+    header_sub = Paragraph(
+        f'<font color="#C7CFE6">GRADE STATEMENT SUMMARY</font>',
+        ParagraphStyle("R", parent=_NORMAL, alignment=TA_RIGHT),
+    )
+    header = Table([[header_title, header_sub]], colWidths=[110 * mm, 70 * mm])
+    header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    from app.services.statement import MONTHS
+    month_name = MONTHS[month - 1] if 1 <= month <= 12 else str(month)
+    period_label = f"{month_name} {academic_year}"
+
+    fields = [
+        ("Grade", grade_name),
+        ("Statement Period", f"January – {period_label}"),
+        ("Students", str(len(students))),
+        ("Date Issued", datetime.now().strftime("%-d %b %Y")),
+    ]
+    cells = []
+    for label, value in fields:
+        cells.append(Paragraph(
+            f'<font color="#94A3B8" size="7">{label.upper()}</font><br/>'
+            f'<font color="#FFFFFF"><b>{value}</b></font>',
+            _NORMAL,
+        ))
+    fields_t = Table([cells], colWidths=[45 * mm] * 4)
+    fields_t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    header_block = Table([[header], [fields_t]], colWidths=[180 * mm])
+    header_block.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+
+    doc.story.extend([header_block, Spacer(1, 6 * mm)])
+
+    # ── Student table ───────────────────────────────────────
+    _HEAD_STYLE = ParagraphStyle("GrdHead", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=9, textColor=colors.white)
+    _CELL_STYLE = ParagraphStyle("GrdCell", parent=_NORMAL, fontSize=9)
+    _MONEY_C = ParagraphStyle("GrdMoney", parent=_MONEY_STYLE, fontSize=9)
+    _MONEY_R = ParagraphStyle("GrdMoneyR", parent=_MONEY_C, fontName=_BRAND_BOLD)
+    _NAME_STYLE = ParagraphStyle("GrdName", parent=_NORMAL, fontSize=9, fontName=_BRAND_BOLD)
+
+    data = [[
+        Paragraph('<b>#</b>', _HEAD_STYLE),
+        Paragraph('<b>Student Name</b>', _HEAD_STYLE),
+        Paragraph('<b>Reg No</b>', _HEAD_STYLE),
+        Paragraph('<b>Total Paid</b>', _HEAD_STYLE),
+        Paragraph('<b>Balance Due</b>', _HEAD_STYLE),
+        Paragraph('<b>Status</b>', _HEAD_STYLE),
+    ]]
+
+    total_paid_all = Decimal("0")
+    total_balance_all = Decimal("0")
+
+    for i, s in enumerate(students, 1):
+        paid = Decimal(str(s.get("total_paid", 0)))
+        bal = Decimal(str(s.get("balance", 0)))
+        total_paid_all += paid
+        total_balance_all += bal
+        status = s.get("status", "")
+        status_color = "#047857" if status == "Paid" else "#BE123C"
+        data.append([
+            Paragraph(str(i), _CELL_STYLE),
+            Paragraph(s.get("name", ""), _NAME_STYLE),
+            Paragraph(s.get("student_number", ""), _CELL_STYLE),
+            Paragraph(money(paid), _MONEY_C),
+            Paragraph(money(bal), _MONEY_R),
+            Paragraph(f'<font color="{status_color}"><b>{status}</b></font>', _CELL_STYLE),
+        ])
+
+    # Totals row
+    data.append([
+        "",
+        Paragraph('<b>TOTAL</b>', ParagraphStyle("Tot", parent=_NAME_STYLE, fontSize=10)),
+        "",
+        Paragraph(f'<b>{money(total_paid_all)}</b>', _MONEY_R),
+        Paragraph(f'<b>{money(total_balance_all)}</b>', _MONEY_R),
+        "",
+    ])
+
+    col_widths = [12 * mm, 58 * mm, 25 * mm, 30 * mm, 30 * mm, 25 * mm]
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), _STMT_NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), _BRAND_BOLD),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, _STMT_ROW_ALT]),
+        # Totals row
+        ("LINEABOVE", (0, -1), (-1, -1), 1.2, _STMT_NAVY),
+        ("BACKGROUND", (0, -1), (-1, -1), _GOLD_SOFT),
+        ("FONTNAME", (0, -1), (-1, -1), _BRAND_BOLD),
+    ]
+    t.setStyle(TableStyle(style_cmds))
+    doc.story.extend([t, Spacer(1, 8 * mm)])
+
+    # ── Footer summary ──────────────────────────────────────
+    paid_pct = (total_paid_all / (total_paid_all + total_balance_all) * 100) if (total_paid_all + total_balance_all) else 0
+    summary_text = (
+        f'<b>Grade Total:</b>  '
+        f'Paid: <font color="#047857"><b>{money(total_paid_all)}</b></font>  |  '
+        f'Outstanding: <font color="#BE123C"><b>{money(total_balance_all)}</b></font>  |  '
+        f'Collection: <b>{paid_pct:.0f}%</b>'
+    )
+    summary = Paragraph(summary_text, ParagraphStyle("Summary", parent=_NORMAL, fontSize=10, leading=16))
+    doc.story.extend([
+        Table([[summary]], colWidths=[180 * mm]),
+        Spacer(1, 6 * mm),
+        Paragraph(
+            '<font color="#94A3B8">Generated by Lambton Christian School Financial System</font>',
+            ParagraphStyle("Foot", parent=_NORMAL, fontSize=8),
+        ),
+    ])
+
+    return doc.build()
+
+
 # ── Invoice ────────────────────────────────────────────────
 def build_invoice_pdf(invoice: Invoice, student_name: str) -> bytes:
     doc = _Document("INVOICE")
