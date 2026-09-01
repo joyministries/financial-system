@@ -62,6 +62,14 @@ async def create_fee_override(
         "student_fee_override", override.id, "create", user.id,
         new_values={"student_id": data.student_id, "amount": str(data.annual_amount)},
     )
+
+    # Re-price the student's untouched outstanding balances so the newly set
+    # discount takes effect immediately (rows with payments are left alone).
+    from app.services.fee_override import reprice_outstanding_balances
+
+    await reprice_outstanding_balances(
+        db, student_id=data.student_id, fee_structure_id=data.fee_structure_id
+    )
     return override
 
 
@@ -112,6 +120,13 @@ async def update_fee_override(
         "student_fee_override", override_id, "update", user.id,
         new_values=data.model_dump(exclude_unset=True),
     )
+
+    # Re-price untouched balances for this student's overridden fee.
+    from app.services.fee_override import reprice_outstanding_balances
+
+    await reprice_outstanding_balances(
+        db, student_id=override.student_id, fee_structure_id=override.fee_structure_id
+    )
     return override
 
 
@@ -131,6 +146,14 @@ async def delete_fee_override(
     override.is_active = False
     await db.flush()
     await AuditService(db).log("student_fee_override", override_id, "delete", user.id)
+
+    # Deactivating the override reverts unaffected balances back to the
+    # grade-level amount.
+    from app.services.fee_override import reprice_outstanding_balances
+
+    await reprice_outstanding_balances(
+        db, student_id=override.student_id, fee_structure_id=override.fee_structure_id
+    )
     return {"detail": "Fee override deactivated"}
 
 
@@ -202,6 +225,14 @@ async def bulk_create_fee_overrides(
             "amount": str(data.annual_amount),
         },
     )
+
+    # Re-price untouched balances for every student who received the override.
+    from app.services.fee_override import reprice_outstanding_balances
+
+    if created:
+        await reprice_outstanding_balances(
+            db, fee_structure_id=data.fee_structure_id
+        )
     return overrides
 
 

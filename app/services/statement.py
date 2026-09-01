@@ -89,6 +89,11 @@ class StatementService:
         return count
 
     async def _total_annual_fees(self, student_id: str, academic_year: int) -> Decimal:
+        from app.services.fee_override import (
+            effective_annual,
+            get_student_overrides,
+        )
+
         student = await self.db.get(Student, student_id)
         if not student:
             return Decimal("0")
@@ -100,17 +105,29 @@ class StatementService:
         )
         result = await self.db.execute(stmt)
         fees = result.scalars().all()
-        return sum((f.annual_amount for f in fees), Decimal("0"))
+        if not fees:
+            return Decimal("0")
+
+        overrides = await get_student_overrides(self.db, student_id, academic_year)
+        total = Decimal("0")
+        for f in fees:
+            total += effective_annual(overrides.get(f.id), f.annual_amount)
+        return total
 
     async def _installment_for_month(
         self, student_id: str, academic_year: int, month: int
     ) -> Decimal:
+        from app.services.fee_override import (
+            effective_monthly,
+            get_student_overrides,
+        )
+
         student = await self.db.get(Student, student_id)
         if not student:
             return Decimal("0")
 
         stmt = (
-            select(MonthlySchedule)
+            select(FeeStructure, MonthlySchedule)
             .join(FeeStructure, FeeStructure.id == MonthlySchedule.fee_structure_id)
             .where(
                 FeeStructure.grade_id == student.grade_id,
@@ -119,8 +136,17 @@ class StatementService:
             )
         )
         result = await self.db.execute(stmt)
-        schedules = result.scalars().all()
-        return sum((s.amount_due for s in schedules), Decimal("0"))
+        rows = result.all()
+        if not rows:
+            return Decimal("0")
+
+        overrides = await get_student_overrides(self.db, student_id, academic_year)
+        total = Decimal("0")
+        for fee, schedule in rows:
+            total += effective_monthly(
+                overrides.get(fee.id), fee.annual_amount, schedule.amount_due
+            )
+        return total
 
     async def _opening_balance(
         self, student_id: str, academic_year: int, month: int

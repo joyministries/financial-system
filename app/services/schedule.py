@@ -141,10 +141,30 @@ class ScheduleService:
                     gen_random_uuid()::text,
                     s.id,
                     ms.id,
-                    ms.amount_due,
+                    GREATEST(0,
+                        CASE
+                            WHEN sfo.id IS NULL THEN ms.amount_due
+                            WHEN sfo.discount_type = 'percent'
+                                THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
+                            ELSE ROUND(
+                                ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
+                                2,
+                            )
+                        END
+                    ) AS effective_amount,
                     0,
                     0,
-                    ms.amount_due,
+                    GREATEST(0,
+                        CASE
+                            WHEN sfo.id IS NULL THEN ms.amount_due
+                            WHEN sfo.discount_type = 'percent'
+                                THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
+                            ELSE ROUND(
+                                ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
+                                2,
+                            )
+                        END
+                    ),
                     'pending',
                     now(),
                     now()
@@ -156,6 +176,10 @@ class ScheduleService:
                 JOIN monthly_schedules ms
                   ON ms.fee_structure_id = fs.id
                  AND ms.academic_year = :academic_year
+                LEFT JOIN student_fee_overrides sfo
+                  ON sfo.fee_structure_id = fs.id
+                 AND sfo.student_id = s.id
+                 AND sfo.is_active = true
                 WHERE s.is_active = true
                   AND s.registration_status = 'approved'
                   AND s.grade_id = :grade_id
@@ -178,10 +202,30 @@ class ScheduleService:
                     gen_random_uuid()::text,
                     s.id,
                     ms.id,
-                    ms.amount_due,
+                    GREATEST(0,
+                        CASE
+                            WHEN sfo.id IS NULL THEN ms.amount_due
+                            WHEN sfo.discount_type = 'percent'
+                                THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
+                            ELSE ROUND(
+                                ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
+                                2,
+                            )
+                        END
+                    ) AS effective_amount,
                     0,
                     0,
-                    ms.amount_due,
+                    GREATEST(0,
+                        CASE
+                            WHEN sfo.id IS NULL THEN ms.amount_due
+                            WHEN sfo.discount_type = 'percent'
+                                THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
+                            ELSE ROUND(
+                                ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
+                                2,
+                            )
+                        END
+                    ),
                     'pending',
                     now(),
                     now()
@@ -193,6 +237,10 @@ class ScheduleService:
                 JOIN monthly_schedules ms
                   ON ms.fee_structure_id = fs.id
                  AND ms.academic_year = :academic_year
+                LEFT JOIN student_fee_overrides sfo
+                  ON sfo.fee_structure_id = fs.id
+                 AND sfo.student_id = s.id
+                 AND sfo.is_active = true
                 WHERE s.is_active = true
                   AND s.registration_status = 'approved'
                   AND NOT EXISTS (
@@ -213,11 +261,34 @@ class ScheduleService:
         Outstanding balances are the ledger rows payments allocate against.
         If a grade's fee schedule was generated before a student was enrolled
         (or the rows were never seeded), they are created here on demand with
-        the schedule's amount due and a pending status.
+        the student's effective (override-aware) amount due and a pending
+        status.
         """
+        from app.models.grade import Student
+        from app.services.fee_override import (
+            effective_monthly,
+            get_student_fee_structures,
+            get_student_overrides,
+        )
+
         schedules = await self.get_schedules_for_student(student_id, academic_year)
         if not schedules:
             return
+
+        overrides = await get_student_overrides(self.db, student_id, academic_year)
+        student = await self.db.get(Student, student_id)
+        fee_structures = (
+            await get_student_fee_structures(self.db, student.grade_id, academic_year)
+            if student
+            else []
+        )
+        # fee_structure_id -> effective monthly installment for this student
+        eff_by_fsid: dict[str, Decimal] = {}
+        for fs in fee_structures:
+            override = overrides.get(fs.id)
+            eff_by_fsid[fs.id] = effective_monthly(
+                override, fs.annual_amount, fs.monthly_installment
+            )
 
         schedule_ids = [s.id for s in schedules]
         stmt = select(OutstandingBalance.monthly_schedule_id).where(
@@ -230,18 +301,29 @@ class ScheduleService:
         created = False
         for schedule in schedules:
             if schedule.id not in existing_ids:
+                eff = eff_by_fsid.get(schedule.fee_structure_id, schedule.amount_due)
                 self.db.add(
                     OutstandingBalance(
                         student_id=student_id,
                         monthly_schedule_id=schedule.id,
-                        original_amount=schedule.amount_due,
-                        balance=schedule.amount_due,
+                        original_amount=eff,
+                        balance=eff,
                         status="pending",
                     )
                 )
                 created = True
         if created:
             await self.db.flush()
+
+        # Converge any untouched balances to the override-aware amount. This
+        # only runs for students who HAVE overrides (reprice is a no-op
+        # otherwise) and only touches rows with no payment allocations, so it
+        # is safe on every read path and closes the gap for overrides that
+        # predate the override-aware billing rollout.
+        if overrides:
+            from app.services.fee_override import reprice_outstanding_balances
+
+            await reprice_outstanding_balances(self.db, student_id=student_id)
 
     async def get_all_pending(self, academic_year: int) -> list[OutstandingBalance]:
         stmt = (

@@ -496,6 +496,11 @@ class StudentService:
                 )
 
         # Legacy path: per-grade 'Registration' fee structure for the current year.
+        from app.services.fee_override import (
+            effective_annual,
+            get_student_overrides,
+        )
+
         year = datetime.now(UTC).year
         stmt = (
             select(FeeStructure)
@@ -512,13 +517,17 @@ class StudentService:
         if not fee:
             return RegistrationFeeResponse(configured=False)
 
+        overrides = await get_student_overrides(self.db, student_id, year)
+        override = overrides.get(fee.id)
+        effective = effective_annual(override, fee.annual_amount)
+
         sched_stmt = select(MonthlySchedule).where(
             MonthlySchedule.fee_structure_id == fee.id
         )
         schedules = list((await self.db.execute(sched_stmt)).scalars().all())
         if not schedules:
             return RegistrationFeeResponse(
-                configured=True, amount=fee.annual_amount, paid=False
+                configured=True, amount=effective, paid=False
             )
 
         bal_stmt = select(OutstandingBalance).where(
@@ -528,13 +537,13 @@ class StudentService:
         balances = list((await self.db.execute(bal_stmt)).scalars().all())
         if not balances:
             return RegistrationFeeResponse(
-                configured=True, amount=fee.annual_amount, paid=False
+                configured=True, amount=effective, paid=False
             )
         paid = all(
             (b.status == "paid" or b.balance <= 0) for b in balances
         )
         return RegistrationFeeResponse(
-            configured=True, amount=fee.annual_amount, paid=paid
+            configured=True, amount=effective, paid=paid
         )
 
     async def _registration_fee_paid(self, student_id: str) -> bool:

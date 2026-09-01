@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { studentsApi, gradesApi, smsApi, paymentsApi, financialApi } from '@/api/client';
-import type { AdminStudentRegisterResponse, Student, Grade, SmsTemplate, Payment, Statement } from '@/types';
+import { studentsApi, gradesApi, smsApi, paymentsApi, financialApi, discountsApi, feesApi, type FeeOverride } from '@/api/client';
+import type { AdminStudentRegisterResponse, Student, Grade, SmsTemplate, Payment, Statement, FeeStructure } from '@/types';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, UserX, UserPlus, Copy, Loader2, MessageSquare, Send, Eye, Search } from 'lucide-react';
 import Modal from '@/components/Modal';
@@ -272,21 +272,94 @@ export default function StudentsPage() {
   const [viewStatements, setViewStatements] = useState<Statement[]>([]);
   const [viewLoading, setViewLoading] = useState(false);
 
+  // ── Fee override (per-student fee) ───────────────────────
+  const [viewFees, setViewFees] = useState<FeeStructure[]>([]);
+  const [viewOverrides, setViewOverrides] = useState<FeeOverride[]>([]);
+  const [ovrFormFeeId, setOvrFormFeeId] = useState('');
+  const [ovrFormAmount, setOvrFormAmount] = useState('');
+  const [ovrFormType, setOvrFormType] = useState<'override' | 'percent'>('override');
+  const [ovrFormReason, setOvrFormReason] = useState('');
+  const [ovrSaving, setOvrSaving] = useState(false);
+
   const openView = async (s: Student) => {
     setViewing(s);
     setViewPayments([]);
     setViewStatements([]);
+    setViewFees([]);
+    setViewOverrides([]);
+    setOvrFormFeeId('');
+    setOvrFormAmount('');
+    setOvrFormType('override');
+    setOvrFormReason('');
     setViewLoading(true);
     try {
       const year = new Date().getFullYear();
-      const [payRes, stmtRes] = await Promise.all([
+      const [payRes, stmtRes, overridesRes, feesRes] = await Promise.all([
         paymentsApi.list({ student_id: s.id, limit: 6 }).catch(() => ({ data: { items: [] as Payment[] } })),
         financialApi.listStatements(s.id, year).catch(() => ({ data: [] as Statement[] })),
+        discountsApi.list(s.id).catch(() => ({ data: [] as FeeOverride[] })),
+        feesApi.listByGrade(s.grade_id, year).catch(() => ({ data: [] as FeeStructure[] })),
       ]);
       setViewPayments(payRes.data.items);
       setViewStatements(stmtRes.data);
+      setViewOverrides(overridesRes.data);
+      setViewFees(feesRes.data);
     } finally {
       setViewLoading(false);
+    }
+  };
+
+  const saveFeeOverride = async () => {
+    if (!viewing || !ovrFormFeeId || !ovrFormAmount) {
+      toast.error('Choose a fee and enter an amount');
+      return;
+    }
+    const amount = parseFloat(ovrFormAmount);
+    if (isNaN(amount) || amount < 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    setOvrSaving(true);
+    try {
+      const existingOverride = viewOverrides.find((o) => o.fee_structure_id === ovrFormFeeId && o.is_active);
+      if (existingOverride) {
+        await discountsApi.update(existingOverride.id, {
+          annual_amount: amount,
+          discount_type: ovrFormType,
+          reason: ovrFormReason || undefined,
+        });
+        toast.success('Fee override updated');
+      } else {
+        await discountsApi.create({
+          student_id: viewing.id,
+          fee_structure_id: ovrFormFeeId,
+          annual_amount: amount,
+          discount_type: ovrFormType,
+          reason: ovrFormReason || undefined,
+        });
+        toast.success('Fee override set — this student now pays the custom amount');
+      }
+      const res = await discountsApi.list(viewing.id);
+      setViewOverrides(res.data);
+      setOvrFormFeeId('');
+      setOvrFormAmount('');
+      setOvrFormReason('');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Failed to save fee override');
+    } finally {
+      setOvrSaving(false);
+    }
+  };
+
+  const removeFeeOverride = async (overrideId: string) => {
+    if (!confirm('Remove this fee override? The student will revert to the grade fee.')) return;
+    try {
+      await discountsApi.remove(overrideId);
+      const res = await discountsApi.list(viewing!.id);
+      setViewOverrides(res.data);
+      toast.success('Fee override removed');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Failed to remove fee override');
     }
   };
 
@@ -864,6 +937,132 @@ export default function StudentsPage() {
                   <p className="mt-2 text-sm text-slate-400">No statements generated yet.</p>
                 )}
               </div>
+            </div>
+
+            {/* ── Fee override (per-student fee) ─────────────── */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Fee Override</h4>
+                  <p className="text-xs text-slate-500">
+                    Set a custom fee for this student only, without changing the grade fee.
+                  </p>
+                </div>
+                <span className="badge badge-info">{viewOverrides.length > 0 ? `${viewOverrides.length} override${viewOverrides.length === 1 ? '' : 's'} active` : 'Grade fee applies'}</span>
+              </div>
+
+              {viewLoading ? (
+                <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {viewFees.length === 0 && (
+                    <p className="text-sm text-slate-400">No fee structures set for this grade yet.</p>
+                  )}
+
+                  {viewFees.map((fee) => {
+                    const override = viewOverrides.find((o) => o.fee_structure_id === fee.id && o.is_active);
+                    const formOpen = ovrFormFeeId === fee.id;
+                    return (
+                      <div key={fee.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{fee.category}</p>
+                            <p className="text-xs text-slate-500">
+                              {override ? (
+                                <>
+                                  Paying <span className="font-semibold text-emerald-700">
+                                    R {Number(override.annual_amount).toLocaleString()}
+                                  </span>
+                                  {' '}{override.discount_type === 'percent' ? `${override.annual_amount}% off` : 'per year (override)'}
+                                  {' '}· Grade default: R {Number(fee.annual_amount).toLocaleString()}
+                                </>
+                              ) : (
+                                <>Grade fee: R {Number(fee.annual_amount).toLocaleString()} per year</>
+                              )}
+                            </p>
+                            {override?.reason && (
+                              <p className="mt-0.5 text-xs italic text-slate-500">Reason: {override.reason}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {override && (
+                              <button
+                                onClick={() => removeFeeOverride(override.id)}
+                                className="rounded-lg bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                              >
+                                Clear
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setOvrFormFeeId(formOpen ? '' : fee.id);
+                                setOvrFormType(override?.discount_type || 'override');
+                                setOvrFormAmount(override ? String(Number(override.annual_amount)) : '');
+                                setOvrFormReason(override?.reason || '');
+                              }}
+                              className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                            >
+                              {override ? 'Edit' : 'Set'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {formOpen && (
+                          <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-slate-600">Type</label>
+                                <select
+                                  value={ovrFormType}
+                                  onChange={(e) => setOvrFormType(e.target.value as 'override' | 'percent')}
+                                  className="input mt-1"
+                                >
+                                  <option value="override">Fixed amount (R)</option>
+                                  <option value="percent">Percentage off (%)</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-slate-600">
+                                  {ovrFormType === 'percent' ? 'Percentage off' : 'Custom annual amount (R)'}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={ovrFormAmount}
+                                  onChange={(e) => setOvrFormAmount(e.target.value)}
+                                  placeholder={ovrFormType === 'percent' ? 'e.g. 10' : `e.g. ${Number(fee.annual_amount).toLocaleString()}`}
+                                  className="input mt-1"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-600">Reason</label>
+                              <input
+                                type="text"
+                                maxLength={255}
+                                value={ovrFormReason}
+                                onChange={(e) => setOvrFormReason(e.target.value)}
+                                placeholder="e.g. Sibling discount, hardship, books trade-in…"
+                                className="input mt-1"
+                              />
+                            </div>
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <button onClick={() => setOvrFormFeeId('')} className="btn btn-outline">
+                                Cancel
+                              </button>
+                              <button onClick={saveFeeOverride} disabled={ovrSaving} className="btn btn-primary">
+                                {ovrSaving && <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />}
+                                {override ? 'Save Changes' : 'Set Override'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

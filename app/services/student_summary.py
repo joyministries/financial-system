@@ -23,11 +23,19 @@ class StudentSummaryService:
     async def summarize(
         self, student_id: str, academic_year: int
     ) -> StudentSummaryResponse:
+        from app.services.fee_override import (
+            effective_monthly,
+            get_student_fee_structures,
+            get_student_overrides,
+        )
+
         student = await self.db.get(Student, student_id)
         grade_id = student.grade_id if student else None
 
         # Fee schedules for the student's grade (all fee structures, one per month)
         schedules: list[MonthlySchedule] = []
+        # Per-student effective monthly installment keyed by fee_structure_id
+        eff_by_fsid: dict[str, Decimal] = {}
         if grade_id:
             stmt = (
                 select(MonthlySchedule)
@@ -39,6 +47,14 @@ class StudentSummaryService:
             )
             result = await self.db.execute(stmt)
             schedules = list(result.scalars().all())
+
+            fee_structures = await get_student_fee_structures(self.db, grade_id, academic_year)
+            if fee_structures:
+                overrides = await get_student_overrides(self.db, student_id, academic_year)
+                for fs in fee_structures:
+                    eff_by_fsid[fs.id] = effective_monthly(
+                        overrides.get(fs.id), fs.annual_amount, fs.monthly_installment
+                    )
 
         # Outstanding balances (one per schedule per student) — carries amounts paid
         balances: list[OutstandingBalance] = []
@@ -77,15 +93,16 @@ class StudentSummaryService:
 
             month_schedules = [s for s in schedules if s.month == month]
             for s in month_schedules:
-                required += s.amount_due
+                eff = eff_by_fsid.get(s.fee_structure_id, s.amount_due)
+                required += eff
                 b = balance_by_schedule.get(s.id)
                 if b:
                     paid += b.amount_paid
                     outstanding += b.balance
                 else:
                     # No balance record yet — nothing has been paid, so the full
-                    # scheduled amount is still outstanding.
-                    outstanding += s.amount_due
+                    # effective scheduled amount is still outstanding.
+                    outstanding += eff
 
             month_charges = [c for c in charges if c.month == month]
             for c in month_charges:

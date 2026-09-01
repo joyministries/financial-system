@@ -295,6 +295,11 @@ class InvoiceService:
     async def _fee_items(
         self, student_id: str, academic_year: int, month: int
     ) -> list[dict]:
+        from app.services.fee_override import (
+            effective_monthly,
+            get_student_overrides,
+        )
+
         student = await self.db.get(Student, student_id)
         if not student:
             return []
@@ -312,10 +317,15 @@ class InvoiceService:
         result = await self.db.execute(stmt)
         rows = result.all()
 
+        overrides = await get_student_overrides(self.db, student_id, academic_year)
+
         by_category: dict[str, Decimal] = {}
         for fee, schedule in rows:
+            eff = effective_monthly(
+                overrides.get(fee.id), fee.annual_amount, schedule.amount_due
+            )
             by_category[fee.category] = to_decimal(
-                by_category.get(fee.category, Decimal("0")) + schedule.amount_due
+                by_category.get(fee.category, Decimal("0")) + eff
             )
         return [
             {
