@@ -183,6 +183,14 @@ async def hard_delete_payment(
     for alloc in alloc_result.scalars().all():
         await service._reverse_allocation(alloc)
         await db.delete(alloc)
+
+    # Remove any reversal records that reference this payment
+    from app.models.payment import PaymentReversal
+    rev_stmt = select(PaymentReversal).where(PaymentReversal.payment_id == payment_id)
+    rev_result = await db.execute(rev_stmt)
+    for rev in rev_result.scalars().all():
+        await db.delete(rev)
+
     await db.flush()
 
     await AuditService(db).log(
