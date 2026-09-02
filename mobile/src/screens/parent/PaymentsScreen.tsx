@@ -24,6 +24,20 @@ const STATUS_STYLE: Record<string, string> = {
 const STATUS_FILTERS = ['all', 'verified', 'pending', 'rejected', 'reversed'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
 
+const PERIOD_FILTERS = ['all', '1m', '3m', '6m', 'year'] as const;
+type PeriodFilter = typeof PERIOD_FILTERS[number];
+const PERIOD_LABELS: Record<PeriodFilter, string> = {
+  all: 'All time', '1m': 'Last month', '3m': 'Last 3 months', '6m': 'Last 6 months', year: 'This year',
+};
+function periodStart(f: PeriodFilter): Date | null {
+  const now = new Date();
+  if (f === '1m') { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
+  if (f === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); return d; }
+  if (f === '6m') { const d = new Date(now); d.setMonth(d.getMonth() - 6); return d; }
+  if (f === 'year') return new Date(now.getFullYear(), 0, 1);
+  return null;
+}
+
 const money = (n: number) =>
   `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -34,6 +48,7 @@ export default function PaymentsScreen() {
   const [students, setStudents] = useState<Student[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   const loadData = useCallback(async () => {
     try {
@@ -66,13 +81,15 @@ export default function PaymentsScreen() {
   const studentMap = Object.fromEntries(students.map(s => [s.id, s]));
 
   const filteredPayments = useMemo(() => {
-    if (statusFilter === 'all') return payments;
-    return payments.filter(p => p.status === statusFilter);
-  }, [payments, statusFilter]);
+    let items = statusFilter === 'all' ? payments : payments.filter(p => p.status === statusFilter);
+    const start = periodStart(periodFilter);
+    if (start) items = items.filter(p => new Date(p.payment_date) >= start);
+    return items;
+  }, [payments, statusFilter, periodFilter]);
 
   return (
     <View style={styles.root}>
-      {/* Filter chips */}
+      {/* Status filter chips */}
       <View style={styles.filterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
           {STATUS_FILTERS.map(f => {
@@ -90,6 +107,25 @@ export default function PaymentsScreen() {
                 <View style={[styles.chipBadge, active && styles.chipBadgeActive]}>
                   <Text style={[styles.chipBadgeText, active && styles.chipBadgeTextActive]}>{count}</Text>
                 </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Period filter chips */}
+      <View style={styles.filterWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          {PERIOD_FILTERS.map(f => {
+            const active = periodFilter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setPeriodFilter(f)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{PERIOD_LABELS[f]}</Text>
               </TouchableOpacity>
             );
           })}

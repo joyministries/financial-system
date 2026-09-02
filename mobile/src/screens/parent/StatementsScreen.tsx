@@ -15,6 +15,20 @@ const money = (n: number) =>
 const STATUS_FILTERS = ['all', 'due', 'paid'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
 
+const PERIOD_FILTERS = ['all', '1m', '3m', '6m', 'year'] as const;
+type PeriodFilter = typeof PERIOD_FILTERS[number];
+const PERIOD_LABELS: Record<PeriodFilter, string> = {
+  all: 'All time', '1m': 'Last month', '3m': 'Last 3 months', '6m': 'Last 6 months', year: 'This year',
+};
+function periodStart(f: PeriodFilter): Date | null {
+  const now = new Date();
+  if (f === '1m') { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
+  if (f === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); return d; }
+  if (f === '6m') { const d = new Date(now); d.setMonth(d.getMonth() - 6); return d; }
+  if (f === 'year') return new Date(now.getFullYear(), 0, 1);
+  return null;
+}
+
 export default function StatementsScreen() {
   const navigation = useNavigation<any>();
   const unreadCount = useNotifications();
@@ -23,6 +37,7 @@ export default function StatementsScreen() {
   const [statements, setStatements] = useState<Statement[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   const loadStudents = useCallback(async () => {
     try {
@@ -77,7 +92,19 @@ export default function StatementsScreen() {
     });
   }
 
-  const filteredStatements = useMemo(() => filterStatements(statements, statusFilter), [statements, statusFilter]);
+  function filterByPeriod(items: Statement[], period: PeriodFilter): Statement[] {
+    const start = periodStart(period);
+    if (!start) return items;
+    return items.filter(s => {
+      const d = new Date(s.generated_at || s.due_date || '');
+      return d >= start;
+    });
+  }
+
+  const filteredStatements = useMemo(
+    () => filterStatements(filterByPeriod(statements, periodFilter), statusFilter),
+    [statements, statusFilter, periodFilter]
+  );
 
   const latestStatement = statements.length > 0 ? statements[statements.length - 1] : null;
   const totalOutstanding = latestStatement ? Number(latestStatement.closing_balance) || 0 : 0;
@@ -129,7 +156,7 @@ export default function StatementsScreen() {
           {STATUS_FILTERS.map(f => {
             const active = statusFilter === f;
             const labels: Record<StatusFilter, string> = { all: 'All', due: 'Outstanding', paid: 'Paid' };
-            const count = filterStatements(statements, f).length;
+            const count = filterStatements(filterByPeriod(statements, periodFilter), f).length;
             return (
               <TouchableOpacity
                 key={f}
@@ -141,6 +168,25 @@ export default function StatementsScreen() {
                 <View style={[styles.chipBadge, active && styles.chipBadgeActive]}>
                   <Text style={[styles.chipBadgeText, active && styles.chipBadgeTextActive]}>{count}</Text>
                 </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Period filter chips */}
+      <View style={styles.filterWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          {PERIOD_FILTERS.map(f => {
+            const active = periodFilter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setPeriodFilter(f)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{PERIOD_LABELS[f]}</Text>
               </TouchableOpacity>
             );
           })}

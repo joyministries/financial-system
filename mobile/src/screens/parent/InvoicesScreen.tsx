@@ -18,6 +18,35 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: colors.textMuted,
 };
 
+// ── Period filter helpers ──────────────────────────────────
+const PERIOD_FILTERS = ['all', '1m', '3m', '6m', 'year'] as const;
+type PeriodFilter = typeof PERIOD_FILTERS[number];
+const PERIOD_LABELS: Record<PeriodFilter, string> = {
+  all: 'All time',
+  '1m': 'Last month',
+  '3m': 'Last 3 months',
+  '6m': 'Last 6 months',
+  year: 'This year',
+};
+
+function periodStart(filter: PeriodFilter): Date | null {
+  const now = new Date();
+  if (filter === '1m') { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
+  if (filter === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); return d; }
+  if (filter === '6m') { const d = new Date(now); d.setMonth(d.getMonth() - 6); return d; }
+  if (filter === 'year') return new Date(now.getFullYear(), 0, 1);
+  return null;
+}
+
+function filterByPeriod(invoices: Invoice[], period: PeriodFilter): Invoice[] {
+  const start = periodStart(period);
+  if (!start) return invoices;
+  return invoices.filter(inv => {
+    const d = new Date(inv.created_at || inv.issue_date || '');
+    return d >= start;
+  });
+}
+
 export default function InvoicesScreen() {
   const navigation = useNavigation<any>();
   const unreadCount = useNotifications();
@@ -26,6 +55,7 @@ export default function InvoicesScreen() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   useEffect(() => {
     navigation.setOptions({
@@ -48,7 +78,7 @@ export default function InvoicesScreen() {
   const loadInvoices = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = { limit: 50 };
+      const params: any = { limit: 100 };
       if (selectedStudent) params.student_id = selectedStudent.id;
       const res = await invoicesApi.list(params);
       setInvoices(res.data?.items || []);
@@ -70,11 +100,13 @@ export default function InvoicesScreen() {
     await downloadFile(url, `invoice-${inv.invoice_number || inv.id}.pdf`);
   };
 
-  const totalAmount = useMemo(() => invoices.reduce((a, inv) => a + (Number(inv.subtotal) || 0), 0), [invoices]);
-  const unpaidAmount = useMemo(() => invoices.reduce((a, inv) => {
+  const filteredInvoices = useMemo(() => filterByPeriod(invoices, periodFilter), [invoices, periodFilter]);
+
+  const totalAmount = useMemo(() => filteredInvoices.reduce((a, inv) => a + (Number(inv.subtotal) || 0), 0), [filteredInvoices]);
+  const unpaidAmount = useMemo(() => filteredInvoices.reduce((a, inv) => {
     if (inv.status === 'paid') return a;
     return a + (Number(inv.balance_due) || 0);
-  }, 0), [invoices]);
+  }, 0), [filteredInvoices]);
 
   return (
     <View style={styles.root}>
@@ -99,36 +131,67 @@ export default function InvoicesScreen() {
         </ScrollView>
       )}
 
+      {/* Period filter chips */}
+      <View style={styles.filterWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          {PERIOD_FILTERS.map(f => {
+            const active = periodFilter === f;
+            const count = filterByPeriod(invoices, f).length;
+            return (
+              <TouchableOpacity
+                key={f}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setPeriodFilter(f)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{PERIOD_LABELS[f]}</Text>
+                <View style={[styles.chipBadge, active && styles.chipBadgeActive]}>
+                  <Text style={[styles.chipBadgeText, active && styles.chipBadgeTextActive]}>{count}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       <ScrollView
         style={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        {/* Summary banner */}
-        {invoices.length > 0 && (
+        {/* Summary banner — fixed layout so numbers don't overflow */}
+        {filteredInvoices.length > 0 && (
           <View style={styles.banner}>
             <View style={styles.bannerRow}>
               <View style={styles.bannerStat}>
                 <Text style={styles.bannerLabel}>Total</Text>
-                <Text style={styles.bannerAmount}>{money(totalAmount)}</Text>
+                <Text style={styles.bannerAmount} adjustsFontSizeToFit numberOfLines={1}>
+                  {money(totalAmount)}
+                </Text>
               </View>
-              <View style={[styles.bannerDivider]} />
+              <View style={styles.bannerDivider} />
               <View style={styles.bannerStat}>
                 <Text style={styles.bannerLabel}>Unpaid</Text>
-                <Text style={[styles.bannerAmount, { color: unpaidAmount > 0 ? colors.danger : colors.success }]}>
+                <Text
+                  style={[styles.bannerAmount, { color: unpaidAmount > 0 ? colors.danger : colors.success }]}
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                >
                   {money(unpaidAmount)}
                 </Text>
               </View>
-              <View style={[styles.bannerDivider]} />
+              <View style={styles.bannerDivider} />
               <View style={styles.bannerStat}>
-                <Text style={styles.bannerLabel}>Invoices</Text>
-                <Text style={styles.bannerAmount}>{invoices.length}</Text>
+                <Text style={styles.bannerLabel}>Count</Text>
+                <Text style={styles.bannerAmount} adjustsFontSizeToFit numberOfLines={1}>
+                  {filteredInvoices.length}
+                </Text>
               </View>
             </View>
           </View>
         )}
 
         {/* Invoice cards */}
-        {invoices.map(inv => {
+        {filteredInvoices.map(inv => {
           const statusColor = STATUS_COLORS[inv.status] || colors.warning;
           const invoiceDate = inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-ZA', {
             day: 'numeric', month: 'short', year: 'numeric',
@@ -187,11 +250,13 @@ export default function InvoicesScreen() {
           );
         })}
 
-        {invoices.length === 0 && !loading && (
+        {filteredInvoices.length === 0 && !loading && (
           <View style={styles.empty}>
             <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No invoices</Text>
-            <Text style={styles.emptySub}>Invoices will appear here when generated</Text>
+            <Text style={styles.emptySub}>
+              {periodFilter === 'all' ? 'Invoices will appear here when generated' : 'No invoices in this period'}
+            </Text>
           </View>
         )}
 
@@ -207,158 +272,87 @@ const styles = StyleSheet.create({
   tabsWrap: { maxHeight: 52 },
   tabsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: 8 },
   tab: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: radii.full,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.line,
+    paddingHorizontal: 18, paddingVertical: 8,
+    borderRadius: radii.full, backgroundColor: colors.card,
+    borderWidth: 1, borderColor: colors.line,
   },
   tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   tabText: { fontFamily: fonts.body, fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   tabTextActive: { color: colors.white },
 
+  filterWrap: { maxHeight: 52 },
+  filterContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: 8 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: radii.full, backgroundColor: colors.white,
+    borderWidth: 1, borderColor: colors.line, gap: 6,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontFamily: fonts.body, fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  chipTextActive: { color: colors.white },
+  chipBadge: {
+    minWidth: 20, height: 20, borderRadius: 10,
+    backgroundColor: colors.bgCanvas,
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
+  },
+  chipBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  chipBadgeText: { fontFamily: fonts.body, fontSize: 11, fontWeight: '700', color: colors.textSecondary },
+  chipBadgeTextActive: { color: colors.white },
+
   scroll: { flex: 1 },
 
-  /* Summary banner */
+  /* Summary banner — each stat gets flex:1 so numbers auto-shrink */
   banner: {
-    backgroundColor: colors.white,
-    borderRadius: radii.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: 14,
-    marginTop: 4,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.white, borderRadius: radii.md,
+    marginHorizontal: spacing.lg, marginBottom: 14, marginTop: 4,
+    padding: 14, borderWidth: 1, borderColor: colors.border,
   },
-  bannerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  bannerStat: { alignItems: 'center', flex: 1 },
-  bannerDivider: { width: 1, height: 32, backgroundColor: colors.line },
+  bannerRow: { flexDirection: 'row', alignItems: 'center' },
+  bannerStat: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  bannerDivider: { width: 1, height: 36, backgroundColor: colors.line },
   bannerLabel: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    fontFamily: fonts.body, fontSize: 10, fontWeight: '700',
+    color: colors.textSecondary, textTransform: 'uppercase',
+    letterSpacing: 0.5, marginBottom: 4,
   },
   bannerAmount: {
-    fontFamily: fonts.monoSemi,
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
+    fontFamily: fonts.monoSemi, fontSize: 14, fontWeight: '600',
+    color: colors.text, textAlign: 'center',
+    minWidth: 0, // allows adjustsFontSizeToFit to work
   },
 
   /* Invoice card */
   card: {
-    backgroundColor: colors.white,
-    borderRadius: radii.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
+    backgroundColor: colors.white, borderRadius: radii.md,
+    marginHorizontal: spacing.lg, marginBottom: 12,
+    borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
   },
   cardTop: {
-    padding: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    padding: 14, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  invoiceNumber: {
-    fontFamily: fonts.heading,
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontFamily: fonts.bodySemi,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  invoiceDate: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    fontWeight: '400',
-    color: colors.textMuted,
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  invoiceNumber: { fontFamily: fonts.heading, fontSize: 14, fontWeight: '700', color: colors.text },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontFamily: fonts.bodySemi, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
+  invoiceDate: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
 
-  cardBody: {
-    padding: 14,
-    paddingTop: 10,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  amountLabel: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  amountValue: {
-    fontFamily: fonts.monoSemi,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  description: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    fontWeight: '400',
-    color: colors.textMuted,
-    marginTop: 4,
-  },
+  cardBody: { padding: 14, paddingTop: 10 },
+  amountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  amountLabel: { fontFamily: fonts.body, fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+  amountValue: { fontFamily: fonts.monoSemi, fontSize: 15, fontWeight: '600', color: colors.text },
 
-  cardActions: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-  },
+  cardActions: { paddingHorizontal: 14, paddingBottom: 14 },
   downloadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.white,
-    paddingVertical: 10,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: colors.white, paddingVertical: 10, borderRadius: radii.sm,
+    borderWidth: 1, borderColor: colors.border,
   },
-  downloadBtnText: {
-    fontFamily: fonts.bodySemi,
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-  },
+  downloadBtnText: { fontFamily: fonts.bodySemi, fontSize: 13, fontWeight: '600', color: colors.text },
 
   empty: { alignItems: 'center', marginTop: 48, gap: 8 },
   emptyTitle: { fontFamily: fonts.heading, fontSize: 16, fontWeight: '700', color: colors.text },
-  emptySub: { fontFamily: fonts.body, fontSize: 13, fontWeight: '400', color: colors.textMuted },
+  emptySub: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
 });
