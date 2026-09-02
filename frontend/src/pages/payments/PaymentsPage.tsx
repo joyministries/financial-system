@@ -163,7 +163,7 @@ export default function PaymentsPage() {
 
   const handleDelete = async (p: Payment) => {
     const allowed = ['Cash', 'Card'];
-    if (!allowed.includes(p.payment_method)) {
+    if (!allowed.includes(p.payment_method) && p.status !== 'reversed') {
       toast.error(`Delete is only for Cash or Card payments. Use Reverse for ${p.payment_method}.`);
       return;
     }
@@ -406,8 +406,8 @@ export default function PaymentsPage() {
                         >
                           <Pencil className="h-3.5 w-3.5 text-blue-500" /> Edit
                         </button>
-                        {/* Delete — Cash/Card only: permanently removes the record */}
-                        {['Cash', 'Card'].includes(p.payment_method) && (
+                        {/* Delete — Cash/Card payments, OR any already-reversed payment */}
+                        {(['Cash', 'Card'].includes(p.payment_method) || p.status === 'reversed') && (
                           <button
                             onClick={() => handleDelete(p)}
                             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-rose-50 hover:text-rose-700"

@@ -169,11 +169,11 @@ async def hard_delete_payment(
         raise HTTPException(status_code=404, detail="Payment not found")
 
     allowed_methods = {"Cash", "Card"}
-    if payment.payment_method not in allowed_methods:
+    if payment.payment_method not in allowed_methods and payment.status != "reversed":
         from fastapi import HTTPException
         raise HTTPException(
             status_code=422,
-            detail=f"Hard delete is only allowed for Cash or Card payments. "
+            detail=f"Hard delete is only allowed for Cash/Card payments or already-reversed payments. "
                    f"This payment method is '{payment.payment_method}'. Use Reverse instead."
         )
 
