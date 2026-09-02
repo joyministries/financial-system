@@ -177,19 +177,27 @@ async def hard_delete_payment(
                    f"This payment method is '{payment.payment_method}'. Use Reverse instead."
         )
 
-    # Remove allocations first so FK constraints don't block the delete
+    # Remove all FK-referencing rows before deleting the payment:
+    # 1. Allocations (reverse their effect on outstanding balances first)
     alloc_stmt = select(PaymentAllocation).where(PaymentAllocation.payment_id == payment_id)
     alloc_result = await db.execute(alloc_stmt)
     for alloc in alloc_result.scalars().all():
         await service._reverse_allocation(alloc)
         await db.delete(alloc)
 
-    # Remove any reversal records that reference this payment
+    # 2. Reversal records
     from app.models.payment import PaymentReversal
     rev_stmt = select(PaymentReversal).where(PaymentReversal.payment_id == payment_id)
     rev_result = await db.execute(rev_stmt)
     for rev in rev_result.scalars().all():
         await db.delete(rev)
+
+    # 3. Receipts linked to this payment
+    from app.models.financial import Receipt
+    receipt_stmt = select(Receipt).where(Receipt.payment_id == payment_id)
+    receipt_result = await db.execute(receipt_stmt)
+    for receipt in receipt_result.scalars().all():
+        await db.delete(receipt)
 
     await db.flush()
 
