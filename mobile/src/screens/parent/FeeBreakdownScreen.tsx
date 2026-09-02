@@ -95,9 +95,7 @@ export default function FeeBreakdownScreen({ route }: any) {
           <View key={fee.id} style={styles.feeCard}>
             <View style={styles.feeCardHeader}>
               <Text style={styles.feeCategory}>{fee.category}</Text>
-              <View style={styles.planBadge}>
-                <Text style={styles.planText}>{fee.payment_plan}</Text>
-              </View>
+              <Text style={styles.planText}>{fee.payment_plan}</Text>
             </View>
             <View style={styles.feeAmounts}>
               <View style={styles.feeAmountItem}>
@@ -143,12 +141,12 @@ export default function FeeBreakdownScreen({ route }: any) {
       )}
 
       {/* Total Outstanding */}
-      <View style={[styles.totalCard, totalDue > 0 ? styles.totalCardRed : styles.totalCardGreen]}>
+      <View style={styles.totalCard}>
         <View style={styles.totalLeft}>
           <Ionicons
             name={totalDue > 0 ? 'alert-circle' : 'checkmark-circle'}
             size={24}
-            color={totalDue > 0 ? '#dc2626' : '#16a34a'}
+            color={totalDue > 0 ? colors.danger : colors.success}
           />
           <Text style={styles.totalLabel}>Total Outstanding</Text>
         </View>
@@ -181,9 +179,7 @@ export default function FeeBreakdownScreen({ route }: any) {
         onPress={() => navigation.navigate('FinancialDetails', { student, gradeId })}
       >
         <View style={styles.detailsBtnLeft}>
-          <View style={styles.detailsBtnIcon}>
-            <Ionicons name="document-text-outline" size={18} color={colors.accent} />
-          </View>
+          <Ionicons name="document-text-outline" size={20} color={colors.icon} />
           <View style={{ flex: 1 }}>
             <Text style={styles.detailsBtnTitle}>Financial Details</Text>
             <Text style={styles.detailsBtnSub}>View invoices, schedule & payment preference</Text>
@@ -207,8 +203,7 @@ const styles = StyleSheet.create({
   feeCard: { backgroundColor: colors.white, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.sm, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   feeCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   feeCategory: { fontFamily: fonts.body, fontSize: 15, fontWeight: '600', color: colors.text, flex: 1 },
-  planBadge: { backgroundColor: colors.accentSoft, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radii.full },
-  planText: { fontFamily: fonts.body, fontSize: 11, fontWeight: '600', color: colors.accent },
+  planText: { fontFamily: fonts.body, fontSize: 11, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
   feeAmounts: { flexDirection: 'row', alignItems: 'center' },
   feeAmountItem: { flex: 1, alignItems: 'center' },
   feeAmountLabel: { fontFamily: fonts.body, fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 2 },
@@ -216,16 +211,13 @@ const styles = StyleSheet.create({
   feeAmountDivider: { width: 1, height: 30, backgroundColor: colors.border },
   chargeCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.sm, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   chargeLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  chargeIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: spacing.sm },
   chargeInfo: { flex: 1 },
   chargeDesc: { fontFamily: fonts.body, fontSize: 15, fontWeight: '500', color: colors.text },
   chargeMonth: { fontFamily: fonts.body, fontSize: 11, fontWeight: '700', color: colors.textMuted, marginTop: 2 },
   chargeRight: { alignItems: 'flex-end' },
   chargeAmount: { fontFamily: fonts.body, fontSize: 15, fontWeight: '700', color: colors.text },
   chargeStatus: { fontFamily: fonts.body, fontSize: 11, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
-  totalCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: radii.md, padding: spacing.md, marginTop: spacing.sm },
-  totalCardRed: { backgroundColor: colors.dangerSoft },
-  totalCardGreen: { backgroundColor: colors.successSoft },
+  totalCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, marginTop: spacing.sm },
   totalLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   totalLabel: { fontFamily: fonts.body, fontSize: 15, fontWeight: '700', color: colors.text },
   totalAmount: { fontFamily: fonts.heading, fontSize: 18, fontWeight: '700', color: colors.text },
@@ -261,7 +253,6 @@ const styles = StyleSheet.create({
   },
   detailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.white, borderRadius: radii.md, padding: spacing.md, marginTop: spacing.sm, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   detailsBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  detailsBtnIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.accentSoft, justifyContent: 'center', alignItems: 'center' },
   detailsBtnTitle: { fontFamily: fonts.heading, fontSize: 15, fontWeight: '700', color: colors.text },
   detailsBtnSub: { fontFamily: fonts.body, fontSize: 12, fontWeight: '500', color: colors.textMuted, marginTop: 1 },
 });

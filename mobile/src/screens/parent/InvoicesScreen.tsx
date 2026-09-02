@@ -11,11 +11,11 @@ import useNotifications from '../../hooks/useNotifications';
 const money = (n: number) =>
   `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  paid: { bg: colors.successSoft, text: colors.success },
-  pending: { bg: colors.warningSoft, text: colors.warning },
-  overdue: { bg: colors.dangerSoft, text: colors.danger },
-  cancelled: { bg: '#F0F0F0', text: colors.textMuted },
+const STATUS_COLORS: Record<string, string> = {
+  paid: colors.success,
+  pending: colors.warning,
+  overdue: colors.danger,
+  cancelled: colors.textMuted,
 };
 
 export default function InvoicesScreen() {
@@ -129,18 +129,24 @@ export default function InvoicesScreen() {
 
         {/* Invoice cards */}
         {invoices.map(inv => {
-          const statusStyle = STATUS_COLORS[inv.status] || STATUS_COLORS.pending;
+          const statusColor = STATUS_COLORS[inv.status] || colors.warning;
           const invoiceDate = inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-ZA', {
             day: 'numeric', month: 'short', year: 'numeric',
           }) : '';
 
           return (
-            <View key={inv.id} style={styles.card}>
+            <TouchableOpacity
+              key={inv.id}
+              style={styles.card}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('InvoiceDetail', { invoice: inv })}
+            >
               <View style={styles.cardTop}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.invoiceNumber}>{inv.invoice_number || 'Invoice'}</Text>
-                  <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
-                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                  <View style={styles.statusPill}>
+                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                    <Text style={[styles.statusText, { color: statusColor }]}>
                       {inv.status?.charAt(0).toUpperCase() + inv.status?.slice(1)}
                     </Text>
                   </View>
@@ -173,11 +179,11 @@ export default function InvoicesScreen() {
 
               <View style={styles.cardActions}>
                 <TouchableOpacity style={styles.downloadBtn} onPress={() => handleDownload(inv)}>
-                  <Ionicons name="download-outline" size={16} color={colors.accentDark} />
+                  <Ionicons name="download-outline" size={16} color={colors.icon} />
                   <Text style={styles.downloadBtnText}>Download</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })}
 
@@ -277,14 +283,21 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: radii.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontFamily: fonts.body,
+    fontFamily: fonts.bodySemi,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   invoiceDate: {
     fontFamily: fonts.body,
@@ -332,15 +345,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.white,
     paddingVertical: 10,
     borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   downloadBtnText: {
-    fontFamily: fonts.heading,
+    fontFamily: fonts.bodySemi,
     fontSize: 13,
-    fontWeight: '700',
-    color: colors.accentDark,
+    fontWeight: '600',
+    color: colors.text,
   },
 
   empty: { alignItems: 'center', marginTop: 48, gap: 8 },

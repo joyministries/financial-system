@@ -103,9 +103,7 @@ export default function RegisterChildScreen() {
       <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Form intro card */}
         <View style={styles.introCard}>
-          <View style={styles.introIcon}>
-            <Ionicons name="person-add" size={22} color={colors.accent} />
-          </View>
+          <Ionicons name="person-add" size={26} color={colors.icon} style={{ marginBottom: 10 }} />
           <Text style={styles.introTitle}>Add a new child</Text>
           <Text style={styles.introSub}>Fill in the details below to register your child.</Text>
         </View>
@@ -225,7 +223,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   introCard: { marginHorizontal: spacing.lg, marginBottom: 16, backgroundColor: colors.bgCanvas, borderRadius: radii.md, padding: spacing.lg, alignItems: 'center' },
-  introIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accentSoft, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   introTitle: { fontFamily: fonts.heading, fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
   introSub: { fontFamily: fonts.body, fontSize: 13, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
   formCard: {

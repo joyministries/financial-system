@@ -7,18 +7,18 @@ import { colors, spacing, radii, fonts } from '../../theme';
 import { Student, Payment } from '../../types';
 import useNotifications from '../../hooks/useNotifications';
 
-const METHOD_ICONS: Record<string, { icon: string; bg: string; fg: string }> = {
-  bank_transfer: { icon: 'business-outline', bg: '#E8EAF0', fg: colors.primary },
-  cash: { icon: 'cash-outline', bg: colors.successSoft, fg: colors.success },
-  card: { icon: 'card-outline', bg: colors.accentSoft, fg: colors.accentDark },
-  online: { icon: 'globe-outline', bg: '#E8EAF0', fg: colors.primary },
+const METHOD_ICONS: Record<string, string> = {
+  bank_transfer: 'business-outline',
+  cash: 'cash-outline',
+  card: 'card-outline',
+  online: 'globe-outline',
 };
 
-const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  verified: { bg: colors.successSoft, fg: colors.success },
-  pending: { bg: colors.warningSoft, fg: colors.warning },
-  rejected: { bg: colors.dangerSoft, fg: colors.danger },
-  reversed: { bg: '#F1F1F6', fg: colors.textMuted },
+const STATUS_STYLE: Record<string, string> = {
+  verified: colors.success,
+  pending: colors.warning,
+  rejected: colors.danger,
+  reversed: colors.textMuted,
 };
 
 const STATUS_FILTERS = ['all', 'verified', 'pending', 'rejected', 'reversed'] as const;
@@ -103,17 +103,15 @@ export default function PaymentsScreen() {
       >
         {filteredPayments.map(p => {
           const student = studentMap[p.student_id];
-          const method = METHOD_ICONS[p.payment_method] || METHOD_ICONS.cash;
-          const statusStyle = STATUS_STYLE[p.status] || STATUS_STYLE.pending;
+          const methodIcon = METHOD_ICONS[p.payment_method] || METHOD_ICONS.cash;
+          const statusFg = STATUS_STYLE[p.status] || colors.warning;
           const payDate = new Date(p.payment_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
 
           return (
             <View key={p.id} style={styles.card}>
               {/* Top row: icon + info + amount */}
               <View style={styles.cardTop}>
-                <View style={[styles.methodIcon, { backgroundColor: method.bg }]}>
-                  <Ionicons name={method.icon as any} size={18} color={method.fg} />
-                </View>
+                <Ionicons name={methodIcon as any} size={20} color={colors.icon} style={{ marginRight: 12 }} />
                 <View style={styles.cardInfo}>
                   {student && <Text style={styles.cardName}>{student.first_name} {student.last_name}</Text>}
                   <Text style={styles.cardDate}>{payDate}</Text>
@@ -121,11 +119,11 @@ export default function PaymentsScreen() {
                 <Text style={styles.cardAmount}>{money(p.amount)}</Text>
               </View>
 
-              {/* Bottom row: status pill + method + ref */}
+              {/* Bottom row: status dot + method + ref */}
               <View style={styles.cardBottom}>
-                <View style={[styles.pill, { backgroundColor: statusStyle.bg }]}>
-                  <View style={[styles.pillDot, { backgroundColor: statusStyle.fg }]} />
-                  <Text style={[styles.pillText, { color: statusStyle.fg }]}>{p.status}</Text>
+                <View style={styles.pill}>
+                  <View style={[styles.pillDot, { backgroundColor: statusFg }]} />
+                  <Text style={[styles.pillText, { color: statusFg }]}>{p.status}</Text>
                 </View>
                 <Text style={styles.method}>{p.payment_method?.replace('_', ' ')}</Text>
                 {p.reference_number && <Text style={styles.ref}>#{p.reference_number}</Text>}
@@ -201,14 +199,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  methodIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
   cardInfo: { flex: 1 },
   cardName: {
     fontFamily: fonts.heading,
@@ -240,9 +230,6 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radii.full,
     gap: 5,
   },
   pillDot: { width: 6, height: 6, borderRadius: 3 },

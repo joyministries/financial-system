@@ -247,20 +247,20 @@ export default function PayOnlineScreen({ route }: any) {
   const renderStatusBanner = () => {
     if (paymentStatus === 'idle' || paymentStatus === 'initiating') return null;
 
-    const configs: Record<string, { icon: string; bg: string; fg: string }> = {
-      waiting: { icon: 'time-outline', bg: colors.warningSoft, fg: colors.warning },
-      polling: { icon: 'sync-outline', bg: colors.info + '15', fg: colors.info },
-      network_down: { icon: 'wifi-outline', bg: colors.dangerSoft, fg: colors.danger },
-      success: { icon: 'checkmark-circle', bg: colors.successSoft, fg: colors.success },
-      failed: { icon: 'close-circle', bg: colors.dangerSoft, fg: colors.danger },
-      cancelled: { icon: 'alert-circle-outline', bg: colors.warningSoft, fg: colors.warning },
-      error: { icon: 'warning-outline', bg: colors.dangerSoft, fg: colors.danger },
+    const configs: Record<string, { icon: string; fg: string }> = {
+      waiting: { icon: 'time-outline', fg: colors.warning },
+      polling: { icon: 'sync-outline', fg: colors.info },
+      network_down: { icon: 'wifi-outline', fg: colors.danger },
+      success: { icon: 'checkmark-circle', fg: colors.success },
+      failed: { icon: 'close-circle', fg: colors.danger },
+      cancelled: { icon: 'alert-circle-outline', fg: colors.warning },
+      error: { icon: 'warning-outline', fg: colors.danger },
     };
 
     const cfg = configs[paymentStatus] || configs.error;
 
     return (
-      <View style={[styles.statusBanner, { backgroundColor: cfg.bg }]}>
+      <View style={styles.statusBanner}>
         {paymentStatus === 'polling' ? (
           <ActivityIndicator size="small" color={cfg.fg} style={{ marginRight: 8 }} />
         ) : (
@@ -500,6 +500,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: spacing.md,
     marginBottom: spacing.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statusText: { fontFamily: fonts.body, fontSize: 13, fontWeight: '500', lineHeight: 18 },
   statusRetryBtn: {

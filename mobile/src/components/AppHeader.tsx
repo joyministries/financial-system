@@ -63,6 +63,15 @@ export default function AppHeader({
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
+  // Only show a back button on stack-pushed screens. The tab navigator
+  // renders AppHeader as its header too, but tabs never need a back affordance.
+  const TAB_ROUTE_NAMES = ['Dashboard', 'PaymentsTab', 'InvoicesTab', 'StatementsTab', 'ProfileTab'];
+  const isTabScreen = TAB_ROUTE_NAMES.includes(route?.name);
+  const canGoBack = Boolean(!isTabScreen && navigation?.canGoBack?.());
+  const handleBack = () => {
+    if (navigation?.goBack && canGoBack) navigation.goBack();
+  };
+
   // When used as a tab navigator header, merge React Navigation options with explicit props
   const title = options?.headerTitle || titleProp || route?.params?.title || '';
   const subtitle = options?.headerSubtitle || subtitleProp;
@@ -78,6 +87,11 @@ export default function AppHeader({
 
   const content = (
     <View style={styles.row}>
+      {canGoBack ? (
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={useFlat ? colors.text : colors.white} />
+        </TouchableOpacity>
+      ) : null}
       <View style={styles.textWrap}>
         <Text style={[styles.title, useFlat && styles.titleFlat]}>{title}</Text>
         {subtitle ? (
@@ -138,6 +152,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     zIndex: 1,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+    marginTop: -4,
   },
   textWrap: { flex: 1 },
   title: {

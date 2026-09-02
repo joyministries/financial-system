@@ -26,6 +26,7 @@ import EditProfileScreen from '../screens/parent/EditProfileScreen';
 import ChangePasswordScreen from '../screens/parent/ChangePasswordScreen';
 import NotificationsScreen from '../screens/parent/NotificationsScreen';
 import InvoicesScreen from '../screens/parent/InvoicesScreen';
+import InvoiceDetailScreen from '../screens/parent/InvoiceDetailScreen';
 import LoadingScreen from '../components/LoadingScreen';
 
 const Stack = createNativeStackNavigator();
@@ -93,37 +94,42 @@ function ParentNavigator() {
       <Stack.Screen
         name="RegisterChild"
         component={RegisterChildScreen}
-        options={{ header: (props) => <AppHeader title="Register Child" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Register Child" showBell={false} />, headerShown: true }}
       />
       <Stack.Screen
         name="FeeBreakdown"
         component={FeeBreakdownScreen}
-        options={{ header: (props) => <AppHeader title="Fee Breakdown" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Fee Breakdown" showBell={false} />, headerShown: true }}
       />
       <Stack.Screen
         name="FinancialDetails"
         component={FinancialDetailsScreen}
-        options={{ header: (props) => <AppHeader title="Financial Details" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Financial Details" showBell={false} />, headerShown: true }}
       />
       <Stack.Screen
         name="PayOnline"
         component={PayOnlineScreen}
-        options={{ header: (props) => <AppHeader title="Pay Online" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Pay Online" showBell={false} />, headerShown: true }}
       />
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{ header: (props) => <AppHeader title="Notifications" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Notifications" showBell={false} />, headerShown: true }}
+      />
+      <Stack.Screen
+        name="InvoiceDetail"
+        component={InvoiceDetailScreen}
+        options={{ header: (props) => <AppHeader {...props} title="Invoice" showBell={false} />, headerShown: true }}
       />
       <Stack.Screen
         name="EditProfile"
         component={EditProfileScreen}
-        options={{ header: (props) => <AppHeader title="Edit Profile" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Edit Profile" showBell={false} />, headerShown: true }}
       />
       <Stack.Screen
         name="ChangePassword"
         component={ChangePasswordScreen}
-        options={{ header: (props) => <AppHeader title="Change Password" showBell={false} />, headerShown: true }}
+        options={{ header: (props) => <AppHeader {...props} title="Change Password" showBell={false} />, headerShown: true }}
       />
     </Stack.Navigator>
   );

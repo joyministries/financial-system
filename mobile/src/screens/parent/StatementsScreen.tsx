@@ -159,11 +159,12 @@ export default function StatementsScreen() {
                 <Text style={styles.bannerLabel}>Current Balance</Text>
                 <Text style={styles.bannerAmount}>{money(totalOutstanding)}</Text>
               </View>
-              <View style={[styles.bannerPill, totalOutstanding > 0 ? styles.bannerPillRed : styles.bannerPillGreen]}>
-                <Ionicons
-                  name={totalOutstanding > 0 ? 'alert-circle' : 'checkmark-circle'}
-                  size={14}
-                  color={totalOutstanding > 0 ? colors.danger : colors.success}
+              <View style={styles.bannerPill}>
+                <View
+                  style={[
+                    styles.bannerDot,
+                    { backgroundColor: totalOutstanding > 0 ? colors.danger : colors.success },
+                  ]}
                 />
                 <Text style={[styles.bannerPillText, { color: totalOutstanding > 0 ? colors.danger : colors.success }]}>
                   {totalOutstanding > 0 ? 'Amount Due' : 'Paid Up'}
@@ -204,7 +205,7 @@ export default function StatementsScreen() {
                   </Text>
                 </View>
                 <TouchableOpacity style={styles.downloadBtn} onPress={() => handleDownload(stmt)}>
-                  <Ionicons name="download-outline" size={16} color={colors.accentDark} />
+                  <Ionicons name="download-outline" size={16} color={colors.icon} />
                 </TouchableOpacity>
               </View>
 
@@ -342,13 +343,9 @@ const styles = StyleSheet.create({
   bannerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radii.full,
-    gap: 4,
+    gap: 5,
   },
-  bannerPillRed: { backgroundColor: colors.dangerSoft },
-  bannerPillGreen: { backgroundColor: colors.successSoft },
+  bannerDot: { width: 6, height: 6, borderRadius: 3 },
   bannerPillText: {
     fontFamily: fonts.body,
     fontSize: 11,
@@ -423,7 +420,8 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },

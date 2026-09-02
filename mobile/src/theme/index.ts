@@ -22,32 +22,36 @@ export const colors = {
   primaryLight: '#1D2E5A',
   primaryGlow: '#2B3E73',
 
-  // Accent gold
+  // Accent gold (used sparingly — brand only)
   accent: '#C08A34',
   accentDark: '#A6742A',
-  accentSoft: '#F5E7CB',
+  accentSoft: '#EFEFEF',
 
-  // Status
+  // Status (text/icon colors only — never as chip backgrounds)
   success: '#1E9E64',
-  successSoft: '#DFF3E9',
+  successSoft: '#ECF1EE',
   warning: '#C68A2E',
-  warningSoft: '#FAEED7',
+  warningSoft: '#F3F1EB',
   danger: '#D14B3F',
-  dangerSoft: '#FBE6E3',
+  dangerSoft: '#F4EEED',
   info: '#3b82f6',
 
-  // Neutrals
+  // Icons (neutral ink — the default for every icon)
+  icon: '#5B6272',
+  iconMuted: '#9AA0AE',
+
+  // Neutrals — cool gray surfaces, no cream
   white: '#ffffff',
   black: '#000000',
-  bg: '#F7F4EE',
-  bgCanvas: '#EAE5DA',
+  bg: '#F6F7F9',
+  bgCanvas: '#EAECF0',
   card: '#ffffff',
-  surface: '#F7F4EE',
-  line: '#E9E3D6',
-  border: '#E9E3D6',
+  surface: '#F6F7F9',
+  line: '#E4E7EC',
+  border: '#E4E7EC',
   text: '#16213F',
-  textSecondary: '#6B7186',
-  textMuted: '#9A9FB0',
+  textSecondary: '#5B6272',
+  textMuted: '#9AA0AE',
   placeholder: '#d1d5db',
 };
 

@@ -2,16 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { studentsApi, financialApi } from '../../api/client';
+import { studentsApi, financialApi, invoicesApi } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { Student, StudentSummary, RegistrationFeeResponse, NextDueDateResponse } from '../../types';
+import { Student, StudentSummary, RegistrationFeeResponse, NextDueDateResponse, Invoice } from '../../types';
 import useNotifications from '../../hooks/useNotifications';
 
-/** Spec: avatar accent ring colors cycle */
-const AVATAR_COLORS = ['#4A7AE5', '#D2A24C', '#1E9E64', '#E3486D'];
-
-const money = (n: number) =>
+export const money = (n: number) =>
   `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ParentDashboard() {
@@ -22,6 +19,7 @@ export default function ParentDashboard() {
   const [summaries, setSummaries] = useState<Record<string, StudentSummary>>({});
   const [regFees, setRegFees] = useState<Record<string, RegistrationFeeResponse>>({});
   const [nextDueDates, setNextDueDates] = useState<NextDueDateResponse[]>([]);
+  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const firstName = useMemo(() => {
@@ -74,6 +72,12 @@ export default function ParentDashboard() {
           })
       );
       setNextDueDates(dueDates);
+
+      // Recent invoices (across the parent's children) for the transactions feed
+      try {
+        const invRes = await invoicesApi.list({ limit: 4 });
+        setRecentInvoices(invRes.data?.items || []);
+      } catch { /* no invoices */ }
     } catch { /* silent */ }
   }, []);
 
@@ -84,6 +88,24 @@ export default function ParentDashboard() {
   const totalOutstanding = useMemo(() => Object.values(summaries).reduce((a, s) => a + (Number(s?.total_outstanding) || 0), 0), [summaries]);
   const activeCount = students.filter(s => s.is_active && s.registration_status === 'approved').length;
   const pendingCount = students.filter(s => s.registration_status === 'pending').length;
+
+  /** Next due date across all children (soonest) */
+  const nextDue = useMemo(() => {
+    const valid = nextDueDates.filter(d => d.next_due_date);
+    if (valid.length === 0) return null;
+    return valid.reduce((a, b) => (new Date(a.next_due_date!) < new Date(b.next_due_date!) ? a : b));
+  }, [nextDueDates]);
+
+  /** Aggregate outstanding with the month label for the hero meta */
+  const outstandingMeta = useMemo(() => {
+    if (nextDue) {
+      const d = new Date(nextDue.next_due_date!);
+      const monthName = d.toLocaleDateString('en-ZA', { month: 'long' });
+      return `${monthName} fees — due ${d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}`;
+    }
+    if (pendingCount > 0) return 'Awaiting admin approval';
+    return 'All fees up to date';
+  }, [nextDue, pendingCount]);
 
   /** Find first child with outstanding balance for quick-pay */
   const firstOwingChild = useMemo(() => {
@@ -131,64 +153,39 @@ export default function ParentDashboard() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        {/* ── Stat cards ── */}
+        {/* ── Hero: Outstanding balance ── */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroLabel}>Outstanding balance</Text>
+          <Text style={styles.heroValue}>{money(totalOutstanding)}</Text>
+          <Text style={styles.heroMeta}>{outstandingMeta}</Text>
+        </View>
+
+        {/* ── Stat grid: Paid this term / Next due ── */}
         <View style={styles.statGrid}>
-          {/* Total Paid */}
           <View style={styles.statCard}>
-            <View style={[styles.statIconWrap, { backgroundColor: colors.successSoft }]}>
-              <Ionicons name="trending-up" size={16} color={colors.success} />
-            </View>
-            <Text style={styles.statLabel}>Total Paid</Text>
+            <Text style={styles.statLabel}>Paid this term</Text>
             <Text style={styles.statAmount}>{money(totalPaid)}</Text>
           </View>
-          {/* Outstanding — full width with Pay button */}
-          {totalOutstanding > 0 ? (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.statCardFull}
-              onPress={handlePayNow}
-            >
-              <View style={styles.statFullTop}>
-                <View style={[styles.statIconWrap, { backgroundColor: colors.dangerSoft }]}>
-                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.statLabel}>Outstanding</Text>
-                  <Text style={styles.statAmount}>{money(totalOutstanding)}</Text>
-                </View>
-              </View>
-              <View style={styles.payNowRow}>
-                <Ionicons name="card-outline" size={16} color={colors.white} />
-                <Text style={styles.payNowText}>Pay Now</Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.white} />
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.statCard}>
-              <View style={[styles.statIconWrap, { backgroundColor: colors.dangerSoft }]}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              </View>
-              <Text style={styles.statLabel}>Outstanding</Text>
-              <Text style={[styles.statAmount, { color: colors.success }]}>{money(0)}</Text>
-            </View>
-          )}
-          {/* Active students */}
           <View style={styles.statCard}>
-            <View style={[styles.statIconWrap, { backgroundColor: '#E8EAF0' }]}>
-              <Ionicons name="school" size={16} color={colors.primary} />
-            </View>
-            <Text style={styles.statLabel}>Active</Text>
-            <Text style={styles.statAmount}>{activeCount}</Text>
-          </View>
-          {/* Pending */}
-          <View style={styles.statCard}>
-            <View style={[styles.statIconWrap, { backgroundColor: colors.warningSoft }]}>
-              <Ionicons name="time" size={16} color={colors.warning} />
-            </View>
-            <Text style={styles.statLabel}>Pending</Text>
-            <Text style={styles.statAmount}>{pendingCount}</Text>
+            <Text style={styles.statLabel}>Next due</Text>
+            <Text style={styles.statAmount}>
+              {nextDue?.next_due_date
+                ? new Date(nextDue.next_due_date).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+                : '—'}
+            </Text>
           </View>
         </View>
+
+        {/* ── Action: Pay outstanding balance ── */}
+        {totalOutstanding > 0 && firstOwingChild && (
+          <TouchableOpacity style={styles.actionCard} activeOpacity={0.8} onPress={handlePayNow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actionTitle}>Pay outstanding balance</Text>
+              <Text style={styles.actionSub}>Card, bank transfer or PayFast</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={18} color={colors.text} />
+          </TouchableOpacity>
+        )}
 
         {/* ── Next Due Date Cards ── */}
         {nextDueDates.filter(d => d.next_due_date).length > 0 && (
@@ -258,7 +255,7 @@ export default function ParentDashboard() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Children</Text>
           <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('RegisterChild')}>
-            <Ionicons name="add" size={16} color={colors.accentDark} />
+            <Ionicons name="add" size={16} color={colors.textSecondary} />
             <Text style={styles.addBtnText}>Add Child</Text>
           </TouchableOpacity>
         </View>
@@ -268,7 +265,6 @@ export default function ParentDashboard() {
           const s = summaries[child.id];
           const initials = `${child.first_name?.[0] || ''}${child.last_name?.[0] || ''}`.toUpperCase();
           const outstanding = Number(s?.total_outstanding) || 0;
-          const ringColor = AVATAR_COLORS[idx % AVATAR_COLORS.length];
 
           return (
             <View key={child.id} style={styles.childCard}>
@@ -277,11 +273,9 @@ export default function ParentDashboard() {
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('FeeBreakdown', { student: child, gradeId: child.grade_id, summary: s })}
               >
-                {/* Colored-ring avatar */}
-                <View style={[styles.avatarRing, { borderColor: ringColor }]}>
-                  <View style={[styles.avatarInner, { backgroundColor: ringColor + '18' }]}>
-                    <Text style={[styles.avatarText, { color: ringColor }]}>{initials}</Text>
-                  </View>
+                {/* Neutral monogram */}
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initials}</Text>
                 </View>
 
                 <View style={styles.childInfo}>
@@ -327,6 +321,45 @@ export default function ParentDashboard() {
           </View>
         )}
 
+        {/* ── Recent transactions ── */}
+        {recentInvoices.length > 0 && (
+          <View style={styles.recentSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent transactions</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('InvoicesTab')}>
+                <Text style={styles.recentSeeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            {recentInvoices.map(inv => {
+              const isPaid = inv.status === 'paid';
+              const child = students.find(s => s.id === inv.student_id);
+              const invDate = inv.created_at ? new Date(inv.created_at) : null;
+              const rowSub = isPaid
+                ? `Paid, ${invDate ? invDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : ''}`
+                : `${String(inv.status || '').charAt(0).toUpperCase()}${String(inv.status || '').slice(1)}`;
+              return (
+                <TouchableOpacity
+                  key={inv.id}
+                  style={styles.listRow}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('InvoiceDetail', { invoice: inv })}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{child ? `${child.first_name} ${child.last_name}` : inv.invoice_number}</Text>
+                    <Text style={styles.rowSub}>{rowSub} · {inv.invoice_number}</Text>
+                  </View>
+                  <View style={styles.rowRight}>
+                    <Text style={[styles.rowValue, !isPaid && { color: colors.danger }]}>
+                      {money(Number(inv.subtotal) || 0)}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -338,31 +371,51 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingTop: 16 },
 
-  /* Stat grid — 2×2 */
+  /* Hero card — outstanding balance (dark panel) */
+  heroCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
+    padding: 20,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  heroLabel: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.78)',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  heroValue: {
+    fontFamily: fonts.headingExtra,
+    fontSize: 30,
+    fontWeight: '800',
+    color: colors.white,
+    marginBottom: 8,
+  },
+  heroMeta: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)',
+  },
+
+  /* Stat grid — two columns */
   statGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    marginBottom: 20,
+    marginBottom: spacing.sm,
   },
   statCard: {
-    width: '48%',
-    flexGrow: 1,
-    minWidth: 140,
+    flex: 1,
     backgroundColor: colors.white,
     borderRadius: radii.md,
     padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  statIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
   },
   statLabel: {
     fontFamily: fonts.body,
@@ -380,35 +433,79 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  /* Full-width outstanding card with pay button */
-  statCardFull: {
-    width: '100%',
+  /* Action card — pay outstanding */
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
+    padding: 16,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  actionTitle: {
+    fontFamily: fonts.heading,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  actionSub: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+  },
+
+  /* Recent transactions */
+  recentSection: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  recentSeeAll: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.accentDark,
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: colors.white,
     borderRadius: radii.md,
     padding: 14,
+    marginHorizontal: spacing.lg,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 10,
   },
-  statFullTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  payNowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    paddingVertical: 11,
-    borderRadius: radii.sm,
-  },
-  payNowText: {
+  rowTitle: {
     fontFamily: fonts.heading,
     fontSize: 14,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.text,
+  },
+  rowSub: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowValue: {
+    fontFamily: fonts.monoSemi,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
   },
 
   /* Registration fee banner */
@@ -554,18 +651,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.accentSoft,
-    paddingHorizontal: 12,
+    paddingHorizontal: 4,
     paddingVertical: 6,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.accent,
   },
   addBtnText: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.accentDark,
+    fontFamily: fonts.bodySemi,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
 
   /* Child card */
@@ -583,26 +676,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
   },
-  avatarRing: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2.5,
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#E8EBF0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  avatarInner: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   avatarText: {
     fontFamily: fonts.headingExtra,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
+    color: colors.text,
   },
   childInfo: { flex: 1 },
   childName: {

@@ -4,6 +4,7 @@
  *
  * Usage: call `registerForPushNotifications()` once after login.
  */
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
@@ -41,8 +42,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
       return null;
     }
 
+    // Expo push tokens require an EAS projectId. When it isn't configured
+    // (app.json extra.eas.projectId is empty in dev), getExpoPushTokenAsync
+    // throws "No projectId found" — skip registration gracefully instead.
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) {
+      console.warn('[Push] No EAS projectId configured — skipping push registration');
+      return null;
+    }
+
     // Get the Expo Push Token
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const pushToken = tokenData.data;
 
     // Android needs a notification channel

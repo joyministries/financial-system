@@ -156,8 +156,9 @@ export const financialApi = {
 
 // ── Invoices ──────────────────────────────────────
 export const invoicesApi = {
-  list: (params?: { student_id?: string; limit?: number }) =>
+  list: (params?: { student_id?: string; limit?: number; month?: number; status?: string }) =>
     api.get<PageResponse<Invoice>>('/invoices/', { params }),
+  get: (id: string) => api.get<Invoice>(`/invoices/${encodeURIComponent(id)}`),
   downloadUrl: (id: string) => `${API_BASE}/invoices/${encodeURIComponent(id)}/download`,
 };
 

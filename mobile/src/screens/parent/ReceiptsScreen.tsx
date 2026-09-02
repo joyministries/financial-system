@@ -107,9 +107,7 @@ export default function ReceiptsScreen() {
           return (
             <View key={r.id} style={styles.card}>
               <View style={styles.cardLeft}>
-                <View style={styles.iconWrap}>
-                  <Ionicons name="receipt-outline" size={18} color={colors.accentDark} />
-                </View>
+                <Ionicons name="receipt-outline" size={20} color={colors.icon} style={{ marginRight: 12 }} />
                 <View style={styles.cardInfo}>
                   <Text style={styles.receiptCode}>{r.receipt_number}</Text>
                   {student && <Text style={styles.receiptStudent}>{student.first_name} {student.last_name}</Text>}
@@ -119,7 +117,7 @@ export default function ReceiptsScreen() {
               <View style={styles.cardRight}>
                 <Text style={styles.receiptAmount}>{money(r.amount)}</Text>
                 <TouchableOpacity style={styles.downloadBtn} onPress={() => handleDownload(r)}>
-                  <Ionicons name="download-outline" size={14} color={colors.accentDark} />
+                  <Ionicons name="download-outline" size={14} color={colors.icon} />
                   <Text style={styles.downloadText}>PDF</Text>
                 </TouchableOpacity>
               </View>
@@ -193,15 +191,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    backgroundColor: colors.accentSoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
   cardInfo: { flex: 1 },
   receiptCode: {
     fontFamily: fonts.heading,
@@ -236,14 +225,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radii.sm,
-    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
     gap: 4,
   },
   downloadText: {
     fontFamily: fonts.body,
     fontSize: 11,
     fontWeight: '700',
-    color: colors.accentDark,
+    color: colors.textSecondary,
   },
 
   empty: { alignItems: 'center', marginTop: 48, gap: 8 },

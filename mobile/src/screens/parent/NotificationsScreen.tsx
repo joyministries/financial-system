@@ -12,12 +12,12 @@ import { useNavigation } from '@react-navigation/native';
 import { notificationsApi, NotificationItem } from '../../api/client';
 import { colors, spacing, radii, fonts } from '../../theme';
 
-const CATEGORY_ICONS: Record<string, { name: string; color: string }> = {
-  payment_received: { name: 'card-outline', color: colors.success },
-  parent_registered: { name: 'person-add-outline', color: colors.primary },
-  student_applied: { name: 'school-outline', color: colors.accent },
-  payment_reversed: { name: 'alert-circle-outline', color: colors.danger },
-  system: { name: 'cog-outline', color: colors.textMuted },
+const CATEGORY_ICONS: Record<string, string> = {
+  payment_received: 'card-outline',
+  parent_registered: 'person-add-outline',
+  student_applied: 'school-outline',
+  payment_reversed: 'alert-circle-outline',
+  system: 'cog-outline',
 };
 
 function timeAgo(dateStr: string): string {
@@ -90,9 +90,12 @@ export default function NotificationsScreen() {
         onPress={() => handlePress(item)}
         activeOpacity={0.7}
       >
-        <View style={[styles.iconWrap, { backgroundColor: icon.color + '15' }]}>
-          <Ionicons name={icon.name as any} size={20} color={icon.color} />
-        </View>
+        <Ionicons
+          name={icon as any}
+          size={20}
+          color={colors.icon}
+          style={{ marginTop: 2, marginRight: spacing.sm }}
+        />
         <View style={styles.itemContent}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.itemMessage} numberOfLines={2}>{item.message}</Text>
@@ -163,15 +166,6 @@ const styles = StyleSheet.create({
   },
   itemUnread: {
     borderColor: colors.accent,
-    backgroundColor: colors.accentSoft + '08',
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
   },
   itemContent: { flex: 1 },
   itemTitle: { fontFamily: fonts.heading, fontSize: 14, fontWeight: '700', color: colors.text },

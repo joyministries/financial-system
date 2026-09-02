@@ -20,11 +20,38 @@ router = APIRouter(prefix="/uploads", tags=["Bulk Uploads"])
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+ALLOWED_UPLOAD_CONTENT_TYPES = {
+    "text/csv",
+    "text/plain",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
 
 async def _read_csv(file: UploadFile) -> list[dict]:
-    """Read an uploaded CSV/Excel file and return list of row dicts."""
-    content = await file.read()
-    text = content.decode("utf-8-sig")  # handles BOM
+    """Read an uploaded CSV file and return list of row dicts.
+
+    Validates size and content type BEFORE reading the whole stream into
+    memory (admin-only endpoint, but a crafted upload must not be able to
+    exhaust server memory or produce a raw 500 on non-UTF-8 bytes).
+    """
+    if file.content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file.content_type}'. Allowed: CSV/Excel (text/csv)",
+        )
+    max_bytes = get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the {get_settings().MAX_UPLOAD_SIZE_MB} MB upload limit",
+        )
+    try:
+        text = content.decode("utf-8-sig")  # handles BOM
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Uploaded file is not valid UTF-8 text")
     reader = csv.DictReader(io.StringIO(text))
     return [row for row in reader]
 

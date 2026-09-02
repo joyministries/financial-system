@@ -144,22 +144,22 @@ export default function FinancialDetailsScreen({ route }: any) {
         {tab === 'schedule' && (
           <>
             <View style={styles.cardRow}>
-              <View style={[styles.summaryCard, { backgroundColor: colors.warningSoft }]}>
-                <Ionicons name="wallet-outline" size={18} color={colors.warning} />
+              <View style={styles.summaryCard}>
+                <Ionicons name="wallet-outline" size={18} color={colors.icon} />
                 <Text style={styles.summaryLabel}>Required</Text>
                 <Text style={[styles.summaryValue, { color: colors.warning }]}>
                   {money(totalRequired)}
                 </Text>
               </View>
-              <View style={[styles.summaryCard, { backgroundColor: colors.successSoft }]}>
-                <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
+              <View style={styles.summaryCard}>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.icon} />
                 <Text style={styles.summaryLabel}>Paid</Text>
                 <Text style={[styles.summaryValue, { color: colors.success }]}>
                   {money(totalPaid)}
                 </Text>
               </View>
-              <View style={[styles.summaryCard, { backgroundColor: colors.dangerSoft }]}>
-                <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+              <View style={styles.summaryCard}>
+                <Ionicons name="alert-circle-outline" size={18} color={colors.icon} />
                 <Text style={styles.summaryLabel}>Outstanding</Text>
                 <Text style={[styles.summaryValue, { color: colors.danger }]}>
                   {money(outstanding)}
@@ -203,8 +203,6 @@ export default function FinancialDetailsScreen({ route }: any) {
               const status = balance <= 0 ? 'PAID' : balance < fees ? 'PARTIAL' : 'DUE';
               const statusColor =
                 status === 'PAID' ? colors.success : status === 'PARTIAL' ? colors.warning : colors.danger;
-              const statusBg =
-                status === 'PAID' ? colors.successSoft : status === 'PARTIAL' ? colors.warningSoft : colors.dangerSoft;
 
               return (
                 <View
@@ -212,22 +210,21 @@ export default function FinancialDetailsScreen({ route }: any) {
                   style={[styles.monthCard, isCurrentMonth && styles.monthCardCurrent]}
                 >
                   <View style={styles.monthHeader}>
-                    <View style={[styles.statusIcon, { backgroundColor: statusBg }]}>
-                      <Ionicons
-                        name={
-                          status === 'PAID'
-                            ? 'checkmark-circle'
-                            : status === 'PARTIAL'
-                              ? 'time'
-                              : 'alert-circle'
-                        }
-                        size={18}
-                        color={statusColor}
-                      />
-                    </View>
+                    <Ionicons
+                      name={
+                        status === 'PAID'
+                          ? 'checkmark-circle'
+                          : status === 'PARTIAL'
+                            ? 'time'
+                            : 'alert-circle'
+                      }
+                      size={20}
+                      color={statusColor}
+                    />
                     <Text style={styles.monthName}>{MONTHS[monthIdx]}</Text>
                     {isCurrentMonth && (
                       <View style={styles.nowBadge}>
+                        <View style={styles.nowDot} />
                         <Text style={styles.nowBadgeText}>Now</Text>
                       </View>
                     )}
@@ -252,7 +249,8 @@ export default function FinancialDetailsScreen({ route }: any) {
                     </View>
                   </View>
 
-                  <View style={[styles.monthFooter, { backgroundColor: statusBg }]}>
+                  <View style={styles.monthFooter}>
+                    <View style={[styles.monthDot, { backgroundColor: statusColor }]} />
                     <Text style={[styles.monthStatus, { color: statusColor }]}>{status}</Text>
                   </View>
                 </View>
@@ -273,16 +271,20 @@ export default function FinancialDetailsScreen({ route }: any) {
               <View key={inv.id} style={styles.invoiceCard}>
                 <View style={styles.invoiceHeader}>
                   <Text style={styles.invoiceNumber}>Invoice #{inv.invoice_number}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      inv.status === 'paid'
-                        ? styles.statusPaid
-                        : inv.status === 'void'
-                          ? styles.statusOverdue
-                          : styles.statusPending,
-                    ]}
-                  >
+                  <View style={styles.statusBadge}>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        {
+                          backgroundColor:
+                            inv.status === 'paid'
+                              ? colors.success
+                              : inv.status === 'void'
+                                ? colors.danger
+                                : colors.warning,
+                        },
+                      ]}
+                    />
                     <Text
                       style={[
                         styles.statusText,
@@ -431,13 +433,13 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: spacing.md, gap: spacing.sm },
   cardRow: { flexDirection: 'row', gap: spacing.sm },
-  summaryCard: { flex: 1, alignItems: 'center', padding: spacing.sm, borderRadius: radii.md, gap: 2 },
+  summaryCard: { flex: 1, alignItems: 'center', padding: spacing.sm, borderRadius: radii.md, gap: 2, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
   summaryLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
   summaryValue: { fontSize: 13, fontWeight: '700' },
   creditSection: { marginTop: spacing.md, gap: spacing.sm },
   creditHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   creditTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-  creditCard: { backgroundColor: colors.accentSoft, borderRadius: radii.md, padding: spacing.md, gap: 4 },
+  creditCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, gap: 4 },
   creditRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   creditType: { fontSize: 14, fontWeight: '700', color: colors.text },
   creditAmount: { fontSize: 14, fontWeight: '700', color: colors.success },
@@ -446,26 +448,25 @@ const styles = StyleSheet.create({
   monthCard: { backgroundColor: colors.white, borderRadius: radii.md, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   monthCardCurrent: { borderColor: colors.accent, borderWidth: 1.5 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
-  statusIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   monthName: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
-  nowBadge: { backgroundColor: colors.accent, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radii.sm },
-  nowBadgeText: { fontSize: 10, fontWeight: '700', color: colors.white },
+  nowBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  nowBadgeText: { fontSize: 10, fontWeight: '700', color: colors.accent },
   monthBody: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   monthCol: { flex: 1, alignItems: 'center' },
   monthColLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '500', marginBottom: 2 },
   monthColValue: { fontSize: 13, fontWeight: '600', color: colors.text },
   monthDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  monthFooter: { paddingVertical: spacing.xs, alignItems: 'center', borderBottomLeftRadius: radii.md, borderBottomRightRadius: radii.md },
+  monthFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: spacing.xs },
+  monthDot: { width: 6, height: 6, borderRadius: 3 },
   monthStatus: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl * 2, gap: spacing.sm },
   emptyText: { fontSize: 14, color: colors.textMuted },
   invoiceCard: { backgroundColor: colors.white, borderRadius: radii.md, padding: spacing.md, gap: spacing.sm, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
   invoiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   invoiceNumber: { fontSize: 15, fontWeight: '700', color: colors.text },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radii.sm },
-  statusPaid: { backgroundColor: colors.successSoft },
-  statusOverdue: { backgroundColor: colors.dangerSoft },
-  statusPending: { backgroundColor: colors.warningSoft },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11, fontWeight: '700' },
   statusTextPaid: { color: colors.success },
   statusTextOverdue: { color: colors.danger },
