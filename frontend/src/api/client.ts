@@ -371,6 +371,7 @@ export const paymentsApi = {
     notes?: string;
   }) => api.put(`/payments/${paymentId}`, data),
   delete: (paymentId: string) => api.delete(`/payments/${paymentId}`),
+  hardDelete: (paymentId: string) => api.delete(`/payments/${paymentId}/hard-delete`),
 };
 
 // ── Financial ─────────────────────────────────────────────

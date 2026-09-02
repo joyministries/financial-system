@@ -128,25 +128,70 @@ async def count_payments(
     return CountResponse(total=await service.count_all(month=month, year=year, search=search))
 
 
-# ── Void (delete) a payment — MUST be before /{payment_id} ────────
-
-
+# ── Void a payment (keeps record, marks reversed) ──────────
 @router.delete("/{payment_id}")
 async def void_payment(
     payment_id: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin")),
 ):
-    """Void (delete) a payment. Reverses any allocations and marks it as reversed."""
+    """Void a payment — reverses allocations and marks it as reversed.
+    The payment record is kept for audit purposes."""
     from app.services.audit import AuditService
 
     service = PaymentService(db)
     reversal = await service.void(payment_id, user.id)
 
     audit = AuditService(db)
-    await audit.log("payment", payment_id, "void", user.id, new_values={"reason": "Deleted by admin"})
-
+    await audit.log("payment", payment_id, "void", user.id, new_values={"reason": "Voided by admin"})
+    await db.commit()
     return {"detail": "Payment voided", "reversal_id": reversal.id}
+
+
+# ── Hard-delete a payment (Cash/Card only) ─────────────────
+@router.delete("/{payment_id}/hard-delete")
+async def hard_delete_payment(
+    payment_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Permanently delete a Cash or Card payment record.
+    Only allowed on non-verified payments OR Cash/Card methods.
+    Does not create a reversal — the record is gone entirely."""
+    from app.services.audit import AuditService
+    from sqlalchemy import select
+    from app.models.payment import PaymentAllocation
+
+    service = PaymentService(db)
+    payment = await service.get(payment_id)
+    if not payment:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    allowed_methods = {"Cash", "Card"}
+    if payment.payment_method not in allowed_methods:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=422,
+            detail=f"Hard delete is only allowed for Cash or Card payments. "
+                   f"This payment method is '{payment.payment_method}'. Use Reverse instead."
+        )
+
+    # Remove allocations first so FK constraints don't block the delete
+    alloc_stmt = select(PaymentAllocation).where(PaymentAllocation.payment_id == payment_id)
+    alloc_result = await db.execute(alloc_stmt)
+    for alloc in alloc_result.scalars().all():
+        await service._reverse_allocation(alloc)
+        await db.delete(alloc)
+    await db.flush()
+
+    await AuditService(db).log(
+        "payment", payment_id, "hard_delete", user.id,
+        new_values={"method": payment.payment_method, "amount": str(payment.amount)},
+    )
+    await db.delete(payment)
+    await db.commit()
+    return {"detail": "Payment permanently deleted"}
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
@@ -325,6 +370,7 @@ async def edit_payment(
 
     payment = await service.edit(payment_id, data)
     await AuditService(db).log("payment", payment_id, "edit", user.id, new_values=data.model_dump(exclude_unset=True))
+    await db.commit()
     return payment
 
 
