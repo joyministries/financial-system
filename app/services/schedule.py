@@ -148,7 +148,7 @@ class ScheduleService:
                                 THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
                             ELSE ROUND(
                                 ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
-                                2,
+                                2
                             )
                         END
                     ) AS effective_amount,
@@ -161,7 +161,7 @@ class ScheduleService:
                                 THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
                             ELSE ROUND(
                                 ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
-                                2,
+                                2
                             )
                         END
                     ),
@@ -209,7 +209,7 @@ class ScheduleService:
                                 THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
                             ELSE ROUND(
                                 ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
-                                2,
+                                2
                             )
                         END
                     ) AS effective_amount,
@@ -222,7 +222,7 @@ class ScheduleService:
                                 THEN ROUND(ms.amount_due * ((100 - sfo.annual_amount) / 100.0), 2)
                             ELSE ROUND(
                                 ms.amount_due * (sfo.annual_amount / NULLIF(fs.annual_amount, 0)),
-                                2,
+                                2
                             )
                         END
                     ),
