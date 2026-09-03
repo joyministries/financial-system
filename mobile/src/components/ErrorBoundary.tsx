@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.dangerSoft,
+    backgroundColor: colors.bgCanvas,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.lg,

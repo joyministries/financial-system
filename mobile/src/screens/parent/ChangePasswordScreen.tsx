@@ -94,8 +94,8 @@ export default function ChangePasswordScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: colors.warningSoft }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={colors.warning} />
+            <View style={[styles.cardIcon, { backgroundColor: colors.bgCanvas }]}>
+              <Ionicons name="lock-closed-outline" size={20} color={colors.icon} />
             </View>
             <Text style={styles.cardTitle}>Change Password</Text>
           </View>
