@@ -41,6 +41,8 @@ uploads/
 temp_credentials.txt
 scripts/temp_credentials.txt
 admin_credentials.md
+google-service-account.json
+**/google-service-account.json
 
 # ── Frontend ───────────────────────────────────────────────────────
 frontend/node_modules/
