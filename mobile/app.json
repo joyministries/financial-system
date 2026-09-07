@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "School Finance",
+    "name": "Lambton School",
     "slug": "school-finance-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.schoolfinance.parent",
+      "bundleIdentifier": "co.za.lambtonchristian.school",
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is needed to scan documents.",
         "NSPhotoLibraryUsageDescription": "Photo library access is needed to upload documents."
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#132043"
       },
-      "package": "com.schoolfinance.parent",
+      "package": "co.za.lambtonchristian.school",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE"
@@ -48,8 +48,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "8721cf87-ceac-490b-b0df-947d84f64480"
       }
-    }
+    },
+    "owner": "riot428"
   }
 }
