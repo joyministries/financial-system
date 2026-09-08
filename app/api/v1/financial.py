@@ -1,7 +1,7 @@
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,12 @@ from app.schemas.financial import (
     StudentSummaryResponse,
 )
 from app.services.balance import BalanceEngine
-from app.services.pdf import build_grade_summary_pdf, build_receipt_pdf, build_statement_pdf, pdf_response
+from app.services.pdf import (
+    build_grade_summary_pdf,
+    build_receipt_pdf,
+    build_statement_pdf,
+    pdf_response,
+)
 from app.services.receipt import ReceiptService
 from app.services.report import ReportService
 from app.services.statement import StatementService
@@ -475,6 +480,30 @@ async def statement_report(
 ):
     service = ReportService(db)
     return await service.statement_report(academic_year, status, grade_id)
+
+
+@router.get("/reports/export-students")
+async def export_students_report(
+    academic_year: int,
+    grade_id: str | None = None,
+    month: int | None = Query(default=None, ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Admin Excel export of approved students in the school's suspension-list
+    layout (Customer | Grade | Amount | Comments | Learners on suspension).
+
+    All grades when `grade_id` is omitted, or a single grade when provided.
+    `month` only controls the sheet title (e.g. 'AUGUST'); the amounts are the
+    live outstanding balances for `academic_year`."""
+    service = ReportService(db)
+    buf = await service.students_xlsx(academic_year, grade_id, month)
+    fname = f"LCS-GERMISTON-SUSPENSION-LIST-{academic_year}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @router.post("/balance-engine/rollover")

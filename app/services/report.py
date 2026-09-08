@@ -1,6 +1,9 @@
 from datetime import UTC, datetime
 from decimal import Decimal
+from io import BytesIO
 
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -343,6 +346,107 @@ class ReportService:
             "total_outstanding": str(total_outstanding),
             "students": students,
         }
+
+    async def students_xlsx(
+        self,
+        academic_year: int,
+        grade_id: str | None = None,
+        month: int | None = None,
+    ) -> BytesIO:
+        """Admin Excel export in the school's suspension-list layout.
+
+        Produces an .xlsx workbook with the same shape as the office's
+        "LCS GERMISTON <MONTH> SUSPENSION LIST" spreadsheet (yellow bold
+        headers: Customer | Grade | Amount | Comments | Learners on
+        suspension). Every approved student is included once, optionally
+        scoped to a single grade, with their outstanding balance for the
+        academic year (0.00 when fully paid) plus a SUM footer row.
+
+        Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
+        """
+        stmt = (
+            select(
+                Student.id,
+                Student.student_number,
+                Student.first_name,
+                Student.last_name,
+                Grade.name.label("grade"),
+                func.coalesce(
+                    func.sum(OutstandingBalance.balance), Decimal("0")
+                ).label("total_balance"),
+            )
+            .outerjoin(
+                OutstandingBalance,
+                OutstandingBalance.student_id == Student.id,
+            )
+            .outerjoin(
+                MonthlySchedule,
+                and_(
+                    MonthlySchedule.id == OutstandingBalance.monthly_schedule_id,
+                    MonthlySchedule.academic_year == academic_year,
+                ),
+            )
+            .join(Grade, Grade.id == Student.grade_id)
+            .where(Student.registration_status == "approved")
+        )
+        if grade_id:
+            stmt = stmt.where(Student.grade_id == grade_id)
+        stmt = (
+            stmt.group_by(
+                Student.id,
+                Student.student_number,
+                Student.first_name,
+                Student.last_name,
+                Grade.name,
+            )
+            .order_by(Grade.name, Student.first_name, Student.last_name)
+        )
+        rows = (await self.db.execute(stmt)).all()
+
+        wb = Workbook()
+        ws = wb.active
+        sheet_label = (
+            datetime(academic_year, month, 1).strftime("%B").upper()
+            if month else "STUDENTS"
+        )
+        ws.title = sheet_label
+
+        headers = ["Customer", "Grade", "Amount", "Comments", "Learners on suspension"]
+        header_fill = PatternFill("solid", fgColor="FFFF00")
+        header_font = Font(bold=True)
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+        ws["A1"].alignment = Alignment(horizontal="left")
+        ws["B1"].alignment = Alignment(horizontal="center")
+        ws["C1"].alignment = Alignment(horizontal="center")
+        ws["E1"].alignment = Alignment(horizontal="center")
+
+        def _grade_display(name: str) -> str:
+            if name == "GRADE R":
+                return "R"
+            if name == "GRADE RR":
+                return "RR"
+            return name.replace("GRADE ", "", 1)
+
+        for r in rows:
+            customer = f"({r.student_number}) {r.first_name} {r.last_name}".strip()
+            ws.append([customer, _grade_display(r.grade), float(r.total_balance), None, None])
+
+        if len(rows) > 0:
+            ws.append([None, "OUTSTANDING BALANCE", f"=SUM(C2:C{len(rows) + 1})", None, None])
+
+        for col_letter, width in (
+            ("A", 56.89), ("B", 28.66), ("C", 21.66),
+            ("D", 14.33), ("E", 24.11),
+        ):
+            ws.column_dimensions[col_letter].width = width
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
 
     async def carry_forward(self, academic_year: int, month: int) -> dict:
         """Dashboard carry-forward section.

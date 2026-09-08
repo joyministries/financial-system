@@ -494,6 +494,11 @@ export const reportsApi = {
     api.get('/financial/reports/statements', {
       params: { academic_year: year, status, grade_id: gradeId || undefined },
     }),
+  downloadStudentExport: (year: number, gradeId?: string, month?: number) =>
+    api.get('/financial/reports/export-students', {
+      params: { academic_year: year, grade_id: gradeId || undefined, month: month || undefined },
+      responseType: 'blob',
+    }),
 };
 
 // ── Notification settings (admin only) ─────────────────────

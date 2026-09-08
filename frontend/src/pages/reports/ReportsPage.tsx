@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react';
-import { reportsApi } from '@/api/client';
+import { gradesApi, reportsApi } from '@/api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Download } from 'lucide-react';
+import { Download, FileSpreadsheet } from 'lucide-react';
+import type { Grade } from '@/types';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function ReportsPage() {
   const year = new Date().getFullYear();
-  const [tab, setTab] = useState<'trends' | 'outstanding' | 'payments'>('trends');
+  const [tab, setTab] = useState<'trends' | 'outstanding' | 'payments' | 'export'>('trends');
 
   const [trends, setTrends] = useState<{ month: number; total: number }[]>([]);
   const [outstanding, setOutstanding] = useState<{ students_with_outstanding: number; students: { student_number?: string; name: string; outstanding: number }[] }>({ students_with_outstanding: 0, students: [] });
   const [payments, setPayments] = useState<{ total_received: number; by_method: Record<string, number> }>({ total_received: 0, by_method: {} });
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [exportGrade, setExportGrade] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,6 +26,7 @@ export default function ReportsPage() {
       reportsApi.paymentTrends(year).then((r) => setTrends(r.data.trends)),
       reportsApi.outstanding(year).then((r) => setOutstanding(r.data)),
       reportsApi.paymentsReceived(year).then((r) => setPayments(r.data)),
+      gradesApi.list().then((r) => setGrades(r.data)),
     ]).finally(() => setLoading(false));
   }, [year]);
 
@@ -28,7 +34,31 @@ export default function ReportsPage() {
     { key: 'trends' as const, label: 'Payment Trends' },
     { key: 'outstanding' as const, label: 'Outstanding Fees' },
     { key: 'payments' as const, label: 'Payments by Method' },
+    { key: 'export' as const, label: 'Export Students' },
   ];
+
+  const exportStudentExcel = async (gradeId?: string) => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const month = new Date().getMonth() + 1;
+      const resp = await reportsApi.downloadStudentExport(year, gradeId, month);
+      const selected = gradeId ? grades.find((g) => g.id === gradeId) : null;
+      const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const scope = selected ? `-${selected.name.replace(/\s+/g, '')}` : '';
+      a.download = `LCS-GERMISTON${scope}-SUSPENSION-LIST-${MONTH_FULL[month - 1]}-${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Export failed — please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const exportOutstandingExcel = () => {
     if (!outstanding.students.length) return;
@@ -211,6 +241,42 @@ export default function ReportsPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {tab === 'export' && (
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <h2 className="mb-1 text-lg font-semibold">Export Students (.xlsx)</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Download the full student list in the school's suspension-list layout
+            (Customer | Grade | Amount | Comments | Learners on suspension) with
+            current outstanding balances.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <select
+              value={exportGrade}
+              onChange={(e) => setExportGrade(e.target.value)}
+              className="input w-full sm:w-64"
+            >
+              <option value="">All grades</option>
+              {grades.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => exportStudentExcel(exportGrade || undefined)}
+              disabled={exporting}
+              className="btn btn-primary"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {exporting ? 'Generating…' : exportGrade ? 'Export this grade' : 'Export all students'}
+            </button>
+          </div>
+          {exportGrade && (
+            <p className="mt-2 text-xs text-slate-400">
+              File will be named with the selected grade, e.g. LCS-GERMISTON-GRADE9-SUSPENSION-LIST-SEPTEMBER-{year}.xlsx
+            </p>
+          )}
         </div>
       )}
     </div>
