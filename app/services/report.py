@@ -2,8 +2,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from io import BytesIO
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -402,6 +400,11 @@ class ReportService:
             .order_by(Grade.name, Student.first_name, Student.last_name)
         )
         rows = (await self.db.execute(stmt)).all()
+
+        # Imported lazily so the REST API continues to boot even if the
+        # spreadsheet library is missing/mis-installed in the serverless runtime.
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
 
         wb = Workbook()
         ws = wb.active
