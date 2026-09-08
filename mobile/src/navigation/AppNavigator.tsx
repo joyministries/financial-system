@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,6 +53,7 @@ const TAB_ICONS: Record<string, { focused: string; default: string }> = {
 };
 
 function ParentTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -68,8 +70,12 @@ function ParentTabs() {
           borderTopColor: colors.line,
           borderTopWidth: 1,
           paddingTop: 10,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          // Use the OS-safe-area inset so the tab bar is never hidden behind
+          // the Android system navigation (gesture/3-button) bar. A hardcoded
+          // height here would override React Navigation's own inset handling
+          // and push the tabs under the system bar on edge-to-edge devices.
+          paddingBottom: Platform.OS === 'ios' ? 24 : Math.max(insets.bottom, 8),
+          height: Platform.OS === 'ios' ? 88 : 64 + Math.max(insets.bottom, 8),
         },
         tabBarIcon: ({ color, focused }) => {
           const icons = TAB_ICONS[route.name] || TAB_ICONS.Dashboard;
