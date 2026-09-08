@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { authApi } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { User } from '@/types';
 import toast from 'react-hot-toast';
-import { Loader2, Mail, Phone, UserRound } from 'lucide-react';
+import { Loader2, Mail, Phone, UserRound, ShieldCheck } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -101,6 +102,30 @@ export default function ProfilePage() {
           </div>
         </form>
       </div>
+
+      {user?.role === 'parent' && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-6">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-rose-900">Privacy & data protection (POPIA)</h2>
+              <p className="mt-1 text-sm leading-relaxed text-rose-700/80">
+                You may ask the school to delete your account and personal information. The school
+                reviews the request and, if approved, removes your data from the portal (statutory
+                financial records are kept). Your access stops once the request is approved.
+              </p>
+              <Link
+                to="/data-deletion"
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+              >
+                Request account deletion
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

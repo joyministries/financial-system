@@ -211,4 +211,14 @@ export const notificationsApi = {
     api.post<{ count: number }>('/notifications/read-all'),
 };
 
+// ── Data deletion (POPIA) ─────────────────────────
+export const deletionApi = {
+  /** Public — works with or without a session token. */
+  submitRequest: (data: { email: string; reason?: string }) =>
+    api.post<{ detail: string }>('/data-deletion/requests', {
+      email: data.email.trim().toLowerCase(),
+      reason: data.reason?.trim() || undefined,
+    }),
+};
+
 export default api;

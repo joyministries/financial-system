@@ -640,4 +640,39 @@ export interface SmsMessage {
   created_at: string;
 }
 
+// ── Data deletion (POPIA) ──────────────────────────────────
+export interface DataDeletionRequest {
+  id: string;
+  user_id: string;
+  email: string;
+  user_full_name: string | null;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  decided_by: string | null;
+  decided_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export const deletionApi = {
+  /** Public — used by /data-deletion. Requires no authentication. */
+  submitRequest: (data: { email: string; reason?: string }) =>
+    api.post<{ detail: string }>('/data-deletion/requests', {
+      email: data.email.trim().toLowerCase(),
+      reason: data.reason?.trim() || undefined,
+    }),
+  /** Admin queue (admin / super_admin only). */
+  list: (params?: { status?: 'pending' | 'approved' | 'rejected'; limit?: number; offset?: number }) =>
+    api.get<PageResponse<DataDeletionRequest>>('/data-deletion/requests', {
+      params: {
+        status: params?.status || undefined,
+        limit: params?.limit ?? 50,
+        offset: params?.offset ?? 0,
+      },
+    }),
+  approve: (id: string) => api.post<DataDeletionRequest>(`/data-deletion/requests/${id}/approve`),
+  reject: (id: string, reason: string) =>
+    api.post<DataDeletionRequest>(`/data-deletion/requests/${id}/reject`, { reason }),
+};
+
 export default api;

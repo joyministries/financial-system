@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, radii, fonts } from '../../theme';
 import useNotifications from '../../hooks/useNotifications';
+import { deletionApi } from '../../api/client';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
@@ -25,6 +26,42 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
     ]);
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteRequest = () => {
+    if (!user?.email) return;
+    Alert.alert(
+      'Request account deletion',
+      'This asks the school to delete your account and personal information under POPIA. ' +
+        'The school reviews the request, and if approved your access stops and your personal ' +
+        'data is removed. Financial records (invoices, payments, receipts) are kept as the law ' +
+        'requires. You can add more detail using the web form at the school portal.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit Request',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deletionApi.submitRequest({ email: user.email });
+              Alert.alert(
+                'Request received',
+                'The school will process your request within 10 working days. If approved, ' +
+                  'your account and personal data will be removed from the portal.',
+                [{ text: 'OK' }]
+              );
+            } catch {
+              Alert.alert('Something went wrong', 'Please try again or contact the school office.');
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const initials = user
@@ -62,6 +99,21 @@ export default function ProfileScreen() {
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Change Password</Text>
               <Text style={styles.actionSub}>Update your account password</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.iconMuted} />
+          </TouchableOpacity>
+
+          <View style={styles.actionDivider} />
+
+          <TouchableOpacity style={styles.actionRow} onPress={handleDeleteRequest} disabled={deleting} activeOpacity={0.7}>
+            {deleting ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.danger} />
+            )}
+            <View style={styles.actionContent}>
+              <Text style={[styles.actionTitle, { color: colors.danger }]}>Request Data Deletion</Text>
+              <Text style={styles.actionSub}>Ask the school to erase your personal data</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.iconMuted} />
           </TouchableOpacity>

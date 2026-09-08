@@ -29,6 +29,9 @@ import DiscountsPage from '@/pages/discounts/DiscountsPage';
 import PaymentSuccessPage from '@/pages/payment/PaymentSuccessPage';
 import PaymentFailedPage from '@/pages/payment/PaymentFailedPage';
 import ForcePasswordChangePage from '@/pages/auth/ForcePasswordChangePage';
+import PrivacyPage from '@/pages/privacy/PrivacyPage';
+import DataDeletionPage from '@/pages/privacy/DataDeletionPage';
+import DeletionRequestsPage from '@/pages/deletion/DeletionRequestsPage';
 
 function AppRoutes() {
   const { user, mustChangePassword } = useAuth();
@@ -50,6 +53,10 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/payment/success" element={<PaymentSuccessPage />} />
       <Route path="/payment/failed" element={<PaymentFailedPage />} />
+      {/* Public POPIA pages — no auth. The data-deletion form is how a parent
+          who lost access can still request erasure of their data. */}
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/data-deletion" element={<DataDeletionPage />} />
       <Route
         element={
           <ProtectedRoute>
@@ -83,6 +90,7 @@ function AppRoutes() {
         <Route path="/send-notification" element={<ProtectedRoute roles={['admin', 'super_admin']}><SendNotificationPage /></ProtectedRoute>} />
         <Route path="/notification-history" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance', 'parent']}><NotificationHistoryPage /></ProtectedRoute>} />
         <Route path="/accounts" element={<ProtectedRoute roles={['super_admin']}><UserAccountsPage /></ProtectedRoute>} />
+        <Route path="/deletion-requests" element={<ProtectedRoute roles={['admin', 'super_admin']}><DeletionRequestsPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );

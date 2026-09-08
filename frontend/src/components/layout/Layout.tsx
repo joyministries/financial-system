@@ -22,6 +22,7 @@ import {
   Bell,
   Percent,
   FileMinus2,
+  Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -45,6 +46,7 @@ const navigation = [
   { name: 'Send Notification', href: '/send-notification', icon: Bell, roles: ['admin'] },
   { name: 'Notification History', href: '/notification-history', icon: Bell, roles: ['admin', 'finance'] },
   { name: 'Staff Accounts', href: '/accounts', icon: ShieldCheck, roles: ['super_admin'] },
+  { name: 'Deletion Requests', href: '/deletion-requests', icon: Trash2, roles: ['admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['super_admin'] },
 ];
 
