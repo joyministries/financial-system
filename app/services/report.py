@@ -401,20 +401,57 @@ class ReportService:
         )
         rows = (await self.db.execute(stmt)).all()
 
-        # Imported lazily so the REST API continues to boot even if the
-        # spreadsheet library is missing/mis-installed in the serverless runtime.
-        from openpyxl import Workbook
-        from openpyxl.styles import Alignment, Font, PatternFill
+        def _grade_display(name: str) -> str:
+            if name == "GRADE R":
+                return "R"
+            if name == "GRADE RR":
+                return "RR"
+            return name.replace("GRADE ", "", 1)
 
-        wb = Workbook()
-        ws = wb.active
         sheet_label = (
             datetime(academic_year, month, 1).strftime("%B").upper()
             if month else "STUDENTS"
         )
+        headers = ["Customer", "Grade", "Amount", "Comments", "Learners on suspension"]
+
+        surfacing_rows = [
+            [
+                f"({r.student_number}) {r.first_name} {r.last_name}".strip(),
+                _grade_display(r.grade),
+                float(r.total_balance),
+                None,
+                None,
+            ]
+            for r in rows
+        ]
+
+        # Imported lazily so the REST API continues to boot even if the
+        # spreadsheet library is missing/mis-installed in the serverless runtime.
+        # If it is unavailable, fall back to the stdlib writer so the export
+        # endpoint keeps working regardless of what the runtime bundled.
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Alignment, Font, PatternFill
+        except ImportError:
+            from app.services.xlsx_writer import build_suspension_list_xlsx
+
+            sum_total = sum(row[2] for row in surfacing_rows)
+            return build_suspension_list_xlsx(
+                sheet_label=sheet_label,
+                headers=headers,
+                data_rows=surfacing_rows,
+                column_widths=(
+                    ("A", 56.89), ("B", 28.66), ("C", 21.66),
+                    ("D", 14.33), ("E", 24.11),
+                ),
+                sum_footer=bool(surfacing_rows),
+                sum_total=sum_total,
+            )
+
+        wb = Workbook()
+        ws = wb.active
         ws.title = sheet_label
 
-        headers = ["Customer", "Grade", "Amount", "Comments", "Learners on suspension"]
         header_fill = PatternFill("solid", fgColor="FFFF00")
         header_font = Font(bold=True)
         ws.append(headers)
@@ -426,16 +463,8 @@ class ReportService:
         ws["C1"].alignment = Alignment(horizontal="center")
         ws["E1"].alignment = Alignment(horizontal="center")
 
-        def _grade_display(name: str) -> str:
-            if name == "GRADE R":
-                return "R"
-            if name == "GRADE RR":
-                return "RR"
-            return name.replace("GRADE ", "", 1)
-
-        for r in rows:
-            customer = f"({r.student_number}) {r.first_name} {r.last_name}".strip()
-            ws.append([customer, _grade_display(r.grade), float(r.total_balance), None, None])
+        for row_values in surfacing_rows:
+            ws.append(row_values)
 
         if len(rows) > 0:
             ws.append([None, "OUTSTANDING BALANCE", f"=SUM(C2:C{len(rows) + 1})", None, None])
