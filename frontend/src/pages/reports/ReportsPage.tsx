@@ -22,10 +22,34 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setLoading(true);
+    // Backend returns Decimal values serialized as strings (avoids float
+    // precision loss). Coerce to numbers here so string `+` never
+    // concatenates downstream (e.g. reduce, charts, toLocaleString).
     Promise.all([
-      reportsApi.paymentTrends(year).then((r) => setTrends(r.data.trends)),
-      reportsApi.outstanding(year).then((r) => setOutstanding(r.data)),
-      reportsApi.paymentsReceived(year).then((r) => setPayments(r.data)),
+      reportsApi.paymentTrends(year).then((r) =>
+        setTrends(
+          r.data.trends.map((t: { month: number; total: string | number }) => ({
+            month: t.month,
+            total: Number(t.total),
+          }))
+        )
+      ),
+      reportsApi.outstanding(year).then((r) =>
+        setOutstanding({
+          ...r.data,
+          students: r.data.students.map((s: { student_number?: string; name: string; outstanding: string | number }) => ({
+            ...s,
+            outstanding: Number(s.outstanding),
+          })),
+        })
+      ),
+      reportsApi.paymentsReceived(year).then((r) => {
+        const by_method: Record<string, number> = {};
+        for (const [method, amount] of Object.entries(r.data.by_method)) {
+          by_method[method] = Number(amount);
+        }
+        setPayments({ total_received: Number(r.data.total_received), by_method });
+      }),
       gradesApi.list().then((r) => setGrades(r.data)),
     ]).finally(() => setLoading(false));
   }, [year]);
