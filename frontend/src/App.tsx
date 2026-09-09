@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -104,6 +105,7 @@ export default function App() {
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>
+        <Analytics />
       </AuthProvider>
     </ErrorBoundary>
   );
