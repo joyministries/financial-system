@@ -40,6 +40,7 @@ export default function StudentSearchSelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | undefined>(undefined);
+  const latestQueryRef = useRef('');
 
   // Resolve the selected student's name when `value` is set externally.
   useEffect(() => {
@@ -55,20 +56,33 @@ export default function StudentSearchSelect({
   }, [value]);
 
   // Debounced server-side search — only fires when open AND query ≥2 chars.
+  // Prior results are kept on screen while a refresh is in flight so the list
+  // never "blinks" away mid-click. A latency guard drops out-of-order responses.
   useEffect(() => {
     if (!open || query.trim().length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
+    const q = query.trim();
+    latestQueryRef.current = q;
     window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
       setLoading(true);
       studentsApi
-        .list({ search: query.trim(), limit: 10 })
-        .then((r) => setResults(r.data.items.filter((s: Student) => !excludeIds.includes(s.id))))
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false));
-    }, 350);
+        .list({ search: q, limit: 10 })
+        .then((r) => {
+          if (latestQueryRef.current !== q) return; // stale response — ignore
+          setResults(r.data.items.filter((s: Student) => !excludeIds.includes(s.id)));
+        })
+        .catch(() => {
+          if (latestQueryRef.current !== q) return;
+          setResults([]);
+        })
+        .finally(() => {
+          if (latestQueryRef.current === q) setLoading(false);
+        });
+    }, 450);
     return () => window.clearTimeout(debounceRef.current);
   }, [query, open, excludeIds]);
 
@@ -188,29 +202,39 @@ export default function StudentSearchSelect({
           role="listbox"
           className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
         >
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> Searching…
-            </div>
-          ) : query.trim().length < 2 ? (
+          {query.trim().length < 2 ? (
             <p className="px-4 py-3 text-sm text-slate-400">Type at least 2 characters to search…</p>
           ) : results.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-slate-500">No students found for "{query}".</p>
+            loading ? (
+              <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+              </div>
+            ) : (
+              <p className="px-4 py-3 text-sm text-slate-500">No students found for "{query}".</p>
+            )
           ) : (
-            results.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                role="option"
-                onClick={() => pick(s)}
-                className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm hover:bg-primary-50 focus:bg-primary-50 focus:outline-none"
-              >
-                <span className="truncate font-medium text-slate-800">
-                  {s.first_name} {s.last_name}
-                </span>
-                <span className="shrink-0 font-mono text-xs text-slate-400">{s.student_number}</span>
-              </button>
-            ))
+            <>
+              {/* Results stay clickable while a refresh is in flight */}
+              {loading && (
+                <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-1.5 text-xs text-slate-400">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Refreshing…
+                </div>
+              )}
+              {results.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="option"
+                  onClick={() => pick(s)}
+                  className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm hover:bg-primary-50 focus:bg-primary-50 focus:outline-none"
+                >
+                  <span className="truncate font-medium text-slate-800">
+                    {s.first_name} {s.last_name}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-slate-400">{s.student_number}</span>
+                </button>
+              ))}
+            </>
           )}
         </div>
       )}

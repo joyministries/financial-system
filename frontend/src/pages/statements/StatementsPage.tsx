@@ -4,7 +4,7 @@ import { getStudentNames } from '@/lib/studentNames';
 import type { Student, Statement, Grade, AdditionalCharge, Payment } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Download, FilePlus2, Landmark } from 'lucide-react';
+import { Download, FilePlus2, Landmark, Loader2 } from 'lucide-react';
 import Pagination from '@/components/Pagination';
 import StudentSearchSelect from '@/components/StudentSearchSelect';
 
@@ -38,7 +38,7 @@ export default function StatementsPage() {
   const [selectedStatement, setSelectedStatement] = useState<Statement | null>(null);
   const [stmtMonth, setStmtMonth] = useState<number | ''>('');
   const [genMonth, setGenMonth] = useState<number | ''>(1);
-  const [generating, setGenerating] = useState(false);
+  const [generatingMonth, setGeneratingMonth] = useState<number | null>(null); // per-row state
   const [loading, setLoading] = useState(false);
   const [namesLoading, setNamesLoading] = useState(true);
 
@@ -102,18 +102,35 @@ export default function StatementsPage() {
       .finally(() => setLoadingLedger(false));
   }, [selectedStatement]);
 
-  const handleGenerate = async (month: number) => {
+  /**
+   * Merged generate-then-download for each row.
+   * If the statement already exists it skips generation and downloads immediately.
+   * Per-row spinner via generatingMonth state.
+   */
+  const generateAndDownload = async (existing: Statement | null, month: number) => {
     if (!selectedStudent) return toast.error('Select a student');
-    setGenerating(true);
+    setGeneratingMonth(month);
+    const toastId = toast.loading(existing ? 'Preparing download…' : 'Generating statement…');
     try {
-      const res = await financialApi.generateStatement({ student_id: selectedStudent, academic_year: year, month });
-      toast.success('Statement generated');
-      setSelectedStatement(res.data);
-      loadStatements();
-    } catch {
-      toast.error('Generation failed');
+      let stmt: Statement | null = existing;
+      if (!stmt) {
+        const res = await financialApi.generateStatement({ student_id: selectedStudent, academic_year: year, month });
+        stmt = res.data as Statement;
+        loadStatements();
+        toast.loading('Download ready — starting…', { id: toastId });
+      }
+      const studentName = getStudentName(selectedStudent).replace(/\s+/g, '-');
+      if (!stmt) throw new Error('Statement not available');
+      await downloadPdf(
+        financialApi.statementDownloadUrl(stmt.student_id, stmt.academic_year, stmt.month),
+        `statement-${studentName}-${stmt.academic_year}-${String(stmt.month).padStart(2, '0')}.pdf`,
+      );
+      toast.success('Download started', { id: toastId });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || 'Failed — try again';
+      toast.error(detail, { id: toastId });
     } finally {
-      setGenerating(false);
+      setGeneratingMonth(null);
     }
   };
 
@@ -151,13 +168,19 @@ export default function StatementsPage() {
     }
   };
 
-  const downloadGradeSummary = () => {
+  // Fix: use downloadPdf so auth token is attached (bare <a href> gets 401)
+  const downloadGradeSummary = async () => {
     if (!bulkGrade || !bulkMonth) return toast.error('Select a grade and month first');
-    const url = financialApi.gradeSummaryDownloadUrl(bulkGrade, year, bulkMonth as number);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `grade-summary-${bulkGrade}-${year}-${bulkMonth}.pdf`;
-    a.click();
+    const toastId = toast.loading('Preparing grade summary…');
+    try {
+      await downloadPdf(
+        financialApi.gradeSummaryDownloadUrl(bulkGrade, year, bulkMonth as number),
+        `grade-summary-${bulkGrade}-${year}-${bulkMonth}.pdf`,
+      );
+      toast.success('Download started', { id: toastId });
+    } catch {
+      toast.error('Download failed', { id: toastId });
+    }
   };
 
   const exportCsv = () => {
@@ -176,15 +199,9 @@ export default function StatementsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // downloadStatement is kept for the bank-view header button (already-generated statements)
   const downloadStatement = async (s: Statement) => {
-    try {
-      await downloadPdf(
-        financialApi.statementDownloadUrl(s.student_id, s.academic_year, s.month),
-        `statement-${getStudentName(s.student_id).replace(/\s+/g, '-')}-${s.academic_year}-${String(s.month).padStart(2, '0')}.pdf`,
-      );
-    } catch {
-      toast.error('Statement download failed — generate the statement first');
-    }
+    await generateAndDownload(s, s.month);
   };
 
   const visibleStatements = stmtMonth
@@ -273,11 +290,17 @@ export default function StatementsPage() {
           {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
         </select>
         <button
-          onClick={() => handleGenerate(genMonth as number)}
-          disabled={generating || !genMonth || !selectedStudent}
+          onClick={() => generateAndDownload(
+            visibleStatements.find(s => s.month === genMonth) ?? null,
+            genMonth as number
+          )}
+          disabled={generatingMonth !== null || !genMonth || !selectedStudent}
           className="btn btn-primary"
         >
-          {generating ? 'Generating…' : 'Generate'}
+          {generatingMonth !== null && generatingMonth === genMonth
+            ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
+            : <><Download className="h-4 w-4" /> Generate & Download</>
+          }
         </button>
       </div>
 
@@ -435,8 +458,15 @@ export default function StatementsPage() {
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-500">{new Date(s.generated_at).toLocaleDateString()}</td>
                 <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => downloadStatement(s)} className="btn btn-secondary btn-sm">
-                    <Download className="h-3.5 w-3.5" /> Download
+                  <button
+                    onClick={() => generateAndDownload(s, s.month)}
+                    disabled={generatingMonth === s.month}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    {generatingMonth === s.month
+                      ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                      : <><Download className="h-3.5 w-3.5" /> Download</>
+                    }
                   </button>
                 </td>
               </tr>
