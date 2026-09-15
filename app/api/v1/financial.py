@@ -1,17 +1,20 @@
 
+import asyncio
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import async_session_factory, get_db
 from app.core.deps import (
     get_current_user,
     get_parent_student_ids,
     require_role,
     verify_student_access,
 )
+from app.core.exceptions import ConflictError
 from app.models.grade import Student, StudentGuardian
 from app.models.user import User
 from app.schemas.common import PageResponse, build_page_response
@@ -130,6 +133,51 @@ async def generate_statement(
     return await service.generate(data.student_id, data.academic_year, data.month)
 
 
+async def _generate_student_statements(
+    student_id: str,
+    academic_year: int,
+    up_to_month: int,
+    existing: set[tuple[str, int]],
+    breakdown: list[dict],
+    charges: list,
+) -> tuple[int, int, int, list[str]]:
+    """Insert every missing statement for one student from pre-fetched data.
+
+    The expensive ledger breakdown was already computed once for the whole
+    school, so this worker only performs INSERTs. Each worker owns its own
+    session and commits its own writes.
+    Returns (generated, skipped, failed, errors).
+    """
+    async with async_session_factory() as db:
+        service = StatementService(db)
+        generated = skipped = failed = 0
+        errors: list[str] = []
+        for m in range(1, up_to_month + 1):
+            if (student_id, m) in existing:
+                skipped += 1
+                continue
+            try:
+                await service.generate_from_breakdown(
+                    student_id, academic_year, m, breakdown, charges=charges
+                )
+                generated += 1
+            except IntegrityError:
+                await db.rollback()
+                skipped += 1
+            except ConflictError:
+                skipped += 1
+            except Exception as exc:  # noqa: BLE001 - one student must not abort the run
+                failed += 1
+                errors.append(f"{student_id} m{m}: {exc}")
+        await db.commit()
+        return generated, skipped, failed, errors
+
+
+# Whole-school generation runs this many students concurrently. With the data
+# pre-fetched, workers only insert, so concurrency is bounded by round trips.
+_GENERATE_ALL_CONCURRENCY = 20
+
+
 @router.post("/statements/generate-all")
 async def generate_all_statements(
     academic_year: int,
@@ -139,29 +187,44 @@ async def generate_all_statements(
     user: User = Depends(require_role("admin", "finance")),
 ):
     """Generate statements accumulatively from month 1 up to the selected month.
+
     When grade_id is provided, only students in that grade are processed.
-    Existing statements are skipped — only missing ones are created."""
+    Existing statements are skipped — only missing ones are created. Ledger
+    breakdowns are prefetched in a few aggregate queries and workers only
+    insert, keeping a whole-school run well under the serverless timeout.
+    """
     service = StatementService(db)
     stmt = select(Student).where(Student.registration_status == "approved")
     if grade_id:
         stmt = stmt.where(Student.grade_id == grade_id)
     students = (await db.execute(stmt)).scalars().all()
-    generated = 0
-    skipped = 0
-    failed = 0
+    student_ids = [s.id for s in students]
+
+    existing = await service.list_existing(academic_year, month, student_ids)
+    breakdowns = await service.bulk_breakdowns(academic_year, student_ids)
+    charges = await service.bulk_charges(academic_year, student_ids)
+
+    sem = asyncio.Semaphore(_GENERATE_ALL_CONCURRENCY)
+
+    async def _run(sid: str):
+        async with sem:
+            return await _generate_student_statements(
+                sid,
+                academic_year,
+                month,
+                existing,
+                breakdowns.get(sid, []),
+                charges.get(sid, []),
+            )
+
+    results = await asyncio.gather(*(_run(sid) for sid in student_ids))
+
+    generated = sum(r[0] for r in results)
+    skipped = sum(r[1] for r in results)
+    failed = sum(r[2] for r in results)
     errors: list[str] = []
-    for student in students:
-        for m in range(1, month + 1):
-            try:
-                if await service.get(student.id, academic_year, m):
-                    skipped += 1
-                    continue
-                await service.generate(student.id, academic_year, m)
-                generated += 1
-            except Exception as exc:  # noqa: BLE001 - one student must not abort the run
-                failed += 1
-                errors.append(f"{student.id} m{m}: {exc}")
-    await db.commit()
+    for r in results:
+        errors.extend(r[3])
     return {
         "academic_year": academic_year,
         "up_to_month": month,

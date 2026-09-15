@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
 from app.core.money import to_decimal
 from app.models.financial import Statement
+from app.models.invoice import Invoice
 from app.models.payment import Payment
+from app.models.schedule import AdditionalCharge
 from app.services.charge import ChargeService
 from app.services.ledger import LedgerService
 
@@ -42,13 +44,32 @@ class StatementService:
             )
 
         breakdown = await self.ledger.monthly_breakdown(student_id, academic_year)
+        return await self.generate_from_breakdown(
+            student_id, academic_year, month, breakdown
+        )
+
+    async def generate_from_breakdown(
+        self,
+        student_id: str,
+        academic_year: int,
+        month: int,
+        breakdown: list[dict],
+        charges: list | None = None,
+    ) -> Statement:
+        """Create a statement row from an already-computed yearly breakdown.
+
+        Shared by the single-student path and the bulk generator so bulk runs
+        compute the expensive ledger breakdown once per student instead of
+        once per month. Does NOT check for an existing statement.
+        """
         month_row = next((r for r in breakdown if r["month"] == month), None)
         prev_row = next((r for r in breakdown if r["month"] == month - 1), None)
 
         opening = prev_row["outstanding"] if prev_row else D0
         installment = month_row["required"] if month_row else D0
 
-        charges = await self.charge_service.list_for_student(student_id, academic_year)
+        if charges is None:
+            charges = await self.charge_service.list_for_student(student_id, academic_year)
         total_additional = sum(
             (c.amount for c in charges if c.month == month), D0
         )
@@ -75,6 +96,96 @@ class StatementService:
         self.db.add(statement)
         await self.db.flush()
         return statement
+
+    async def list_existing(
+        self, academic_year: int, up_to_month: int, student_ids: list[str]
+    ) -> set[tuple[str, int]]:
+        """Return {(student_id, month)} pairs that already have statements."""
+        if not student_ids:
+            return set()
+        stmt = (
+            select(Statement.student_id, Statement.month)
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month <= up_to_month,
+                Statement.student_id.in_(student_ids),
+            )
+        )
+        rows = (await self.db.execute(stmt)).all()
+        return {(r[0], r[1]) for r in rows}
+
+    async def bulk_breakdowns(
+        self, academic_year: int, student_ids: list[str]
+    ) -> dict[str, list[dict]]:
+        """Yearly ledger breakdown for many students in ~2 aggregate queries.
+
+        Same shape as LedgerService.monthly_breakdown (month 1..12 with
+        required/paid/outstanding) but computed for the whole student set at
+        once so bulk generation is not bound by per-student round trips.
+        """
+        req_by: dict[str, dict[int, Decimal]] = {}
+        stmt = (
+            select(Invoice.student_id, Invoice.month, func.sum(Invoice.subtotal))
+            .where(
+                Invoice.status != "void",
+                Invoice.academic_year == academic_year,
+            )
+            .group_by(Invoice.student_id, Invoice.month)
+        )
+        if student_ids:
+            stmt = stmt.where(Invoice.student_id.in_(student_ids))
+        for sid, m, amt in (await self.db.execute(stmt)).all():
+            req_by.setdefault(sid, {})[m] = amt
+
+        start = datetime(academic_year, 1, 1, tzinfo=UTC)
+        end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
+        pay_stmt = (
+            select(Payment.student_id, Payment.payment_date, Payment.amount)
+            .where(
+                Payment.status == "verified",
+                Payment.payment_date >= start,
+                Payment.payment_date < end,
+            )
+        )
+        if student_ids:
+            pay_stmt = pay_stmt.where(Payment.student_id.in_(student_ids))
+        paid_by: dict[str, dict[int, Decimal]] = {}
+        for sid, pdate, amt in (await self.db.execute(pay_stmt)).all():
+            paid_by.setdefault(sid, {}).setdefault(pdate.month, D0)
+            paid_by[sid][pdate.month] += amt
+
+        out: dict[str, list[dict]] = {}
+        for sid in student_ids:
+            req_m = req_by.get(sid, {})
+            paid_m = paid_by.get(sid, {})
+            running = D0
+            rows = []
+            for m in range(1, 13):
+                req = req_m.get(m, D0)
+                paid = paid_m.get(m, D0)
+                running += req - paid
+                rows.append({
+                    "month": m,
+                    "required": req,
+                    "paid": paid,
+                    "outstanding": running,
+                })
+            out[sid] = rows
+        return out
+
+    async def bulk_charges(
+        self, academic_year: int, student_ids: list[str]
+    ) -> dict[str, list[AdditionalCharge]]:
+        """Load all additional charges for the student set in one query."""
+        stmt = select(AdditionalCharge).where(
+            AdditionalCharge.academic_year == academic_year
+        )
+        if student_ids:
+            stmt = stmt.where(AdditionalCharge.student_id.in_(student_ids))
+        out: dict[str, list[AdditionalCharge]] = {}
+        for c in (await self.db.execute(stmt)).scalars().all():
+            out.setdefault(c.student_id, []).append(c)
+        return out
 
     async def get(self, student_id: str, academic_year: int, month: int) -> Statement | None:
         stmt = select(Statement).where(
