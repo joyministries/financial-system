@@ -255,7 +255,6 @@ async def download_grade_summary(
             select(Student)
             .where(Student.grade_id == grade_id)
             .where(Student.registration_status == "approved")
-            .options(selectinload(Student.guardians))
             .order_by(Student.last_name, Student.first_name)
         )
     ).scalars().all()
