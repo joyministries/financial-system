@@ -15,6 +15,11 @@ from app.services.ledger import LedgerService
 
 D0 = Decimal("0")
 
+MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
 
 class StatementService:
     """Monthly statement snapshots derived from the Excel-aligned ledger.
