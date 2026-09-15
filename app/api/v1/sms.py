@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import require_role
 from app.models.grade import Student
-from app.models.schedule import OutstandingBalance
 from app.schemas.common import PageResponse, build_page_response
 from app.schemas.sms import (
     SmsMessageOut,
@@ -103,33 +102,22 @@ async def send_balance_reminders(
     One SMS per student to their billing parent's mobile. Students without a
     usable guardian phone are counted and reported (not silently dropped).
     """
-    stmt = (
-        select(Student)
-        .join(
-            OutstandingBalance,
-            OutstandingBalance.student_id == Student.id,
-        )
-        .where(
-            Student.is_active == True,  # noqa: E712
-            OutstandingBalance.status != "paid",
-        )
-        .distinct()
-    )
-    result = await db.execute(stmt)
-    students = result.scalars().all()
+    from app.services.ledger import LedgerService
+
+    ledger_rows = await LedgerService(db).students_outstanding(payload.academic_year)
+    students = []
+    for row in ledger_rows:
+        if row["outstanding"] <= 0:
+            continue
+        student = await db.get(Student, row["student_id"])
+        if student and student.is_active:
+            students.append((student, row["outstanding"]))
 
     service = SmsService(db)
     sent = 0
     skipped_no_phone = 0
     errors: list[str] = []
-    for student in students:
-        balance_stmt = select(OutstandingBalance).where(
-            OutstandingBalance.student_id == student.id,
-            OutstandingBalance.status != "paid",
-        )
-        balance_rows = (await db.execute(balance_stmt)).scalars().all()
-        total = sum((row.balance or Decimal("0")) for row in balance_rows)
-
+    for student, total in students:
         phone = await service.get_student_phone(student)
         if not phone:
             skipped_no_phone += 1

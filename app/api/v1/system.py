@@ -26,7 +26,6 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
-from app.services.balance import BalanceEngine
 from app.services.notification import NotificationService
 from app.services.receipt import ReceiptService
 from app.services.reminder import due_reminder_index, send_payment_link_reminders
@@ -110,7 +109,10 @@ async def run_daily_jobs(
 async def run_monthly_jobs(
     authorized: bool = Depends(_is_authorized),
 ) -> dict:
-    """Monthly close: rollover balances, generate statements and missing receipts."""
+    """Monthly close: generate statements and missing receipts.
+
+    Balances come from the Excel-aligned ledger (invoices minus verified
+    payments); no monthly rollover rows are written anymore."""
     _require_authorization(authorized)
 
     from app.models.financial import Receipt
@@ -120,10 +122,6 @@ async def run_monthly_jobs(
     async with async_session_factory() as db:
         year = date.today().year
         month = date.today().month
-
-        engine = BalanceEngine(db)
-        await engine.process_rollover(year)
-        await db.commit()
 
         stmt = select(Student).where(Student.is_active == True)  # noqa: E712
         result = await db.execute(stmt)

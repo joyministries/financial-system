@@ -2,7 +2,7 @@
 #
 # Deploy: push this repo to GitHub, then Render → New → Blueprint → pick the repo.
 # The Blueprint creates: web API, Celery worker (with embedded beat), Redis.
-# Your Render Postgres already exists (dpg-d9s91g2jnfac73932et0) — you'll paste
+# Your Render Postgres already exists (dpg-dagfnlid0e5s73caej20) — you'll paste
 # its connection string when Render prompts for DATABASE_URL (sync: false).
 #
 # One-time values prompted during Blueprint creation:
@@ -25,7 +25,7 @@ services:
       sizeGB: 1
     envVars:
       # Database — paste the Render Postgres connection string when prompted
-      # (internal URL, e.g. postgresql://admin:****@dpg-...-a.ohio-postgres.render.com/financial_db_r82w)
+      # (internal URL, e.g. postgresql://****@dpg-dagfnlid0e5s73caej20-a.oregon-postgres.render.com/financial_db_p98t)
       - key: DATABASE_URL
         sync: false
       # Uploaded documents live on the persistent disk

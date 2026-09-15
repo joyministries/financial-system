@@ -5,18 +5,36 @@ from app.tasks import celery_app
 
 @celery_app.task(name="tasks.process_monthly_rollover")
 def process_monthly_rollover(academic_year: int) -> dict:
-    """Roll unpaid balances into the next month's outstanding amount."""
+    """Monthly close (legacy name).
+
+    Balances are derived from the Excel-aligned ledger (invoices minus
+    verified payments), so there is nothing to roll over — this task reports
+    the school-wide outstanding position instead of writing schedule rows.
+    """
+    from sqlalchemy import select
+
     from app.core.database import async_session_factory
-    from app.services.balance import BalanceEngine
+    from app.models.grade import Grade, Student
+    from app.services.ledger import LedgerService
 
     async def _run():
         async with async_session_factory() as db:
-            engine = BalanceEngine(db)
-            await engine.process_rollover(academic_year)
-            await db.commit()
+            ledger = LedgerService(db)
+            rows = await ledger.students_outstanding(academic_year)
+            total_required = sum((r["required"] for r in rows), 0)
+            total_paid = sum((r["paid"] for r in rows), 0)
+            total_outstanding = sum((r["outstanding"] for r in rows), 0)
+            students_outstanding = sum(1 for r in rows if r["outstanding"] > 0)
+            return {
+                "academic_year": academic_year,
+                "total_required": str(total_required),
+                "total_paid": str(total_paid),
+                "total_outstanding": str(total_outstanding),
+                "students_outstanding": students_outstanding,
+            }
 
-    asyncio.run(_run())
-    return {"status": "rollover_complete", "academic_year": academic_year}
+    result = asyncio.run(_run())
+    return {"status": "rollover_noop_ledger_aligned", **result}
 
 
 @celery_app.task(name="tasks.generate_monthly_statements")
@@ -67,22 +85,20 @@ def send_fee_reminders(academic_year: int, month: int) -> dict:
 
     from app.core.database import async_session_factory
     from app.models.grade import Student
-    from app.models.schedule import OutstandingBalance
+    from app.services.ledger import LedgerService
     from app.services.sms import SmsNotConfiguredError, SmsService
 
     async def _run():
         async with async_session_factory() as db:
-            stmt = (
-                select(Student)
-                .join(OutstandingBalance, OutstandingBalance.student_id == Student.id)
-                .where(
-                    OutstandingBalance.status != "paid",
-                    Student.is_active == True,  # noqa: E712
-                )
-                .distinct()
-            )
-            result = await db.execute(stmt)
-            students = result.scalars().all()
+            ledger = LedgerService(db)
+            ledger_rows = await ledger.students_outstanding(academic_year)
+            students = []
+            for row in ledger_rows:
+                if row["outstanding"] <= 0:
+                    continue
+                student = await db.get(Student, row["student_id"])
+                if student and student.is_active:
+                    students.append((student, row["outstanding"]))
 
             if not students:
                 return {"sent": 0, "skipped_no_phone": 0, "failed": 0, "errors": []}
@@ -92,13 +108,7 @@ def send_fee_reminders(academic_year: int, month: int) -> dict:
             skipped_no_phone = 0
             errors: list[str] = []
 
-            for student in students:
-                balance_stmt = select(OutstandingBalance).where(
-                    OutstandingBalance.student_id == student.id,
-                    OutstandingBalance.status != "paid",
-                )
-                rows = (await db.execute(balance_stmt)).scalars().all()
-                total = sum((row.balance or 0) for row in rows)
+            for student, total in students:
                 try:
                     message = await service.send_balance_reminder(
                         student, total, month, academic_year

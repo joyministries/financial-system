@@ -7,16 +7,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError
 from app.core.money import to_decimal
 from app.models.financial import Statement
-from app.models.grade import FeeStructure, Student
 from app.models.payment import Payment
-from app.models.schedule import MonthlySchedule
 from app.services.charge import ChargeService
+from app.services.ledger import LedgerService
+
+D0 = Decimal("0")
 
 
 class StatementService:
+    """Monthly statement snapshots derived from the Excel-aligned ledger.
+
+    Everything shown here comes from LedgerService (invoices minus verified
+    payments) — never from MonthlySchedule / OutstandingBalance.
+
+    Because the school's INV lines are annual invoices dated January (with a
+    small number of pro-rated invoices in later months), a monthly statement
+    reads like a running ledger: the fees billed *in that month* are the
+    installment debit, verified payments in that month are the credit, and
+    the closing balance is the running outstanding at the end of the month.
+    """
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.charge_service = ChargeService(db)
+        self.ledger = LedgerService(db)
 
     async def generate(self, student_id: str, academic_year: int, month: int) -> Statement:
         # Idempotency: return existing statement if already generated
@@ -27,19 +41,23 @@ class StatementService:
                 f"{academic_year}-{month:02d}"
             )
 
-        total_fees = await self._total_annual_fees(student_id, academic_year)
-        installment = await self._installment_for_month(student_id, academic_year, month)
+        breakdown = await self.ledger.monthly_breakdown(student_id, academic_year)
+        month_row = next((r for r in breakdown if r["month"] == month), None)
+        prev_row = next((r for r in breakdown if r["month"] == month - 1), None)
+
+        opening = prev_row["outstanding"] if prev_row else D0
+        installment = month_row["required"] if month_row else D0
 
         charges = await self.charge_service.list_for_student(student_id, academic_year)
         total_additional = sum(
-            (c.amount for c in charges if c.month == month), Decimal("0")
+            (c.amount for c in charges if c.month == month), D0
         )
 
-        payments = await self._verified_payments_for_month(student_id, academic_year, month)
-        total_payments = sum((p.amount for p in payments), Decimal("0"))
+        total_payments = month_row["paid"] if month_row else D0
 
-        opening = await self._opening_balance(student_id, academic_year, month)
         closing = to_decimal(opening + installment + total_additional - total_payments)
+
+        total_fees = sum((r["required"] for r in breakdown), D0)
 
         statement = Statement(
             student_id=student_id,
@@ -51,7 +69,7 @@ class StatementService:
             total_additional_charges=total_additional,
             total_payments=total_payments,
             closing_balance=closing,
-            current_amount_due=max(Decimal("0"), closing),
+            current_amount_due=closing,
             due_date=self._due_date_for(academic_year, month),
         )
         self.db.add(statement)
@@ -88,75 +106,6 @@ class StatementService:
         await self.db.flush()
         return count
 
-    async def _total_annual_fees(self, student_id: str, academic_year: int) -> Decimal:
-        from app.services.fee_override import (
-            effective_annual,
-            get_student_overrides,
-        )
-
-        student = await self.db.get(Student, student_id)
-        if not student:
-            return Decimal("0")
-
-        stmt = select(FeeStructure).where(
-            FeeStructure.grade_id == student.grade_id,
-            FeeStructure.academic_year == academic_year,
-            FeeStructure.is_active == True,  # noqa: E712
-        )
-        result = await self.db.execute(stmt)
-        fees = result.scalars().all()
-        if not fees:
-            return Decimal("0")
-
-        overrides = await get_student_overrides(self.db, student_id, academic_year)
-        total = Decimal("0")
-        for f in fees:
-            total += effective_annual(overrides.get(f.id), f.annual_amount)
-        return total
-
-    async def _installment_for_month(
-        self, student_id: str, academic_year: int, month: int
-    ) -> Decimal:
-        from app.services.fee_override import (
-            effective_monthly,
-            get_student_overrides,
-        )
-
-        student = await self.db.get(Student, student_id)
-        if not student:
-            return Decimal("0")
-
-        stmt = (
-            select(FeeStructure, MonthlySchedule)
-            .join(FeeStructure, FeeStructure.id == MonthlySchedule.fee_structure_id)
-            .where(
-                FeeStructure.grade_id == student.grade_id,
-                FeeStructure.academic_year == academic_year,
-                MonthlySchedule.month == month,
-            )
-        )
-        result = await self.db.execute(stmt)
-        rows = result.all()
-        if not rows:
-            return Decimal("0")
-
-        overrides = await get_student_overrides(self.db, student_id, academic_year)
-        total = Decimal("0")
-        for fee, schedule in rows:
-            total += effective_monthly(
-                overrides.get(fee.id), fee.annual_amount, schedule.amount_due
-            )
-        return total
-
-    async def _opening_balance(
-        self, student_id: str, academic_year: int, month: int
-    ) -> Decimal:
-        if month == 1:
-            return Decimal("0")
-
-        prev = await self.get(student_id, academic_year, month - 1)
-        return to_decimal(prev.closing_balance) if prev else Decimal("0")
-
     async def _verified_payments_for_month(
         self, student_id: str, academic_year: int, month: int
     ) -> list[Payment]:
@@ -183,7 +132,7 @@ class StatementService:
     async def ledger_for_statement(self, statement: Statement) -> list[dict]:
         """Build the bank-style ledger rows for a generated statement.
 
-        Mirrors the frontend ledger: opening balance -> monthly installment
+        Mirrors the frontend ledger: opening balance -> fees billed this month
         (debit) -> additional charges (debit) -> verified payments (credit) ->
         closing balance, with a running balance column.
         """
@@ -204,6 +153,7 @@ class StatementService:
         rows.append(
             {
                 "date": due_str,
+                "reference": None,
                 "description": "Balance brought forward",
                 "debit": None,
                 "credit": None,
@@ -217,8 +167,9 @@ class StatementService:
             rows.append(
                 {
                     "date": due_str,
+                    "reference": None,
                     "description": (
-                        f"Monthly installment — {statement.month:02d}/{statement.academic_year}"
+                        f"Fees for {statement.month:02d}/{statement.academic_year}"
                     ),
                     "debit": statement.total_installments,
                     "credit": None,
@@ -234,6 +185,7 @@ class StatementService:
             rows.append(
                 {
                     "date": c.created_at.strftime("%d %b %Y") if c.created_at else due_str,
+                    "reference": None,
                     "description": desc,
                     "debit": c.amount,
                     "credit": None,
@@ -243,11 +195,11 @@ class StatementService:
 
         for p in payments:
             balance -= p.amount
-            ref = f" ({p.reference_number})" if p.reference_number else ""
             rows.append(
                 {
                     "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
-                    "description": f"Payment — {p.payment_method}{ref}",
+                    "reference": p.reference_number or "",
+                    "description": f"Payment — {p.payment_method}",
                     "debit": None,
                     "credit": p.amount,
                     "balance": balance,
@@ -260,6 +212,7 @@ class StatementService:
         rows.append(
             {
                 "date": due_str,
+                "reference": None,
                 "description": "Balance carried forward",
                 "debit": None,
                 "credit": None,

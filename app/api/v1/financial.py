@@ -12,7 +12,7 @@ from app.core.deps import (
     require_role,
     verify_student_access,
 )
-from app.models.grade import Student
+from app.models.grade import Student, StudentGuardian
 from app.models.user import User
 from app.schemas.common import PageResponse, build_page_response
 from app.schemas.financial import (
@@ -23,7 +23,6 @@ from app.schemas.financial import (
     StatementResponse,
     StudentSummaryResponse,
 )
-from app.services.balance import BalanceEngine
 from app.services.pdf import (
     build_grade_summary_pdf,
     build_receipt_pdf,
@@ -202,7 +201,7 @@ async def download_grade_summary(
     for s in students:
         stmt = await service.get(s.id, academic_year, month)
         if stmt:
-            paid = stmt.total_paid
+            paid = stmt.total_payments
             bal = stmt.closing_balance
         else:
             paid = Decimal("0")
@@ -271,50 +270,41 @@ async def get_next_due_date(
 ):
     """Return the next upcoming payment due date for a student.
 
-    Looks at outstanding_balances with status 'pending' or 'partial' to find
-    the next month that needs payment, based on the due_date of the linked
-    monthly_schedule.
+    Computed from the Excel-aligned invoice ledger: the earliest non-void
+    invoice that still has an unpaid balance (status issued/draft). If no
+    invoices remain unpaid, the student is caught up.
     """
     if user.role == "parent":
         await verify_student_access(student_id, user, db)
 
     from datetime import UTC, datetime
 
-    from app.models.grade import Student
-    from app.models.schedule import MonthlySchedule, OutstandingBalance
+    from app.models.grade import Student, StudentGuardian
+    from app.models.invoice import Invoice
+    from app.services.ledger import LedgerService
 
     student = await db.get(Student, student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    datetime.now(UTC)
+    ledger = LedgerService(db)
+    total_outstanding = await ledger.outstanding(student_id, datetime.now(UTC).year)
 
-    # Find next unpaid outstanding balance (pending or partial), ordered by due_date
+    # Earliest unpaid invoice (Excel-aligned), ordered by due_date
     stmt = (
-        select(OutstandingBalance)
-        .join(MonthlySchedule, OutstandingBalance.monthly_schedule_id == MonthlySchedule.id)
+        select(Invoice)
         .where(
-            OutstandingBalance.student_id == student_id,
-            OutstandingBalance.status.in_(["pending", "partial"]),
+            Invoice.student_id == student_id,
+            Invoice.status.in_(["issued", "draft"]),
+            Invoice.balance_due > 0,
         )
-        .order_by(MonthlySchedule.due_date.asc())
+        .order_by(Invoice.due_date.asc())
         .limit(1)
     )
     result = await db.execute(stmt)
-    next_balance = result.scalar_one_or_none()
+    next_invoice = result.scalar_one_or_none()
 
-    # Compute total outstanding
-    total_stmt = (
-        select(OutstandingBalance)
-        .where(OutstandingBalance.student_id == student_id)
-    )
-    total_result = await db.execute(total_stmt)
-    all_balances = total_result.scalars().all()
-    total_outstanding = sum(
-        float(b.balance or 0) for b in all_balances
-    )
-
-    if not next_balance:
+    if not next_invoice or total_outstanding <= 0:
         return NextDueDateResponse(
             student_id=student_id,
             student_name=f"{student.first_name} {student.last_name}",
@@ -325,22 +315,25 @@ async def get_next_due_date(
             total_outstanding=total_outstanding,
         )
 
-    schedule = await db.get(MonthlySchedule, next_balance.monthly_schedule_id)
     MONTHS = [
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December",
     ]
-    month_name = MONTHS[schedule.month - 1] if schedule.month <= 12 else f"Month {schedule.month}"
-    description = f"{month_name} {schedule.academic_year} installment"
+    month_name = (
+        MONTHS[next_invoice.month - 1]
+        if 1 <= next_invoice.month <= 12
+        else f"Month {next_invoice.month}"
+    )
+    description = f"{month_name} {next_invoice.academic_year} invoice"
 
     return NextDueDateResponse(
         student_id=student_id,
         student_name=f"{student.first_name} {student.last_name}",
-        next_due_date=schedule.due_date,
-        next_month=schedule.month,
-        next_amount_due=float(next_balance.balance or 0),
+        next_due_date=next_invoice.due_date,
+        next_month=next_invoice.month,
+        next_amount_due=float(next_invoice.balance_due),
         next_description=description,
-        total_outstanding=total_outstanding,
+        total_outstanding=float(total_outstanding),
     )
 
 
@@ -380,12 +373,35 @@ async def download_statement(
         f"{student.first_name} {student.last_name}" if student else student_id
     )
 
+    # Customer for the TO block: primary guardian where possible.
+    account_name = student_name
+    account_address = ""
+    if student is not None:
+        guardian = (
+            await db.execute(
+                select(StudentGuardian)
+                .where(StudentGuardian.student_id == student.id)
+                .order_by(
+                    StudentGuardian.guardian_type != "primary",
+                    StudentGuardian.created_at,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if guardian is not None:
+            account_name = guardian.full_name or student_name
+            account_address = ", ".join(
+                bit for bit in (guardian.physical_address, guardian.po_box) if bit
+            )
+
     ledger = await service.ledger_for_statement(statement)
     pdf = build_statement_pdf(
         statement,
         student_name,
         ledger,
         student_number=student.student_number if student else "",
+        account_name=account_name,
+        account_address=account_address,
     )
     return pdf_response(
         pdf,
@@ -512,9 +528,24 @@ async def trigger_rollover(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin")),
 ):
-    engine = BalanceEngine(db)
-    await engine.process_rollover(academic_year)
-    return {"detail": "Rollover processed"}
+    """Legacy rollover endpoint — now a no-op.
+
+    Balances are derived from the Excel-aligned ledger (invoices minus
+    verified payments), so there is nothing to roll over. Returns the
+    school-wide outstanding position for the year instead.
+    """
+    from app.services.ledger import LedgerService
+
+    ledger = LedgerService(db)
+    rows = await ledger.students_outstanding(academic_year)
+    total_outstanding = sum((r["outstanding"] for r in rows), Decimal("0"))
+    students_outstanding = sum(1 for r in rows if r["outstanding"] > 0)
+    return {
+        "detail": "Rollover no longer applies — balances come from the Excel ledger",
+        "academic_year": academic_year,
+        "total_outstanding": str(total_outstanding),
+        "students_outstanding": students_outstanding,
+    }
 
 
 @router.get("/balance-engine/total-due/{student_id}")
@@ -526,8 +557,10 @@ async def get_total_due(
 ):
     if user.role == "parent":
         await verify_student_access(student_id, user, db)
-    engine = BalanceEngine(db)
-    total = await engine.calculate_total_due(student_id, academic_year)
+    from app.services.ledger import LedgerService
+
+    ledger = LedgerService(db)
+    total = await ledger.outstanding(student_id, academic_year)
     return {
         "student_id": student_id,
         "academic_year": academic_year,

@@ -20,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.grade import Student
-from app.models.schedule import OutstandingBalance
 from app.schemas.payment import PaymentCreate
+from app.services.ledger import LedgerService
 from app.services.payment import PaymentService
 from app.services.sms import SmsNotConfiguredError, SmsService
 
@@ -34,30 +34,30 @@ REMINDER_REFERENCE_PREFIX = "PF-RM"
 
 
 # ── queries ──────────────────────────────────────────────────
-async def get_due_students(db: AsyncSession) -> list[Student]:
-    """Active students with at least one unpaid outstanding balance."""
+async def get_due_students(db: AsyncSession, academic_year: int | None = None) -> list[Student]:
+    """Active students with a positive Excel-ledger outstanding balance."""
+    year = academic_year or date.today().year
+    ledger = LedgerService(db)
+    rows = await ledger.students_outstanding(year)
+    student_ids = [r["student_id"] for r in rows if r["outstanding"] > 0]
+    if not student_ids:
+        return []
     stmt = (
         select(Student)
-        .join(OutstandingBalance, OutstandingBalance.student_id == Student.id)
         .where(
+            Student.id.in_(student_ids),
             Student.is_active == True,  # noqa: E712
-            OutstandingBalance.status != "paid",
         )
-        .distinct()
         .order_by(Student.first_name, Student.last_name)
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
-async def outstanding_total(db: AsyncSession, student_id: str) -> Decimal:
-    """Total current outstanding balance for one student."""
-    stmt = select(OutstandingBalance).where(
-        OutstandingBalance.student_id == student_id,
-        OutstandingBalance.status != "paid",
-    )
-    rows = (await db.execute(stmt)).scalars().all()
-    return sum((row.balance or Decimal("0")) for row in rows)
+async def outstanding_total(db: AsyncSession, student_id: str, academic_year: int | None = None) -> Decimal:
+    """Total current outstanding balance for one student from the Excel ledger."""
+    year = academic_year or date.today().year
+    return await LedgerService(db).outstanding(student_id, year)
 
 
 # ── link generation ──────────────────────────────────────────

@@ -2,18 +2,18 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from io import BytesIO
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.grade import Grade, Student
 from app.models.payment import Payment
-from app.models.schedule import MonthlySchedule, OutstandingBalance
-from app.services.schedule import ScheduleService
+from app.services.ledger import LedgerService
 
 
 class ReportService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.ledger = LedgerService(db)
 
     async def monthly_income(self, academic_year: int, month: int) -> dict:
         start, end = self._month_range(academic_year, month)
@@ -48,16 +48,11 @@ class ReportService:
     ) -> dict:
         """Monthly admin dashboard view.
 
-        Combines income actually received in the month with the outstanding
-        position up to (and including) that month, so admins can see, for a
-        single month: how much was collected, how much is still owed, and
-        which students owe. Optionally scoped to a single grade.
+        Income actually received in the month combined with the Excel-ledger
+        outstanding position up to (and including) that month — how much was
+        collected, how much is still owed, and which students owe.
         """
         start, end = self._month_range(academic_year, month)
-
-        # Ensure every active student has ledger rows (outstanding balances)
-        # before aggregating, so the outstanding view is not silently empty.
-        await ScheduleService(self.db).materialize_for_all(academic_year, grade_id)
 
         # Income received during the month
         income_stmt = select(func.sum(Payment.amount)).where(
@@ -80,41 +75,12 @@ class ReportService:
         total_income = (await self.db.execute(income_stmt)).scalar() or Decimal("0")
         payment_count = (await self.db.execute(count_stmt)).scalar() or 0
 
-        # Outstanding position: balances for schedules up to the month
-        out_stmt = (
-            select(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name.label("grade_name"),
-                func.sum(OutstandingBalance.balance).label("total_outstanding"),
-            )
-            .join(Grade, Grade.id == Student.grade_id)
-            .join(OutstandingBalance, OutstandingBalance.student_id == Student.id)
-            .join(MonthlySchedule, MonthlySchedule.id == OutstandingBalance.monthly_schedule_id)
-            .where(
-                MonthlySchedule.academic_year == academic_year,
-                MonthlySchedule.month <= month,
-                OutstandingBalance.status != "paid",
-            )
-            .group_by(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name,
-            )
+        # Outstanding position from the Excel-aligned ledger
+        rows = await self.ledger.students_outstanding(
+            academic_year, grade_id=grade_id, up_to_month=month
         )
-        if grade_id:
-            out_stmt = out_stmt.where(Student.grade_id == grade_id)
-        out_result = await self.db.execute(out_stmt)
-        rows = [
-            r
-            for r in out_result.all()
-            if (Decimal(str(r.total_outstanding)) > 0)
-        ]
-        rows.sort(key=lambda r: Decimal(str(r.total_outstanding)), reverse=True)
+        owing = [r for r in rows if r["outstanding"] > 0]
+        owing.sort(key=lambda r: r["outstanding"], reverse=True)
 
         return {
             "academic_year": academic_year,
@@ -122,18 +88,18 @@ class ReportService:
             "total_income": str(total_income),
             "payment_count": payment_count,
             "outstanding_total": str(
-                sum((Decimal(str(r.total_outstanding)) for r in rows), Decimal("0"))
+                sum((r["outstanding"] for r in owing), Decimal("0"))
             ),
-            "students_owing": len(rows),
+            "students_owing": len(owing),
             "students_owing_list": [
                 {
-                    "student_id": r.id,
-                    "student_number": r.student_number,
-                    "name": f"{r.first_name} {r.last_name}",
-                    "grade": r.grade_name,
-                    "balance": str(r.total_outstanding),
+                    "student_id": r["student_id"],
+                    "student_number": r["student_number"],
+                    "name": r["name"],
+                    "grade": r["grade"],
+                    "balance": str(r["outstanding"]),
                 }
-                for r in rows
+                for r in owing
             ],
         }
 
@@ -173,36 +139,19 @@ class ReportService:
         }
 
     async def outstanding_fees(self, academic_year: int) -> dict:
-        stmt = (
-            select(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                func.sum(OutstandingBalance.balance).label("total_outstanding"),
-            )
-            .join(OutstandingBalance, OutstandingBalance.student_id == Student.id)
-            .join(MonthlySchedule, MonthlySchedule.id == OutstandingBalance.monthly_schedule_id)
-            .where(
-                MonthlySchedule.academic_year == academic_year,
-                OutstandingBalance.status != "paid",
-            )
-            .group_by(Student.id, Student.student_number, Student.first_name, Student.last_name)
-        )
-        result = await self.db.execute(stmt)
-        rows = result.all()
-
+        rows = await self.ledger.students_outstanding(academic_year)
+        owing = [r for r in rows if r["outstanding"] > 0]
         return {
             "academic_year": academic_year,
-            "students_with_outstanding": len(rows),
+            "students_with_outstanding": len(owing),
             "students": [
                 {
-                    "student_id": r.id,
-                    "student_number": r.student_number,
-                    "name": f"{r.first_name} {r.last_name}",
-                    "outstanding": str(r.total_outstanding),
+                    "student_id": r["student_id"],
+                    "student_number": r["student_number"],
+                    "name": r["name"],
+                    "outstanding": str(r["outstanding"]),
                 }
-                for r in rows
+                for r in owing
             ],
         }
 
@@ -220,30 +169,34 @@ class ReportService:
             Payment.payment_date >= start,
             Payment.payment_date < end,
         )
+        if grade_id:
+            stmt = stmt.join(
+                Student, Student.id == Payment.student_id
+            ).where(Student.grade_id == grade_id)
         if payment_method:
             stmt = stmt.where(Payment.payment_method == payment_method)
-
         result = await self.db.execute(stmt)
         payments = result.scalars().all()
 
-        # Filter by grade in-memory since payment doesn't directly reference grade
-        if grade_id:
-            student_stmt = select(Student.id).where(Student.grade_id == grade_id)
-            student_result = await self.db.execute(student_stmt)
-            student_ids = set(student_result.scalars().all())
-            payments = [p for p in payments if p.student_id in student_ids]
-
-        total = sum((p.amount for p in payments), Decimal("0"))
-        by_method: dict[str, str] = {}
+        monthly_breakdown: dict[int, Decimal] = {}
+        monthly_counts: dict[int, int] = {}
         for p in payments:
-            current = Decimal(by_method.get(p.payment_method, "0"))
-            by_method[p.payment_method] = str(current + p.amount)
+            m = p.payment_date.month
+            monthly_breakdown[m] = monthly_breakdown.get(m, Decimal("0")) + p.amount
+            monthly_counts[m] = monthly_counts.get(m, 0) + 1
 
         return {
             "academic_year": academic_year,
-            "total_received": str(total),
-            "payment_count": len(payments),
-            "by_method": by_method,
+            "total_payments": str(sum(monthly_breakdown.values(), Decimal("0"))),
+            "payment_count": sum(monthly_counts.values()),
+            "monthly_breakdown": [
+                {
+                    "period": f"{academic_year}-{m:02d}",
+                    "total": str(monthly_breakdown.get(m, Decimal("0"))),
+                    "count": monthly_counts.get(m, 0),
+                }
+                for m in range(1, 13)
+            ],
         }
 
     async def payment_trends(self, academic_year: int) -> dict:
@@ -258,15 +211,21 @@ class ReportService:
         result = await self.db.execute(stmt)
         payments = result.scalars().all()
 
-        monthly_totals: dict[int, Decimal] = {}
+        monthly_data = {}
         for p in payments:
             m = p.payment_date.month
-            monthly_totals[m] = monthly_totals.get(m, Decimal("0")) + p.amount
+            entry = monthly_data.setdefault(m, {"total": Decimal("0"), "count": 0})
+            entry["total"] += p.amount
+            entry["count"] += 1
 
         return {
             "academic_year": academic_year,
-            "trends": [
-                {"month": m, "total": str(monthly_totals.get(m, Decimal("0")))}
+            "months": [
+                {
+                    "month": m,
+                    "total": str(monthly_data.get(m, {"total": Decimal("0")})["total"]),
+                    "count": monthly_data.get(m, {"count": 0})["count"],
+                }
                 for m in range(1, 13)
             ],
         }
@@ -275,53 +234,14 @@ class ReportService:
         self, academic_year: int, status_filter: str | None = None, grade_id: str | None = None
     ) -> dict:
         """School-wide statement summary — every approved student with their
-        outstanding balance for the academic year (balance 0 when no fee rows
-        exist yet), so admin can see the whole school, not just one child.
-        Pass `grade_id` to restrict the report to one grade."""
-        stmt = (
-            select(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name.label("grade"),
-                func.coalesce(
-                    func.sum(OutstandingBalance.balance), Decimal("0")
-                ).label("total_balance"),
-            )
-            .outerjoin(
-                OutstandingBalance,
-                OutstandingBalance.student_id == Student.id,
-            )
-            .outerjoin(
-                MonthlySchedule,
-                and_(
-                    MonthlySchedule.id == OutstandingBalance.monthly_schedule_id,
-                    MonthlySchedule.academic_year == academic_year,
-                ),
-            )
-            .outerjoin(Grade, Grade.id == Student.grade_id)
-            .where(Student.registration_status == "approved")
-        )
-        if grade_id:
-            stmt = stmt.where(Student.grade_id == grade_id)
-        stmt = (
-            stmt.group_by(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name,
-            )
-            .order_by(Grade.name, Student.first_name, Student.last_name)
-        )
-        result = await self.db.execute(stmt)
-        rows = result.all()
+        outstanding balance for the academic year from the Excel-aligned
+        ledger, so admin can see the whole school, not just one child."""
+        rows = await self.ledger.students_outstanding(academic_year, grade_id=grade_id)
 
         students = []
         total_outstanding = Decimal("0")
         for r in rows:
-            balance = Decimal(str(r.total_balance))
+            balance = r["outstanding"]
             student_status = "paid" if balance <= 0 else "overdue"
             if student_status == "overdue":
                 total_outstanding += balance
@@ -330,10 +250,10 @@ class ReportService:
                 continue
 
             students.append({
-                "student_id": r.id,
-                "student_number": r.student_number,
-                "name": f"{r.first_name} {r.last_name}",
-                "grade": r.grade or "",
+                "student_id": r["student_id"],
+                "student_number": r["student_number"],
+                "name": r["name"],
+                "grade": r["grade"] or "",
                 "balance": str(balance),
                 "status": student_status,
             })
@@ -358,48 +278,12 @@ class ReportService:
         headers: Customer | Grade | Amount | Comments | Learners on
         suspension). Every approved student is included once, optionally
         scoped to a single grade, with their outstanding balance for the
-        academic year (0.00 when fully paid) plus a SUM footer row.
+        academic year from the Excel-aligned ledger (0.00 when fully paid)
+        plus a SUM footer row.
 
         Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
         """
-        stmt = (
-            select(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name.label("grade"),
-                func.coalesce(
-                    func.sum(OutstandingBalance.balance), Decimal("0")
-                ).label("total_balance"),
-            )
-            .outerjoin(
-                OutstandingBalance,
-                OutstandingBalance.student_id == Student.id,
-            )
-            .outerjoin(
-                MonthlySchedule,
-                and_(
-                    MonthlySchedule.id == OutstandingBalance.monthly_schedule_id,
-                    MonthlySchedule.academic_year == academic_year,
-                ),
-            )
-            .join(Grade, Grade.id == Student.grade_id)
-            .where(Student.registration_status == "approved")
-        )
-        if grade_id:
-            stmt = stmt.where(Student.grade_id == grade_id)
-        stmt = (
-            stmt.group_by(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name,
-            )
-            .order_by(Grade.name, Student.first_name, Student.last_name)
-        )
-        rows = (await self.db.execute(stmt)).all()
+        rows = await self.ledger.students_outstanding(academic_year, grade_id=grade_id)
 
         def _grade_display(name: str) -> str:
             if name == "GRADE R":
@@ -416,9 +300,9 @@ class ReportService:
 
         surfacing_rows = [
             [
-                f"({r.student_number}) {r.first_name} {r.last_name}".strip(),
-                _grade_display(r.grade),
-                float(r.total_balance),
+                f"({r['student_number']}) {r['name']}".strip(),
+                _grade_display(r["grade"]),
+                float(r["outstanding"]),
                 None,
                 None,
             ]
@@ -485,8 +369,8 @@ class ReportService:
 
         - not_paid: active students with NO verified payment in the selected
           month (they have not paid for that month yet)
-        - outstanding: students with a positive OutstandingBalance in the
-          academic year up to (and including) the selected month
+        - outstanding: students with a positive ledger balance in the academic
+          year up to (and including) the selected month
         """
         start, end = self._month_range(academic_year, month)
 
@@ -518,44 +402,19 @@ class ReportService:
             if s.id not in paid_ids
         ]
 
-        outstanding_stmt = (
-            select(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name.label("grade_name"),
-                func.sum(OutstandingBalance.balance).label("total_outstanding"),
-            )
-            .join(Grade, Grade.id == Student.grade_id)
-            .join(OutstandingBalance, OutstandingBalance.student_id == Student.id)
-            .join(MonthlySchedule, MonthlySchedule.id == OutstandingBalance.monthly_schedule_id)
-            .where(
-                MonthlySchedule.academic_year == academic_year,
-                MonthlySchedule.month <= month,
-                OutstandingBalance.status != "paid",
-            )
-            .group_by(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name,
-            )
+        ledger_rows = await self.ledger.students_outstanding(
+            academic_year, up_to_month=month
         )
-        outstanding_result = await self.db.execute(outstanding_stmt)
-        outstanding_rows = outstanding_result.all()
-
         outstanding = [
             {
-                "student_id": r.id,
-                "student_number": r.student_number,
-                "name": f"{r.first_name} {r.last_name}",
-                "grade": r.grade_name,
-                "balance": str(r.total_outstanding),
+                "student_id": r["student_id"],
+                "student_number": r["student_number"],
+                "name": r["name"],
+                "grade": r["grade"],
+                "balance": str(r["outstanding"]),
             }
-            for r in outstanding_rows
-            if Decimal(str(r.total_outstanding)) > 0
+            for r in ledger_rows
+            if r["outstanding"] > 0
         ]
         outstanding.sort(key=lambda r: Decimal(r["balance"]), reverse=True)
 
@@ -569,7 +428,6 @@ class ReportService:
         }
 
     def _month_range(self, year: int, month: int) -> tuple[datetime, datetime]:
-        """Return [start, end) boundaries for a given month."""
         start = datetime(year, month, 1, tzinfo=UTC)
         if month == 12:
             end = datetime(year + 1, 1, 1, tzinfo=UTC)

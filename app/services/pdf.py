@@ -21,6 +21,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as _rl_canvas
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -65,6 +66,22 @@ _GOLD_SOFT = colors.HexColor("#F6F0DC")    # pale gold table header
 _GOLD_ROW = colors.HexColor("#FDFBF3")     # pale gold zebra row
 _LINE = colors.HexColor("#E3DCC9")         # warm hairline
 _LINE_SOFT = colors.HexColor("#F0EBDB")
+
+# ── Bank details (shown on statements) ──────────────────────
+# TODO: replace the placeholders below with the school's real bank details.
+_BANK_NAME = "Bank Name"
+_BANK_ACCOUNT = "0000 000 0000"
+_BANK_BRANCH = "000000"
+
+# ── Light statement palette (mirrors the HTML statement template) ──
+_LIGHT_TEXT = colors.HexColor("#333333")
+_LIGHT_LABEL = colors.HexColor("#888888")
+_LIGHT_DESC = colors.HexColor("#444444")
+_LIGHT_BORDER_SOFT = colors.HexColor("#EEEEEE")
+_LIGHT_BORDER = colors.HexColor("#DDDDDD")
+_LIGHT_GOLD = colors.HexColor("#E1C073")
+_LIGHT_GOLD_DARK = colors.HexColor("#B08B2F")  # gold kept readable on white
+_LIGHT_HEADING = colors.HexColor("#111111")
 
 # ── Fonts ───────────────────────────────────────────────────
 # Prefer DejaVu (metric-friendly, ships with most Linux/macOS) as the
@@ -404,79 +421,179 @@ _STMT_CREDIT = colors.HexColor("#047857")     # emerald-700 (frontend credit)
 _STMT_MUTED = colors.HexColor("#94A3B8")      # slate-400
 
 
-def _statement_header(account: dict) -> Table:
-    """Navy account-header card: school name + 'Statement of Account', then a
-    4-field grid — Account Holder / Account Number / Statement Period / Date Issued."""
-    _right = ParagraphStyle(
-        "StmtHeaderRight",
-        parent=_NORMAL,
-        alignment=TA_RIGHT,
-    )
-    header = Table(
-        [[
-            Paragraph(
-                '<font color="#FFFFFF"><b>Lambton Christian School</b></font>',
-                _NORMAL,
-            ),
-            Paragraph(
-                '<font color="#C7CFE6">STATEMENT OF ACCOUNT</font>',
-                _right,
-            ),
-        ]],
-        colWidths=[110 * mm, 70 * mm],
-    )
-    header.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
-                ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 12),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ]
-        )
-    )
+# ── Light statement styles (HTML statement template) ─────────
+_STMT_PARTY_LABEL = ParagraphStyle(
+    "StmtPartyLabel", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=9,
+    textColor=_LIGHT_LABEL, spaceAfter=3, leading=11,
+)
+_STMT_PARTY_NAME = ParagraphStyle(
+    "StmtPartyName", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=15,
+    textColor=_LIGHT_HEADING, spaceAfter=8, leading=19,
+)
+_STMT_ADDR_LABEL = ParagraphStyle(
+    "StmtAddrLabel", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=8.5,
+    textColor=_LIGHT_LABEL, spaceAfter=2, leading=10,
+)
+_STMT_ADDR = ParagraphStyle(
+    "StmtAddr", parent=_NORMAL, fontSize=9, textColor=_LIGHT_DESC, leading=12,
+)
+_STMT_TABLE_HDR = ParagraphStyle(
+    "StmtTblHdr", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=9,
+    textColor=_LIGHT_LABEL, leading=11,
+)
+_STMT_TABLE_HDR_R = ParagraphStyle(
+    "StmtTblHdrR", parent=_STMT_TABLE_HDR, alignment=TA_RIGHT,
+)
+_STMT_TABLE_BODY = ParagraphStyle(
+    "StmtTblBody", parent=_NORMAL, fontSize=9.5, textColor=_LIGHT_TEXT, leading=12,
+)
+_STMT_TABLE_DESC = ParagraphStyle(
+    "StmtTblDesc", parent=_STMT_TABLE_BODY, textColor=_LIGHT_DESC,
+    fontName="Brand-Italic",
+)
+_STMT_TABLE_BOLD = ParagraphStyle(
+    "StmtTblBold", parent=_STMT_TABLE_BODY, fontName=_BRAND_BOLD,
+    textColor=_LIGHT_HEADING,
+)
+_STMT_TABLE_MONEY = ParagraphStyle(
+    "StmtTblMoney", parent=_STMT_TABLE_BODY, alignment=TA_RIGHT,
+)
+_STMT_TABLE_MONEY_B = ParagraphStyle(
+    "StmtTblMoneyB", parent=_STMT_TABLE_MONEY, fontName=_BRAND_BOLD,
+)
+_STMT_TOTAL_LABEL = ParagraphStyle(
+    "StmtTotLabel", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=12,
+    textColor=_LIGHT_HEADING, leading=15,
+)
+_STMT_TOTAL_VALUE = ParagraphStyle(
+    "StmtTotValue", parent=_STMT_TOTAL_LABEL, alignment=TA_RIGHT,
+    textColor=_LIGHT_GOLD_DARK,
+)
+_STMT_NOTE = ParagraphStyle(
+    "StmtNote", parent=_NORMAL, fontSize=9.5, textColor=_LIGHT_DESC, leading=13,
+    spaceAfter=6,
+)
+_STMT_NOTE_BOLD = ParagraphStyle(
+    "StmtNoteBold", parent=_STMT_NOTE, fontName=_BRAND_BOLD, textColor=_LIGHT_TEXT,
+)
 
-    fields = [
-        ("Account Holder", account.get("name", "—")),
-        ("Account Number", account.get("number", "—")),
-        ("Statement Period", account.get("period", "—")),
-        ("Date Issued", account.get("issued", "—")),
-    ]
-    cells = []
-    for label, value in fields:
-        cells.append(
-            Paragraph(
-                f'<font color="#94A3B8" size="7">{label.upper()}</font><br/>'
-                f'<font color="#FFFFFF"><b>{value}</b></font>',
-                _NORMAL,
+
+class _PageCountingCanvas(_rl_canvas.Canvas):
+    """Canvas that can draw 'PAGE: n/total' once the page count is known."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states: list[dict] = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = max(1, len(self._saved_page_states))
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_page_label(total)
+            super().showPage()
+        super().save()
+
+    def _draw_page_label(self, total: int) -> None:
+        margin = getattr(self, "_stmt_margin", 18 * mm)
+        top = A4[1]
+        self.setFont(_BRAND_FONT, 10)
+        self.setFillColor(_LIGHT_LABEL)
+        self.drawString(margin, top - 35.5 * mm, "PAGE:")
+        self.setFont(_BRAND_BOLD, 10)
+        self.setFillColor(_LIGHT_HEADING)
+        self.drawString(margin + 15 * mm, top - 35.5 * mm, f"{self.getPageNumber()}/{total}")
+
+
+class _StatementDocument:
+    """A4 reportlab document with the light bank-style statement header."""
+
+    _MARGIN = 18 * mm
+    _TOP = 42 * mm
+    _BOTTOM = 18 * mm
+
+    def __init__(self, *, date_label: str) -> None:
+        self.buffer = BytesIO()
+        self.story: list = []
+        self.date_label = date_label
+
+    def _on_page(self, canvas, doc) -> None:  # pragma: no cover - reportlab callback
+        canvas._stmt_margin = self._MARGIN
+        top = A4[1]
+        canvas.saveState()
+
+        # Title
+        canvas.setFont(_BRAND_BOLD, 26)
+        canvas.setFillColor(_LIGHT_HEADING)
+        canvas.drawString(self._MARGIN, top - 22 * mm, "STATEMENT")
+        # Gold underline beneath the title
+        canvas.setStrokeColor(_LIGHT_GOLD)
+        canvas.setLineWidth(2.6)
+        canvas.line(self._MARGIN, top - 25.5 * mm, self._MARGIN + 46 * mm, top - 25.5 * mm)
+        # DATE meta
+        canvas.setFont(_BRAND_FONT, 10)
+        canvas.setFillColor(_LIGHT_LABEL)
+        canvas.drawString(self._MARGIN, top - 31 * mm, "DATE:")
+        canvas.setFont(_BRAND_BOLD, 10)
+        canvas.setFillColor(_LIGHT_HEADING)
+        canvas.drawString(self._MARGIN + 15 * mm, top - 31 * mm, self.date_label)
+        # PAGE meta is drawn by _PageCountingCanvas once the total is known.
+
+        # Crest / logo (top-right)
+        size = 24 * mm
+        if _CREST.exists():
+            try:
+                canvas.drawImage(
+                    str(_CREST),
+                    A4[0] - self._MARGIN - size,
+                    top - 8 * mm - size,
+                    width=size,
+                    height=size,
+                    mask="auto",
+                    preserveAspectRatio=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        canvas.restoreState()
+
+    def build(self) -> bytes:
+        doc = BaseDocTemplate(
+            self.buffer,
+            pagesize=A4,
+            leftMargin=self._MARGIN,
+            rightMargin=self._MARGIN,
+            topMargin=self._TOP,
+            bottomMargin=self._BOTTOM,
             )
+        frame = Frame(
+            doc.leftMargin,
+            doc.bottomMargin,
+            doc.width,
+            doc.height,
+            id="normal",
         )
+        doc.addPageTemplates([PageTemplate(id="page", frames=[frame], onPage=self._on_page)])
+        # NOTE: canvasmaker must be passed to build() — BaseDocTemplate.build()
+        # uses the argument, not the constructor attribute.
+        doc.build(self.story, canvasmaker=_PageCountingCanvas)
+        return self.buffer.getvalue()
 
-    fields_t = Table([cells], colWidths=[45 * mm] * 4)
-    fields_t.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
-                ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
 
-    body = [
-        [header],
-        [fields_t],
-    ]
-    t = Table(body, colWidths=[180 * mm])
+def _stmt_addr_blocks(blocks: list[tuple[str, list[str]]]) -> Table:
+    """A horizontal strip of labelled address blocks (e.g. POSTAL | PHYSICAL)."""
+    cells = []
+    for label, lines in blocks:
+        cell = [Paragraph(label, _STMT_ADDR_LABEL)]
+        cell += [Paragraph(line, _STMT_ADDR) for line in lines]
+        cells.append(cell)
+    t = Table([cells], colWidths=[48 * mm] * len(cells))
     t.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
-                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#FFFFFF22")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING", (0, 0), (-1, -1), 0),
@@ -487,148 +604,164 @@ def _statement_header(account: dict) -> Table:
     return t
 
 
-def _balance_strip(statement: Statement) -> Table:
-    """3-cell strip: Opening Balance | Closing Balance | Amount Due (navy)."""
-    opening = Paragraph(
-        '<font color="#64748B" size="7">OPENING BALANCE</font><br/>'
-        f'<font color="#0F172A"><b>{money(statement.opening_balance)}</b></font>',
-        _NORMAL,
-    )
-    closing = Paragraph(
-        '<font color="#64748B" size="7">CLOSING BALANCE</font><br/>'
-        f'<font color="#0F172A"><b>{money(statement.closing_balance)}</b></font>',
-        _NORMAL,
-    )
-    due = Paragraph(
-        '<font color="#94A3B8" size="7">AMOUNT DUE</font><br/>'
-        f'<font color="#FFFFFF"><b>{money(statement.current_amount_due)}</b></font>',
-        _NORMAL,
-    )
-
-    t = Table([[opening, closing, due]], colWidths=[60 * mm] * 3)
+def _stmt_parties(to_name: str, *, to_address: str = "") -> Table:
+    """FROM/TO party blocks — mirrors the HTML template's two columns."""
+    from_cell = [
+        Paragraph("FROM", _STMT_PARTY_LABEL),
+        Paragraph(_SCHOOL_NAME, _STMT_PARTY_NAME),
+        _stmt_addr_blocks(
+            [
+                ("POSTAL ADDRESS:", _CONTACT_LINES[0].split(", ")),
+                ("PHYSICAL ADDRESS:", _CONTACT_LINES[1].split(", ")),
+            ]
+        ),
+    ]
+    cleaned = [
+        ln.strip()
+        for ln in to_address.replace(", ", "\n").split("\n")
+        if ln.strip()
+    ]
+    to_cell = [
+        Paragraph("TO", _STMT_PARTY_LABEL),
+        Paragraph(to_name, _STMT_PARTY_NAME),
+        _stmt_addr_blocks([("POSTAL ADDRESS:", cleaned or ["—"])]),
+    ]
+    t = Table([[from_cell, to_cell]], colWidths=[95 * mm, 85 * mm])
     t.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (1, 0), _STMT_ROW_ALT),
-                ("BACKGROUND", (2, 0), (2, 0), _STMT_NAVY),
-                ("LINEAFTER", (0, 0), (1, 0), 0.5, _LINE),
-                ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
     return t
 
 
-def _ledger_table(rows: list[dict]) -> Table:
-    """5-column ledger matching the frontend: Date | Details | Debit | Credit | Balance."""
+def _stmt_transactions(rows: list[dict]) -> Table:
+    """Date | Reference | Description | Debit | Credit table (HTML statement)."""
     data = [
         [
-            Paragraph('<b>Date</b>', _NORMAL),
-            Paragraph('<b>Transaction Details</b>', _NORMAL),
-            Paragraph('<b>Debit</b>', _MONEY_STYLE),
-            Paragraph('<b>Credit</b>', _MONEY_STYLE),
-            Paragraph('<b>Balance</b>', _MONEY_STYLE),
+            Paragraph("Date", _STMT_TABLE_HDR),
+            Paragraph("Reference", _STMT_TABLE_HDR),
+            Paragraph("Description", _STMT_TABLE_HDR),
+            Paragraph("Debit", _STMT_TABLE_HDR_R),
+            Paragraph("Credit", _STMT_TABLE_HDR_R),
         ]
     ]
     for r in rows:
-        # Frontend colours: debit rose-700, credit emerald-700, balance slate-900.
-        debit_p = Paragraph(
-            f'<font color="#BE123C">{money(r.get("debit"))}</font>'
-            if r.get("debit") is not None else "",
-            _MONEY_STYLE,
-        )
-        credit_p = Paragraph(
-            f'<font color="#047857">{money(r.get("credit"))}</font>'
-            if r.get("credit") is not None else "",
-            _MONEY_STYLE,
-        )
-        bold = r.get("bold")
-        desc_style = ParagraphStyle(
-            "LedgerDesc",
-            parent=_NORMAL,
-            fontName=_BRAND_BOLD if bold else _BRAND_FONT,
-        )
-        date_style = ParagraphStyle(
-            "LedgerDate",
-            parent=_NORMAL,
-            fontName=_BRAND_BOLD if bold else _BRAND_FONT,
-            textColor=_INK if bold else _INK_SOFT,
-        )
-        bal_style = ParagraphStyle(
-            "LedgerBal",
-            parent=_MONEY_BOLD if bold else _MONEY_STYLE,
-        )
+        desc = r.get("description", "")
+        bold = bool(r.get("bold"))
+        is_open = bold and "brought forward" in desc.lower()
+        is_close = bold and "carried forward" in desc.lower()
+
+        debit = r.get("debit")
+        credit = r.get("credit")
+        if is_open:
+            # HTML template opens with a zero credit; keep signed honesty.
+            bal = Decimal(str(r.get("balance") or 0))
+            if bal > 0:
+                debit, credit = bal, None
+            elif bal < 0:
+                debit, credit = None, -bal
+            else:
+                debit, credit = None, Decimal("0")
+        if is_close:
+            debit = credit = None
+
+        desc_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_DESC
+        date_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_BODY
+        money_style = _STMT_TABLE_MONEY_B if bold else _STMT_TABLE_MONEY
         data.append(
             [
                 Paragraph(r.get("date", ""), date_style),
-                Paragraph(r.get("description", ""), desc_style),
-                debit_p,
-                credit_p,
-                Paragraph(money(r.get("balance")), bal_style),
+                Paragraph(r.get("reference") or "", _STMT_TABLE_BODY),
+                Paragraph(desc, desc_style),
+                Paragraph(money(debit) if debit is not None else "", money_style),
+                Paragraph(money(credit) if credit is not None else "", money_style),
             ]
         )
 
-    t = Table(data, colWidths=[30 * mm, 70 * mm, 25 * mm, 28 * mm, 27 * mm], repeatRows=1)
+    t = Table(
+        data,
+        colWidths=[28 * mm, 30 * mm, 72 * mm, 25 * mm, 25 * mm],
+        repeatRows=1,
+    )
     style = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.white),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.8, _STMT_MUTED),
-        ("FONTNAME", (0, 0), (-1, 0), _BRAND_BOLD),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.9, _LIGHT_BORDER),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.5, _LIGHT_BORDER_SOFT),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, _STMT_ROW_ALT]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
     ]
-    # Bold final row with a strong top border (balance carried forward)
     if rows:
-        style.append(("LINEABOVE", (0, -1), (-1, -1), 1.2, _STMT_MUTED))
-        style.append(("FONTNAME", (0, -1), (-1, -1), _BRAND_BOLD))
+        style.append(("LINEABOVE", (0, -1), (-1, -1), 0.9, _LIGHT_BORDER))
     t.setStyle(TableStyle(style))
     return t
 
 
-def _statement_footer(statement: Statement) -> Table:
-    """Light strip: total annual fees, payments received, due date + thanks."""
-    fees = Paragraph(
-        'Total annual fees: '
-        f'<font color="#0F172A"><b>{money(statement.total_fees).replace(" ", "&nbsp;")}</b></font>',
-        _NORMAL,
-    )
-    payments = Paragraph(
-        "Payments received: "
-        '<font color="#047857"><b>'
-        f"{money(statement.total_payments).replace(' ', '&nbsp;')}"
-        "</b></font>",
-        _NORMAL,
-    )
-    due = Paragraph(
-        'Due date: '
-        f'<font color="#0F172A"><b>{_fmt_date(statement.due_date)}</b></font>',
-        _NORMAL,
-    )
-    thanks = Paragraph(
-        '<font color="#94A3B8">Thank you for banking with Lambton Christian School</font>',
-        _NORMAL,
-    )
-
-    t = Table([[fees, payments, due], [thanks]], colWidths=[60 * mm] * 3)
+def _stmt_totals(amount_due: Decimal, amount_paid: Decimal) -> Table:
+    """Right-aligned 'Amount Due for 2026' / 'Amount Paid to date' rows."""
+    rows = [
+        [
+            Paragraph("Amount Due for 2026", _STMT_TOTAL_LABEL),
+            Paragraph(money(amount_due), _STMT_TOTAL_VALUE),
+        ],
+        [
+            Paragraph("Amount Paid to date", _STMT_TOTAL_LABEL),
+            Paragraph(money(amount_paid), _STMT_TOTAL_VALUE),
+        ],
+    ]
+    t = Table(rows, colWidths=[110 * mm, 70 * mm])
     t.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), _STMT_ROW_ALT),
-                ("LINEABOVE", (0, 0), (-1, 0), 0.5, _LINE),
-                ("SPAN", (0, 1), (-1, 1)),
-                ("LEFTPADDING", (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return t
+
+
+def _stmt_notes() -> Table:
+    """Terms + bank payment instructions + sign-off (HTML statement footer)."""
+    notes = [
+        Paragraph(
+            "Dear Parent/Guardian, please note the payment terms and instalment "
+            "schedule for your account. Kindly settle each instalment by its due "
+            "date. Please contact the Finance Office to make alternative payment "
+            "arrangements.",
+            _STMT_NOTE,
+        ),
+        Paragraph("Please make all payments with your reference number to:", _STMT_NOTE),
+        Paragraph(
+            f"{_SCHOOL_NAME}<br/>"
+            f"{_BANK_NAME}<br/>"
+            f"Account Number: {_BANK_ACCOUNT}<br/>"
+            f"Branch Code: {_BANK_BRANCH}",
+            _STMT_NOTE_BOLD,
+        ),
+        Spacer(1, 4 * mm),
+        Paragraph("Kind Regards,<br/>Finance Department", _STMT_NOTE),
+    ]
+    t = Table([[notes]], colWidths=[180 * mm])
+    t.setStyle(
+        TableStyle(
+            [
+                ("LINEABOVE", (0, 0), (-1, -1), 0.6, _LIGHT_BORDER_SOFT),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
@@ -641,28 +774,38 @@ def build_statement_pdf(
     ledger: list[dict] | None = None,
     *,
     student_number: str = "",
+    account_name: str = "",
+    account_address: str = "",
 ) -> bytes:
-    doc = _Document("STATEMENT OF ACCOUNT")
+    """Light bank-style A4 statement matching the HTML statement template.
 
-    period_start = datetime(statement.academic_year, statement.month, 1)
-    period_label = f"{period_start.strftime('%B %Y')}"
-    issued = statement.generated_at
-    account = {
-        "name": student_name,
-        "number": student_number,
-        "period": period_label,
-        "issued": issued.strftime("%-d %b %Y") if issued else "—",
-    }
+    The header (STATEMENT title, DATE/PAGE meta, crest) is drawn on the canvas
+    with real page numbers; body flowables carry the parties, transactions
+    table, totals and payment notes.
+
+    *account_name* / *account_address* identify the customer in the TO block
+    (normally the primary guardian); fall back to the student when absent.
+    """
+    issued = statement.generated_at or datetime.utcnow()
+    doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))
+
+    # TO name in accounting style: (number) LASTNAME, Firstname
+    customer = (account_name or student_name or "").split()
+    if len(customer) >= 2:
+        to_name = f"({student_number}) {customer[-1]}, {' '.join(customer[:-1])}"
+    else:
+        to_name = f"({student_number}) {account_name or student_name}".strip()
 
     doc.story.extend(
         [
-            _statement_header(account),
-            Spacer(1, 4 * mm),
-            _balance_strip(statement),
-            Spacer(1, 6 * mm),
-            _ledger_table(ledger or []),
-            Spacer(1, 6 * mm),
-            _statement_footer(statement),
+            Spacer(1, 2 * mm),
+            _stmt_parties(to_name, to_address=account_address),
+            Spacer(1, 8 * mm),
+            _stmt_transactions(ledger or []),
+            Spacer(1, 8 * mm),
+            _stmt_totals(statement.current_amount_due, statement.total_payments),
+            Spacer(1, 10 * mm),
+            _stmt_notes(),
         ]
     )
     return doc.build()

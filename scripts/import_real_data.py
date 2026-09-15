@@ -9,6 +9,7 @@ import csv
 import re
 import uuid
 import secrets
+import os
 from datetime import datetime, UTC
 from decimal import Decimal
 import openpyxl
@@ -16,7 +17,11 @@ import psycopg2
 import psycopg2.extras
 
 # ── Config ──────────────────────────────────────────
-DB_URL = "postgresql://admin:REDACTED_PASSWORD@dpg-d9s91g2jnfac73932et0-a.ohio-postgres.render.com/financial_db_r82w"
+# Connection string comes from the environment, never hardcoded.
+# Usage: DATABASE_URL=postgresql://... python scripts/import_real_data.py
+DB_URL = os.environ.get("DATABASE_URL")
+if not DB_URL:
+    raise SystemExit("Set DATABASE_URL in the environment before running this script.")
 EXCEL_PATH = "/home/unknwn/Downloads/2026 CLASS LISTS.xlsx"
 CSV_PATH = "/home/unknwn/Downloads/CustomerStatementReport (1).csv"
 
