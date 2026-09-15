@@ -88,25 +88,29 @@ _LIGHT_HEADING = colors.HexColor("#111111")
 # closest freely-available stand-in for the letterhead's Trebuchet MS.
 # Falls back to Helvetica when the TTFs are not installed.
 def _register_fonts() -> tuple[str, str]:
+    # Bundled DejaVu ships with the app (app/static/fonts) so PDF rendering is
+    # deterministic on serverless runtimes (Vercel/Lambda have no system fonts).
+    bundled = Path(__file__).resolve().parent.parent / "static" / "fonts"
     candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        "/Library/Fonts/DejaVuSans.ttf",
+        bundled / "DejaVuSans.ttf",
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+        Path("/Library/Fonts/DejaVuSans.ttf"),
     ]
     for path in candidates:
-        if Path(path).exists():
-            pdfmetrics.registerFont(TTFont("Brand", path))
-            bold = str(Path(path).with_name("DejaVuSans-Bold.ttf"))
-            italic = str(Path(path).with_name("DejaVuSans-Oblique.ttf"))
-            if Path(bold).exists():
-                pdfmetrics.registerFont(TTFont("Brand-Bold", bold))
+        if path.exists():
+            pdfmetrics.registerFont(TTFont("Brand", str(path)))
+            bold = path.with_name("DejaVuSans-Bold.ttf")
+            italic = path.with_name("DejaVuSans-Oblique.ttf")
+            if bold.exists():
+                pdfmetrics.registerFont(TTFont("Brand-Bold", str(bold)))
             else:
                 pdfmetrics.registerFontFamily("Brand", normal="Brand")
-                pdfmetrics.registerFont(TTFont("Brand-Bold", path))
-            if Path(italic).exists():
-                pdfmetrics.registerFont(TTFont("Brand-Italic", italic))
+                pdfmetrics.registerFont(TTFont("Brand-Bold", str(path)))
+            if italic.exists():
+                pdfmetrics.registerFont(TTFont("Brand-Italic", str(italic)))
             else:
-                pdfmetrics.registerFont(TTFont("Brand-Italic", path))
+                pdfmetrics.registerFont(TTFont("Brand-Italic", str(path)))
             pdfmetrics.registerFontFamily(
                 "Brand", normal="Brand", bold="Brand-Bold", italic="Brand-Italic",
                 boldItalic="Brand-Bold",

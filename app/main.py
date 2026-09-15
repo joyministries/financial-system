@@ -1,6 +1,4 @@
-import faulthandler
 import logging
-import traceback as _tb
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -9,9 +7,6 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
-
-# TEMPORARY-DEBUG: catch native crashes so Vercel logs capture the traceback.
-faulthandler.enable()
 
 from app.api.pay import router as pay_router
 from app.api.v1.router import api_router
@@ -63,22 +58,6 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-# TEMPORARY-DEBUG: surface the real traceback for the statement-download 500.
-# This handler will be REMOVED once the root cause is fixed.
-@app.exception_handler(Exception)
-async def _debug_unhandled(request: Request, exc: Exception):
-    logger = logging.getLogger("app.debug")
-    logger.error("Unhandled exception on %s %s: %s",
-                 request.method, request.url.path, exc, exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": f"{type(exc).__name__}: {exc}",
-            "traceback": _tb.format_exception(type(exc), exc, exc.__traceback__),
-        },
-    )
 
 app.add_middleware(
     CORSMiddleware,
