@@ -28,7 +28,7 @@ export default function ReportsPage() {
     Promise.all([
       reportsApi.paymentTrends(year).then((r) =>
         setTrends(
-          r.data.trends.map((t: { month: number; total: string | number }) => ({
+          r.data.months.map((t: { month: number; total: string | number }) => ({
             month: t.month,
             total: Number(t.total),
           }))

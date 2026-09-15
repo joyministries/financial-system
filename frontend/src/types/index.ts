@@ -328,7 +328,7 @@ export interface OutstandingReport {
 
 export interface PaymentTrendsReport {
   academic_year: number;
-  trends: { month: number; total: number }[];
+  months: { month: number; total: number; count: number }[];
 }
 
 export interface CarryForwardItem {

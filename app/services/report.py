@@ -180,14 +180,18 @@ class ReportService:
 
         monthly_breakdown: dict[int, Decimal] = {}
         monthly_counts: dict[int, int] = {}
+        by_method: dict[str, Decimal] = {}
         for p in payments:
             m = p.payment_date.month
             monthly_breakdown[m] = monthly_breakdown.get(m, Decimal("0")) + p.amount
             monthly_counts[m] = monthly_counts.get(m, 0) + 1
+            method = p.payment_method or "unknown"
+            by_method[method] = by_method.get(method, Decimal("0")) + p.amount
 
         return {
             "academic_year": academic_year,
             "total_payments": str(sum(monthly_breakdown.values(), Decimal("0"))),
+            "total_received": str(sum(monthly_breakdown.values(), Decimal("0"))),
             "payment_count": sum(monthly_counts.values()),
             "monthly_breakdown": [
                 {
@@ -197,6 +201,7 @@ class ReportService:
                 }
                 for m in range(1, 13)
             ],
+            "by_method": {k: str(v) for k, v in sorted(by_method.items())},
         }
 
     async def payment_trends(self, academic_year: int) -> dict:

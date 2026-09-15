@@ -37,7 +37,7 @@ export default function DashboardPage() {
         reportsApi.paymentTrends(y),
       ]);
       setSummary(summaryRes.data);
-      setTrends(trendsRes.data.trends);
+      setTrends(trendsRes.data.months);
     } catch {
       setSummary(null);
     } finally {
