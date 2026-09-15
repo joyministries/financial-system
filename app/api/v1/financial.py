@@ -16,6 +16,7 @@ from app.core.deps import (
 )
 from app.core.exceptions import ConflictError
 from app.models.grade import Student, StudentGuardian
+from app.models.financial import Statement
 from app.models.user import User
 from app.schemas.common import PageResponse, build_page_response
 from app.schemas.financial import (
@@ -260,24 +261,82 @@ async def download_grade_summary(
     ).scalars().all()
 
     student_data = []
-    for s in students:
-        stmt = await service.get(s.id, academic_year, month)
-        if stmt:
-            paid = stmt.total_payments
-            bal = stmt.closing_balance
-        else:
-            paid = Decimal("0")
-            bal = Decimal("0")
-        student_data.append({
-            "name": f"{s.first_name} {s.last_name}",
-            "student_number": s.student_number or "",
-            "total_paid": paid,
-            "balance": bal,
-            "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
-        })
+    if students:
+        stmts = (await db.execute(
+            select(Statement)
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month == month,
+                Statement.student_id.in_([s.id for s in students]),
+            )
+        )).scalars().all()
+        stmt_by_student = {st.student_id: st for st in stmts}
+        for s in students:
+            stmt = stmt_by_student.get(s.id)
+            if stmt:
+                paid = stmt.total_payments
+                bal = stmt.closing_balance
+            else:
+                paid = Decimal("0")
+                bal = Decimal("0")
+            student_data.append({
+                "name": f"{s.first_name} {s.last_name}",
+                "student_number": s.student_number or "",
+                "total_paid": paid,
+                "balance": bal,
+                "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
+            })
 
     pdf = build_grade_summary_pdf(grade_name, academic_year, month, student_data)
     return pdf_response(pdf, f"grade-summary-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf")
+
+
+@router.get("/statements/school-summary/download")
+async def download_school_summary(
+    academic_year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Download a school-wide summary PDF — all approved students across every grade."""
+    service = StatementService(db)
+    students = (
+        await db.execute(
+            select(Student)
+            .where(Student.registration_status == "approved")
+            .order_by(Student.last_name, Student.first_name)
+        )
+    ).scalars().all()
+
+    student_data = []
+    if students:
+        stmts = (await db.execute(
+            select(Statement)
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month == month,
+                Statement.student_id.in_([s.id for s in students]),
+            )
+        )).scalars().all()
+        stmt_by_student = {st.student_id: st for st in stmts}
+        for s in students:
+            stmt = stmt_by_student.get(s.id)
+            if stmt:
+                paid = stmt.total_payments
+                bal = stmt.closing_balance
+            else:
+                paid = Decimal("0")
+                bal = Decimal("0")
+            student_data.append({
+                "name": f"{s.first_name} {s.last_name}",
+                "student_number": s.student_number or "",
+                "total_paid": paid,
+                "balance": bal,
+                "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
+            })
+
+    pdf = build_grade_summary_pdf("All Grades", academic_year, month, student_data)
+    return pdf_response(pdf, f"school-summary-{academic_year}-{month:02d}.pdf")
 
 
 @router.post("/statements/regenerate")

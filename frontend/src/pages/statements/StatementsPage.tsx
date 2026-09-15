@@ -154,6 +154,24 @@ export default function StatementsPage() {
 
   useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade]);
 
+  // Fix: use downloadPdf so auth token is attached (bare <a href> gets 401)
+  // Works for a whole-school summary (no grade selected) or a single grade.
+  const downloadSummary = async () => {
+    if (!bulkMonth) return toast.error('Select a month first');
+    const toastId = toast.loading('Preparing summary PDF…');
+    try {
+      await downloadPdf(
+        bulkGrade
+          ? financialApi.gradeSummaryDownloadUrl(bulkGrade, year, bulkMonth as number)
+          : financialApi.schoolSummaryDownloadUrl(year, bulkMonth as number),
+        bulkGrade ? `grade-summary-${bulkGrade}-${year}-${bulkMonth}.pdf` : `school-summary-${year}-${bulkMonth}.pdf`,
+      );
+      toast.success('Download started', { id: toastId });
+    } catch {
+      toast.error('Download failed', { id: toastId });
+    }
+  };
+
   const handleBulkGenerate = async () => {
     if (!bulkMonth) return toast.error('Select a month');
     setBulking(true);
@@ -161,25 +179,13 @@ export default function StatementsPage() {
       const res = await financialApi.generateAllStatements(year, bulkMonth as number, bulkGrade || undefined);
       toast.success(`${bulkGrade ? 'Grade' : 'Whole school'}: ${res.data.generated} generated (months 1–${bulkMonth}), ${res.data.skipped} already existed`);
       loadSchoolReport();
+      // Generate is now generate-AND-download: once the statements exist,
+      // pull the summary PDF so the admin gets the file in one click.
+      await downloadSummary();
     } catch {
       toast.error('Bulk generation failed');
     } finally {
       setBulking(false);
-    }
-  };
-
-  // Fix: use downloadPdf so auth token is attached (bare <a href> gets 401)
-  const downloadGradeSummary = async () => {
-    if (!bulkGrade || !bulkMonth) return toast.error('Select a grade and month first');
-    const toastId = toast.loading('Preparing grade summary…');
-    try {
-      await downloadPdf(
-        financialApi.gradeSummaryDownloadUrl(bulkGrade, year, bulkMonth as number),
-        `grade-summary-${bulkGrade}-${year}-${bulkMonth}.pdf`,
-      );
-      toast.success('Download started', { id: toastId });
-    } catch {
-      toast.error('Download failed', { id: toastId });
     }
   };
 
@@ -514,13 +520,11 @@ export default function StatementsPage() {
                 {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
               </select>
               <button onClick={handleBulkGenerate} disabled={bulking || !bulkMonth} className="btn btn-primary">
-                <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate'}
+                <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate & Download'}
               </button>
-              {bulkGrade && bulkMonth && (
-                <button onClick={downloadGradeSummary} className="btn btn-secondary">
-                  <Download className="h-4 w-4" /> Grade Summary PDF
-                </button>
-              )}
+              <button onClick={downloadSummary} disabled={!bulkMonth} className="btn btn-secondary">
+                <Download className="h-4 w-4" /> {bulkGrade ? 'Grade Summary PDF' : 'Whole School Summary PDF'}
+              </button>
             </div>
           </div>
 

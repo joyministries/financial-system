@@ -398,6 +398,8 @@ export const financialApi = {
     `/financial/statements/${encodeURIComponent(studentId)}/download?academic_year=${year}&month=${month}`,
   gradeSummaryDownloadUrl: (gradeId: string, year: number, month: number) =>
     `/financial/statements/grade-summary/${encodeURIComponent(gradeId)}/download?academic_year=${year}&month=${month}`,
+  schoolSummaryDownloadUrl: (year: number, month: number) =>
+    `/financial/statements/school-summary/download?academic_year=${year}&month=${month}`,
   triggerRollover: (year: number) =>
     api.post(`/financial/balance-engine/rollover?academic_year=${year}`),
   getTotalDue: (studentId: string, year: number) =>
