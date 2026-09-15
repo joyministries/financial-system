@@ -4,6 +4,8 @@ import type { Student } from '@/types';
 import { Search, X, Loader2, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
 
+const NO_EXCLUDES: string[] = [];
+
 interface Props {
   value: string;
   onChange: (id: string) => void;
@@ -30,7 +32,7 @@ export default function StudentSearchSelect({
   onChange,
   placeholder = 'Type a name or student number…',
   disabled,
-  excludeIds = [],
+  excludeIds = NO_EXCLUDES,
 }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Student[]>([]);
@@ -41,6 +43,12 @@ export default function StudentSearchSelect({
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | undefined>(undefined);
   const latestQueryRef = useRef('');
+  // excludeIds lives in a ref so a new array identity per render can never
+  // retrigger the search effect (the parent re-renders constantly).
+  const excludeIdsRef = useRef(excludeIds);
+  useEffect(() => {
+    excludeIdsRef.current = excludeIds;
+  }, [excludeIds]);
 
   // Resolve the selected student's name when `value` is set externally.
   useEffect(() => {
@@ -55,9 +63,11 @@ export default function StudentSearchSelect({
     }
   }, [value]);
 
-  // Debounced server-side search — only fires when open AND query ≥2 chars.
-  // Prior results are kept on screen while a refresh is in flight so the list
-  // never "blinks" away mid-click. A latency guard drops out-of-order responses.
+  // Debounced server-side search — fires only when open AND query ≥2 chars,
+  // and only when the query itself changes (never on parent re-renders, which
+  // used to retrigger via the excludeIds prop identity). Prior results stay on
+  // screen while a refresh is in flight so the list never "blinks" away
+  // mid-click; a latency guard drops out-of-order responses.
   useEffect(() => {
     if (!open || query.trim().length < 2) {
       setResults([]);
@@ -73,7 +83,7 @@ export default function StudentSearchSelect({
         .list({ search: q, limit: 10 })
         .then((r) => {
           if (latestQueryRef.current !== q) return; // stale response — ignore
-          setResults(r.data.items.filter((s: Student) => !excludeIds.includes(s.id)));
+          setResults(r.data.items.filter((s: Student) => !excludeIdsRef.current.includes(s.id)));
         })
         .catch(() => {
           if (latestQueryRef.current !== q) return;
@@ -84,7 +94,7 @@ export default function StudentSearchSelect({
         });
     }, 450);
     return () => window.clearTimeout(debounceRef.current);
-  }, [query, open, excludeIds]);
+  }, [query, open]);
 
   // Close on outside click.
   useEffect(() => {
