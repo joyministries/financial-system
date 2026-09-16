@@ -823,7 +823,7 @@ def build_statement_pdf(
                 f'<font size="9" color="#666666"><b>Period:</b> {period_label}</font>',
                 ParagraphStyle(
                     "PeriodLabel",
-                    fontName="DejaVuSans",
+                    fontName=_BRAND_FONT,
                     fontSize=9,
                     textColor=colors.HexColor("#666666"),
                     alignment=TA_LEFT,
