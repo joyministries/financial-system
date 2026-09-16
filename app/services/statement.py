@@ -345,11 +345,22 @@ class StatementService:
 
         for p in payments:
             balance -= p.amount
+            ref = (p.reference_number or "").strip()
+            if ref.upper().startswith("CRN"):
+                # Credit note rows on the Xero report are credit transactions
+                # with their CRN reference — not payments.
+                description = f"Credit note — {ref}"
+            elif not ref:
+                # Refless January Brought-Forward credit (parent overpaid in a
+                # prior year) carried into this year as an opening credit.
+                description = "Balance brought forward"
+            else:
+                description = f"Payment — {p.payment_method}"
             rows.append(
                 {
                     "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
-                    "reference": p.reference_number or "",
-                    "description": f"Payment — {p.payment_method}",
+                    "reference": ref,
+                    "description": description,
                     "debit": None,
                     "credit": p.amount,
                     "balance": balance,

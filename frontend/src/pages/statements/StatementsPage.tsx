@@ -278,9 +278,18 @@ export default function StatementsPage() {
     });
     ledgerPayments.forEach((p) => {
       balance -= p.amount;
+      const ref = (p.reference_number || '').trim();
+      let description: string;
+      if (ref.toUpperCase().startsWith('CRN')) {
+        description = `Credit note — ${ref}`;
+      } else if (!ref) {
+        description = 'Balance brought forward';
+      } else {
+        description = `Payment — ${p.payment_method}${ref ? ` (${ref})` : ''}`;
+      }
       rows.push({
         date: new Date(p.payment_date).toLocaleDateString(),
-        description: `Payment — ${p.payment_method}${p.reference_number ? ` (${p.reference_number})` : ''}`,
+        description,
         credit: p.amount,
         balance,
       });

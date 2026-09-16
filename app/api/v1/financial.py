@@ -343,18 +343,26 @@ async def download_school_summary(
 async def regenerate_statements(
     student_id: str,
     academic_year: int,
+    up_to_month: int = 12,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
     """Delete all existing statements for a student+year and regenerate them.
 
     This picks up any payments that were verified after the original
-    statements were generated."""
+    statements were generated.
+
+    ``up_to_month`` caps the regeneration horizon (default 12 = full year).
+    Pass the report/current month (e.g. 9 for September) to avoid fabricating
+    zero-activity statements for future months that have no fee schedule yet.
+    """
+    if not 1 <= up_to_month <= 12:
+        raise HTTPException(status_code=422, detail="up_to_month must be 1..12")
     service = StatementService(db)
     deleted = await service.delete_for_student(student_id, academic_year)
 
     generated = 0
-    for month in range(1, 13):
+    for month in range(1, up_to_month + 1):
         try:
             await service.generate(student_id, academic_year, month)
             generated += 1
@@ -557,7 +565,14 @@ async def download_statement(
             f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
         )
 
-    total_paid = sum(s.total_payments for s in statements)
+    # "Amount Paid to date" mirrors the Xero report footer: RCP receipts only.
+    # Brought-forward credits (refless) and credit notes (CRN) are shown as
+    # their own ledger rows, so they must not inflate the paid total.
+    total_paid = sum(
+        (row.get("credit") or 0)
+        for row in ledger
+        if (row.get("reference") or "").upper().startswith("RCP")
+    )
     pdf = build_statement_pdf(
         last,
         student_name,
