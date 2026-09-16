@@ -46,6 +46,7 @@ export default function StatementsPage() {
   const [ledgerCharges, setLedgerCharges] = useState<AdditionalCharge[]>([]);
   const [ledgerPayments, setLedgerPayments] = useState<Payment[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
+  const [statementMonths, setStatementMonths] = useState<number>(1); // 1/3/6/12 month range
 
   // Whole-school statement summary (admin / finance only).
   const [schoolStatus, setSchoolStatus] = useState<'all' | 'paid' | 'overdue'>('all');
@@ -122,8 +123,8 @@ export default function StatementsPage() {
       const studentName = getStudentName(selectedStudent).replace(/\s+/g, '-');
       if (!stmt) throw new Error('Statement not available');
       await downloadPdf(
-        financialApi.statementDownloadUrl(stmt.student_id, stmt.academic_year, stmt.month),
-        `statement-${studentName}-${stmt.academic_year}-${String(stmt.month).padStart(2, '0')}.pdf`,
+        financialApi.statementDownloadUrl(stmt.student_id, stmt.academic_year, stmt.month, statementMonths),
+        `statement-${studentName}-${stmt.academic_year}-${String(stmt.month).padStart(2, '0')}${statementMonths > 1 ? `-${statementMonths}m` : ''}.pdf`,
       );
       toast.success('Download started', { id: toastId });
     } catch (err: any) {
@@ -350,6 +351,19 @@ export default function StatementsPage() {
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-slate-400">Statement Period</p>
                 <p className="mt-0.5 font-semibold text-white">{MONTHS[selectedStatement.month - 1]} {selectedStatement.academic_year}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-slate-400">Download Range</p>
+                <select
+                  value={statementMonths}
+                  onChange={(e) => setStatementMonths(Number(e.target.value))}
+                  className="mt-0.5 rounded border border-slate-600 bg-[#1e2a4a] px-2 py-1 text-xs font-semibold text-white focus:border-primary-500 focus:outline-none"
+                >
+                  <option value={1}>1 month</option>
+                  <option value={3}>3 months</option>
+                  <option value={6}>6 months</option>
+                  <option value={12}>Full year</option>
+                </select>
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-slate-400">Date Issued</p>

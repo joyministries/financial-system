@@ -14,7 +14,7 @@ from pathlib import Path
 
 from fastapi import Response
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_RIGHT
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -780,6 +780,9 @@ def build_statement_pdf(
     student_number: str = "",
     account_name: str = "",
     account_address: str = "",
+    period_label: str = "",
+    amount_due: Decimal | None = None,
+    amount_paid: Decimal | None = None,
 ) -> bytes:
     """Light bank-style A4 statement matching the HTML statement template.
 
@@ -789,6 +792,12 @@ def build_statement_pdf(
 
     *account_name* / *account_address* identify the customer in the TO block
     (normally the primary guardian); fall back to the student when absent.
+
+    *period_label* — optional string like "July — September 2026" shown below
+    the FROM/TO parties when present (multi-month statements).
+
+    *amount_due* / *amount_paid* — override the totals section (default:
+    statement.current_amount_due / statement.total_payments).
     """
     issued = statement.generated_at or datetime.utcnow()
     doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))
@@ -805,9 +814,32 @@ def build_statement_pdf(
             Spacer(1, 2 * mm),
             _stmt_parties(to_name, to_address=account_address),
             Spacer(1, 8 * mm),
+        ]
+    )
+
+    if period_label:
+        doc.story.extend([
+            Paragraph(
+                f'<font size="9" color="#666666"><b>Period:</b> {period_label}</font>',
+                ParagraphStyle(
+                    "PeriodLabel",
+                    fontName="DejaVuSans",
+                    fontSize=9,
+                    textColor=colors.HexColor("#666666"),
+                    alignment=TA_LEFT,
+                    spaceAfter=4 * mm,
+                ),
+            ),
+        ])
+
+    doc.story.extend(
+        [
             _stmt_transactions(ledger or []),
             Spacer(1, 8 * mm),
-            _stmt_totals(statement.current_amount_due, statement.total_payments),
+            _stmt_totals(
+                amount_due if amount_due is not None else statement.current_amount_due,
+                amount_paid if amount_paid is not None else statement.total_payments,
+            ),
             Spacer(1, 10 * mm),
             _stmt_notes(),
         ]

@@ -213,6 +213,40 @@ class StatementService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_range_statements(
+        self, student_id: str, academic_year: int, end_month: int, months: int = 1
+    ) -> list[Statement]:
+        """Return the *months* most recent statements up to *end_month* (inclusive).
+
+        Statements are ordered chronologically (earliest → latest).  Missing
+        months are silently skipped — the list may be shorter than *months*.
+        """
+        start_month = max(1, end_month - months + 1)
+        all_stmts = await self.list_for_student(student_id, academic_year)
+        return [s for s in all_stmts if start_month <= s.month <= end_month]
+
+    async def combined_ledger(self, statements: list[Statement]) -> list[dict]:
+        """Build a single combined ledger spanning multiple monthly statements.
+
+        The opening row of the first month and the closing row of the last
+        month bookend a continuous stream of transactions — no duplicate
+        interior opening/closing rows.
+        """
+        if not statements:
+            return []
+        ledgers = [await self.ledger_for_statement(s) for s in statements]
+        if len(ledgers) == 1:
+            return ledgers[0]
+
+        # First month: opening + all rows except closing.
+        combined: list[dict] = list(ledgers[0][:-1])
+        # Middle months: only the transaction rows (skip opening and closing).
+        for ledger in ledgers[1:-1]:
+            combined.extend(ledger[1:-1])
+        # Last month: skip opening (equals previous closing), include transactions + closing.
+        combined.extend(ledgers[-1][1:])
+        return combined
+
     async def delete_for_student(self, student_id: str, academic_year: int) -> int:
         """Delete all statements for a student+year. Returns count deleted."""
         stmts = await self.list_for_student(student_id, academic_year)

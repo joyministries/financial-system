@@ -476,18 +476,34 @@ async def download_statement(
     student_id: str,
     academic_year: int,
     month: int,
+    months: int = 1,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     if user.role == "parent":
         await verify_student_access(student_id, user, db)
     service = StatementService(db)
-    statement = await service.get(student_id, academic_year, month)
-    if not statement:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Statement not found for {academic_year}-{month:02d}. Generate it first.",
+
+    # Single-month (months=1): original behaviour.
+    # Multi-month: fetch the N most recent statements up to `month` and
+    # build a combined ledger in one PDF.
+    if months <= 1:
+        statement = await service.get(student_id, academic_year, month)
+        if not statement:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement not found for {academic_year}-{month:02d}. Generate it first.",
+            )
+        statements = [statement]
+    else:
+        statements = await service.get_range_statements(
+            student_id, academic_year, month, months
         )
+        if not statements:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No statements found for {academic_year} up to month {month:02d}.",
+            )
 
     student = await db.get(Student, student_id)
     student_name = (
@@ -515,18 +531,44 @@ async def download_statement(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
-    ledger = await service.ledger_for_statement(statement)
-    pdf = build_statement_pdf(
-        statement,
-        student_name,
-        ledger,
-        student_number=student.student_number if student else "",
-        account_name=account_name,
-        account_address=account_address,
-    )
+    if len(statements) == 1:
+        # Single month: use the statement's own ledger (original path).
+        ledger = await service.ledger_for_statement(statements[0])
+        pdf = build_statement_pdf(
+            statements[0],
+            student_name,
+            ledger,
+            student_number=student.student_number if student else "",
+            account_name=account_name,
+            account_address=account_address,
+        )
+    else:
+        # Multi-month: combined ledger + period label.
+        ledger = await service.combined_ledger(statements)
+        first = statements[0]
+        last = statements[-1]
+        from app.services.statement import MONTHS as _MONTHS
+
+        period_label = (
+            f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {last.academic_year}"
+        )
+        total_paid = sum(s.total_payments for s in statements)
+        pdf = build_statement_pdf(
+            last,
+            student_name,
+            ledger,
+            student_number=student.student_number if student else "",
+            account_name=account_name,
+            account_address=account_address,
+            period_label=period_label,
+            amount_due=last.current_amount_due,
+            amount_paid=total_paid,
+        )
+
+    suffix = f"-{months}m" if months > 1 else ""
     return pdf_response(
         pdf,
-        f"statement-{student_id[:8]}-{academic_year}-{month:02d}.pdf",
+        f"statement-{student_id[:8]}-{academic_year}-{month:02d}{suffix}.pdf",
     )
 
 
