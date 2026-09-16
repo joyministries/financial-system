@@ -46,7 +46,7 @@ export default function StatementsPage() {
   const [ledgerCharges, setLedgerCharges] = useState<AdditionalCharge[]>([]);
   const [ledgerPayments, setLedgerPayments] = useState<Payment[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
-  const [statementMonths, setStatementMonths] = useState<number>(1); // 1/3/6/12 month range
+  const [statementMonths, setStatementMonths] = useState<number>(0); // 0=year to date, 3/6/12=range
 
   // Whole-school statement summary (admin / finance only).
   const [schoolStatus, setSchoolStatus] = useState<'all' | 'paid' | 'overdue'>('all');
@@ -111,13 +111,14 @@ export default function StatementsPage() {
   const generateAndDownload = async (existing: Statement | null, month: number) => {
     if (!selectedStudent) return toast.error('Select a student');
     setGeneratingMonth(month);
-    const toastId = toast.loading(existing ? 'Preparing download…' : 'Generating statement…');
+    const toastId = toast.loading(existing && !('_pending' in existing) ? 'Preparing download…' : 'Generating statement…');
     try {
-      let stmt: Statement | null = existing;
+      let stmt: Statement | null = existing && !('_pending' in existing) ? existing : null;
       if (!stmt) {
         const res = await financialApi.generateStatement({ student_id: selectedStudent, academic_year: year, month });
         stmt = res.data as Statement;
         loadStatements();
+        if (selectedStatement?.month === month) setSelectedStatement(stmt);
         toast.loading('Download ready — starting…', { id: toastId });
       }
       const studentName = getStudentName(selectedStudent).replace(/\s+/g, '-');
@@ -211,9 +212,36 @@ export default function StatementsPage() {
     await generateAndDownload(s, s.month);
   };
 
-  const visibleStatements = stmtMonth
-    ? statements.filter((s) => s.month === stmtMonth)
-    : statements;
+  const visibleStatements = (() => {
+    // Show every month of the school year (1-12), not just the ones that have
+    // been generated. Missing months get a synthetic row flagged _pending so
+    // the user can Generate & Download them — no more 'only Jan and Feb'.
+    const byMonth = new Map(statements.map((s) => [s.month, s]));
+    const targetYearEnd = year === new Date().getFullYear() ? Math.min(12, new Date().getMonth() + 1) : 12;
+    const range = stmtMonth ? [stmtMonth] : Array.from({ length: targetYearEnd }, (_, i) => i + 1);
+    return range
+      .map((m): (Statement & { _pending?: boolean }) => {
+        const existing = byMonth.get(m);
+        if (existing) return existing;
+        return {
+          id: `pending-${year}-${m}`,
+          student_id: selectedStudent || '',
+          academic_year: year,
+          month: m,
+          opening_balance: 0,
+          total_fees: 0,
+          total_installments: 0,
+          total_additional_charges: 0,
+          total_payments: 0,
+          closing_balance: 0,
+          current_amount_due: 0,
+          due_date: '',
+          generated_at: '',
+          _pending: true,
+        } satisfies Statement & { _pending?: boolean };
+      })
+      .sort((a, b) => a.month - b.month);
+  })();
 
   // ── Bank-style ledger ─────────────────────────────────────
   // Rows: opening balance → installment (debit) → charges (debit) →
@@ -359,7 +387,7 @@ export default function StatementsPage() {
                   onChange={(e) => setStatementMonths(Number(e.target.value))}
                   className="mt-0.5 rounded border border-slate-600 bg-[#1e2a4a] px-2 py-1 text-xs font-semibold text-white focus:border-primary-500 focus:outline-none"
                 >
-                  <option value={1}>1 month</option>
+                  <option value={0}>Year to date</option>
                   <option value={3}>3 months</option>
                   <option value={6}>6 months</option>
                   <option value={12}>Full year</option>
@@ -466,17 +494,21 @@ export default function StatementsPage() {
           </thead>
           <tbody className="divide-y divide-slate-200">
             {visibleStatements.map((s) => (
-              <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedStatement(s)}>
+              <tr key={s.id} className={`cursor-pointer hover:bg-slate-50 ${'_pending' in s ? 'text-slate-400' : ''}`} onClick={() => !('_pending' in s) && setSelectedStatement(s)}>
                 <td className="px-6 py-4 text-sm font-medium text-slate-900">{MONTHS[s.month - 1]}</td>
-                <td className="px-6 py-4 text-sm text-slate-700">R {s.total_installments.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-emerald-600 font-medium">R {s.total_payments.toLocaleString()}</td>
-                <td className={`px-6 py-4 text-sm font-medium ${s.closing_balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>R {s.closing_balance.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-slate-700">{'_pending' in s ? '—' : `R ${s.total_installments.toLocaleString()}`}</td>
+                <td className="px-6 py-4 text-sm text-emerald-600 font-medium">{'_pending' in s ? '—' : `R ${s.total_payments.toLocaleString()}`}</td>
+                <td className={`px-6 py-4 text-sm font-medium ${'_pending' in s ? '' : (s.closing_balance > 0 ? 'text-red-600' : 'text-emerald-600')}`}>{'_pending' in s ? '—' : `R ${s.closing_balance.toLocaleString()}`}</td>
                 <td className="px-6 py-4">
-                  <span className={`badge ${s.closing_balance > 0 ? 'badge-danger' : 'badge-success'}`}>
-                    {s.closing_balance > 0 ? 'Outstanding' : 'Paid'}
-                  </span>
+                  {'_pending' in s ? (
+                    <span className="badge badge-neutral">Not generated</span>
+                  ) : (
+                    <span className={`badge ${s.closing_balance > 0 ? 'badge-danger' : 'badge-success'}`}>
+                      {s.closing_balance > 0 ? 'Outstanding' : 'Paid'}
+                    </span>
+                  )}
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-500">{new Date(s.generated_at).toLocaleDateString()}</td>
+                <td className="px-6 py-4 text-sm text-slate-500">{'_pending' in s ? '—' : new Date(s.generated_at).toLocaleDateString()}</td>
                 <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => generateAndDownload(s, s.month)}
@@ -485,7 +517,7 @@ export default function StatementsPage() {
                   >
                     {generatingMonth === s.month
                       ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
-                      : <><Download className="h-3.5 w-3.5" /> Download</>
+                      : <><Download className="h-3.5 w-3.5" /> {'_pending' in s ? 'Generate & Download' : 'Download'}</>
                     }
                   </button>
                 </td>
@@ -493,7 +525,7 @@ export default function StatementsPage() {
             ))}
           </tbody>
         </table>
-        {visibleStatements.length === 0 && !loading && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? (isParent ? 'No statements generated for this child yet.' : 'No statements. Generate one above.') : 'Select a student.'}</p>}
+        {visibleStatements.length === 0 && !loading && <p className="py-8 text-center text-sm text-slate-500">{selectedStudent ? 'No statements for this student yet.' : 'Select a student.'}</p>}
           </>
         )}
       </div>

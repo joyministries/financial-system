@@ -480,30 +480,38 @@ async def download_statement(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Download a student statement as a combined PDF.
+
+    *months* is an END month offset from January:
+      - ``months <= 1`` (default): year-to-date — every statement from
+        January up to *month*, so the PDF always shows ALL payments and fees
+        the family can track.
+      - ``months = 3/6/12``: only the N most recent months up to *month*.
+    """
     if user.role == "parent":
         await verify_student_access(student_id, user, db)
     service = StatementService(db)
+    from app.services.statement import MONTHS as _MONTHS
 
-    # Single-month (months=1): original behaviour.
-    # Multi-month: fetch the N most recent statements up to `month` and
-    # build a combined ledger in one PDF.
     if months <= 1:
-        statement = await service.get(student_id, academic_year, month)
-        if not statement:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Statement not found for {academic_year}-{month:02d}. Generate it first.",
-            )
-        statements = [statement]
+        # Year-to-date: January .. selected month.
+        statements = await service.get_range_statements(
+            student_id, academic_year, month, month
+        )
     else:
+        # N most recent months up to the selected month.
         statements = await service.get_range_statements(
             student_id, academic_year, month, months
         )
-        if not statements:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No statements found for {academic_year} up to month {month:02d}.",
-            )
+
+    if not statements:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No statements found for {academic_year} up to month "
+                f"{month:02d}. Generate one first."
+            ),
+        )
 
     student = await db.get(Student, student_id)
     student_name = (
@@ -531,39 +539,36 @@ async def download_statement(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
+    ledger = await service.combined_ledger(statements)
+    first = statements[0]
+    last = statements[-1]
+
     if len(statements) == 1:
-        # Single month: use the statement's own ledger (original path).
-        ledger = await service.ledger_for_statement(statements[0])
-        pdf = build_statement_pdf(
-            statements[0],
-            student_name,
-            ledger,
-            student_number=student.student_number if student else "",
-            account_name=account_name,
-            account_address=account_address,
+        # Single statement — no period label needed.
+        period_label = ""
+    elif months <= 1:
+        yr = first.academic_year
+        period_label = (
+            f"Year to date — {_MONTHS[first.month - 1]} to "
+            f"{_MONTHS[last.month - 1]} {yr}"
         )
     else:
-        # Multi-month: combined ledger + period label.
-        ledger = await service.combined_ledger(statements)
-        first = statements[0]
-        last = statements[-1]
-        from app.services.statement import MONTHS as _MONTHS
-
         period_label = (
-            f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {last.academic_year}"
+            f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
         )
-        total_paid = sum(s.total_payments for s in statements)
-        pdf = build_statement_pdf(
-            last,
-            student_name,
-            ledger,
-            student_number=student.student_number if student else "",
-            account_name=account_name,
-            account_address=account_address,
-            period_label=period_label,
-            amount_due=last.current_amount_due,
-            amount_paid=total_paid,
-        )
+
+    total_paid = sum(s.total_payments for s in statements)
+    pdf = build_statement_pdf(
+        last,
+        student_name,
+        ledger,
+        student_number=student.student_number if student else "",
+        account_name=account_name,
+        account_address=account_address,
+        period_label=period_label,
+        amount_due=last.current_amount_due,
+        amount_paid=total_paid,
+    )
 
     suffix = f"-{months}m" if months > 1 else ""
     return pdf_response(

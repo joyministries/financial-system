@@ -394,7 +394,7 @@ export const financialApi = {
     api.post(`/financial/statements/generate-all?academic_year=${academic_year}&month=${month}${grade_id ? `&grade_id=${grade_id}` : ''}`),
   listStatements: (studentId: string, year: number) =>
     api.get(`/financial/statements/${studentId}?academic_year=${year}`),
-  statementDownloadUrl: (studentId: string, year: number, month: number, months: number = 1) =>
+  statementDownloadUrl: (studentId: string, year: number, month: number, months: number = 0) =>
     `/financial/statements/${encodeURIComponent(studentId)}/download?academic_year=${year}&month=${month}${months > 1 ? `&months=${months}` : ''}`,
   gradeSummaryDownloadUrl: (gradeId: string, year: number, month: number) =>
     `/financial/statements/grade-summary/${encodeURIComponent(gradeId)}/download?academic_year=${year}&month=${month}`,
