@@ -21,10 +21,12 @@ class PaymentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def record_payment(self, data: PaymentCreate, user_id: str) -> Payment:
+    async def record_payment(
+        self, data: PaymentCreate, user_id: str, status: str = "pending"
+    ) -> Payment:
         payment = Payment(
             **data.model_dump(),
-            status="pending",
+            status=status,
             allocated_by=user_id,
         )
         self.db.add(payment)

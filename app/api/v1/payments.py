@@ -33,8 +33,14 @@ async def record_payment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
+    """Record a payment received by the school.
+
+    The admin/finance user typing the receipt IS the verification — the
+    payment is created as `verified` so it appears on statements immediately.
+    (PayFast/reminder-link payments keep the `pending` default so the ITN can
+    confirm them before they surface on a statement.)"""
     service = PaymentService(db)
-    return await service.record_payment(data, user.id)
+    return await service.record_payment(data, user.id, status="verified")
 
 
 @router.get("/", response_model=PageResponse[PaymentResponse])

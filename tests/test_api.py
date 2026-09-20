@@ -186,7 +186,8 @@ async def test_record_payment(client: AsyncClient, auth_headers):
     assert response.status_code == 200
     data = response.json()
     assert data["amount"] == 5000.00
-    assert data["status"] == "pending"
+    # Admin-recorded receipts are verified immediately so they appear on statements.
+    assert data["status"] == "verified"
 
 
 @pytest.mark.asyncio
