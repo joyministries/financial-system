@@ -282,13 +282,20 @@ class ReportService:
         "LCS GERMISTON <MONTH> SUSPENSION LIST" spreadsheet (yellow bold
         headers: Customer | Grade | Amount | Comments | Learners on
         suspension). Every approved student is included once, optionally
-        scoped to a single grade, with their outstanding balance for the
-        academic year from the Excel-aligned ledger (0.00 when fully paid)
-        plus a SUM footer row.
+        scoped to a single grade.
+
+        When `month` is given the Amount column is the outstanding balance
+        FOR that month (invoices with month <= month minus verified payments
+        received up to the end of that month) from the Excel-aligned ledger —
+        the same position the month's statement shows. When `month` is omitted
+        the Amount is the full-year outstanding. Either way a SUM footer row
+        is appended.
 
         Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
         """
-        rows = await self.ledger.students_outstanding(academic_year, grade_id=grade_id)
+        rows = await self.ledger.students_outstanding(
+            academic_year, grade_id=grade_id, up_to_month=month
+        )
 
         def _grade_display(name: str) -> str:
             if name == "GRADE R":

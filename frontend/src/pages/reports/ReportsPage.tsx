@@ -17,6 +17,7 @@ export default function ReportsPage() {
   const [payments, setPayments] = useState<{ total_received: number; by_method: Record<string, number> }>({ total_received: 0, by_method: {} });
   const [grades, setGrades] = useState<Grade[]>([]);
   const [exportGrade, setExportGrade] = useState('');
+  const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
   const [exporting, setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -65,7 +66,7 @@ export default function ReportsPage() {
     if (exporting) return;
     setExporting(true);
     try {
-      const month = new Date().getMonth() + 1;
+      const month = exportMonth;
       const resp = await reportsApi.downloadStudentExport(year, gradeId, month);
       const selected = gradeId ? grades.find((g) => g.id === gradeId) : null;
       const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -273,10 +274,20 @@ export default function ReportsPage() {
           <h2 className="mb-1 text-lg font-semibold">Export Students (.xlsx)</h2>
           <p className="mb-4 text-sm text-slate-500">
             Download the full student list in the school's suspension-list layout
-            (Customer | Grade | Amount | Comments | Learners on suspension) with
-            current outstanding balances.
+            (Customer | Grade | Amount | Comments | Learners on suspension).
+            The Amount column shows each student's outstanding balance for the
+            selected month, not the whole year.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <select
+              value={exportMonth}
+              onChange={(e) => setExportMonth(Number(e.target.value))}
+              className="input w-full sm:w-40"
+            >
+              {MONTH_FULL.map((name, i) => (
+                <option key={name} value={i + 1}>{name}</option>
+              ))}
+            </select>
             <select
               value={exportGrade}
               onChange={(e) => setExportGrade(e.target.value)}

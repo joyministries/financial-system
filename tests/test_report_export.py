@@ -57,14 +57,34 @@ def test_fallback_writer_builds_valid_workbook():
     assert ws.column_dimensions["A"].width == 56.89
 
 
-def _fake_row(student_number, first_name, last_name, grade, balance):
+def _inv_row(student_id, student_number, first_name, last_name, grade_name, required):
+    """One row of LedgerService.students_outstanding's invoice aggregate."""
     return SimpleNamespace(
+        id=student_id,
         student_number=student_number,
         first_name=first_name,
         last_name=last_name,
-        grade=grade,
-        total_balance=balance,
+        grade_name=grade_name,
+        required=required,
     )
+
+
+def _fake_ledger_db(invoices, payments=()):
+    """Emulate the two queries LedgerService.students_outstanding runs.
+
+    First execute() returns invoice rows (one per student, with the summed
+    ``required``); second returns ``(student_id, paid)`` pairs, which the
+    ledger consumes with ``dict(...)``. A single AsyncMock keyed on call
+    order matches the implementation without a real database.
+    """
+    db = SimpleNamespace()
+    db.execute = mock.AsyncMock(
+        side_effect=[
+            SimpleNamespace(all=lambda: list(invoices)),
+            SimpleNamespace(all=lambda: list(payments)),
+        ]
+    )
+    return db
 
 
 @pytest.mark.asyncio
@@ -73,14 +93,11 @@ async def test_students_xlsx_falls_back_when_openpyxl_missing():
     blocked at import time — the exact deployed failure mode — and
     assert the stdlib fallback produces a loadable workbook.
     """
-    fake_db = SimpleNamespace()
-    fake_db.execute = mock.AsyncMock(
-        return_value=SimpleNamespace(
-            all=lambda: [
-                _fake_row("1001", "Alex", "Kuti", "GRADE 8", 1250.5),
-                _fake_row("1002", "Thandi", "Kunene", "GRADE R", 0.0),
-            ]
-        )
+    fake_db = _fake_ledger_db(
+        [
+            _inv_row("s1", "1001", "Alex", "Kuti", "GRADE 8", 1250.5),
+            _inv_row("s2", "1002", "Thandi", "Kunene", "GRADE R", 0.0),
+        ]
     )
 
     real_import = __import__
@@ -114,13 +131,10 @@ async def test_students_xlsx_still_uses_openpyxl_when_available():
     """Parity check: the primary openpyxl path must keep working and
     produce the same shape as the fallback.
     """
-    fake_db = SimpleNamespace()
-    fake_db.execute = mock.AsyncMock(
-        return_value=SimpleNamespace(
-            all=lambda: [
-                _fake_row("1001", "Alex", "Kuti", "GRADE 8", 1250.5),
-            ]
-        )
+    fake_db = _fake_ledger_db(
+        [
+            _inv_row("s1", "1001", "Alex", "Kuti", "GRADE 8", 1250.5),
+        ]
     )
 
     service = ReportService(db=fake_db)  # type: ignore[arg-type]

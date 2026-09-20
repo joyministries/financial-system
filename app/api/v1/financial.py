@@ -693,8 +693,10 @@ async def export_students_report(
     layout (Customer | Grade | Amount | Comments | Learners on suspension).
 
     All grades when `grade_id` is omitted, or a single grade when provided.
-    `month` only controls the sheet title (e.g. 'AUGUST'); the amounts are the
-    live outstanding balances for `academic_year`."""
+    When `month` is given the Amount column is the student's outstanding
+    balance FOR that month (invoices up to & including `month` minus payments
+    received in that period — the same position the month's statement shows).
+    When `month` is omitted the Amount is the full-year outstanding."""
     service = ReportService(db)
     buf = await service.students_xlsx(academic_year, grade_id, month)
     fname = f"LCS-GERMISTON-SUSPENSION-LIST-{academic_year}.xlsx"
