@@ -108,8 +108,9 @@ export default function StatementsPage() {
    * If the statement already exists it skips generation and downloads immediately.
    * Per-row spinner via generatingMonth state.
    */
-  const generateAndDownload = async (existing: Statement | null, month: number) => {
+  const generateAndDownload = async (existing: Statement | null, month: number, monthsOverride?: number) => {
     if (!selectedStudent) return toast.error('Select a student');
+    const months = monthsOverride ?? statementMonths;
     setGeneratingMonth(month);
     const toastId = toast.loading(existing && !('_pending' in existing) ? 'Preparing download…' : 'Generating statement…');
     try {
@@ -123,9 +124,10 @@ export default function StatementsPage() {
       }
       const studentName = getStudentName(selectedStudent).replace(/\s+/g, '-');
       if (!stmt) throw new Error('Statement not available');
+      const rangeTag = months === 12 ? '-full-year' : months > 1 ? `-${months}m` : '';
       await downloadPdf(
-        financialApi.statementDownloadUrl(stmt.student_id, stmt.academic_year, stmt.month, statementMonths),
-        `statement-${studentName}-${stmt.academic_year}-${String(stmt.month).padStart(2, '0')}${statementMonths > 1 ? `-${statementMonths}m` : ''}.pdf`,
+        financialApi.statementDownloadUrl(stmt.student_id, stmt.academic_year, stmt.month, months),
+        `statement-${studentName}-${stmt.academic_year}-${String(stmt.month).padStart(2, '0')}${rangeTag}.pdf`,
       );
       toast.success('Download started', { id: toastId });
     } catch (err: any) {
@@ -210,6 +212,16 @@ export default function StatementsPage() {
   // downloadStatement is kept for the bank-view header button (already-generated statements)
   const downloadStatement = async (s: Statement) => {
     await generateAndDownload(s, s.month);
+  };
+
+  // One-click whole cumulative statement: January to the current month of the
+  // selected year, combined in a single PDF. No month knowledge required —
+  // this is the "statement till now" download.
+  const downloadFullYearStatement = async () => {
+    if (!selectedStudent) return toast.error('Select a student first');
+    const endMonth = year === new Date().getFullYear() ? Math.min(12, new Date().getMonth() + 1) : 12;
+    const existing = visibleStatements.find((s) => s.month === endMonth) ?? null;
+    await generateAndDownload(existing, endMonth, 12);
   };
 
   const visibleStatements = (() => {
@@ -346,11 +358,22 @@ export default function StatementsPage() {
             : <><Download className="h-4 w-4" /> Generate & Download</>
           }
         </button>
+        <button
+          onClick={downloadFullYearStatement}
+          disabled={generatingMonth !== null || !selectedStudent}
+          className="btn btn-secondary"
+          title="Downloads the whole cumulative statement for this student — January to the current month — in one PDF"
+        >
+          {generatingMonth !== null
+            ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
+            : <><Download className="h-4 w-4" /> Download Full Year Statement</>
+          }
+        </button>
       </div>
 
       {isParent && (
         <p className="text-sm text-slate-500">
-          Generate a statement for any month of the current school year. Statements you generate are only for your own children.
+          Generate a statement for any month of the current school year. Statements you generate are only for your own children. Use <span className="font-medium">Download Full Year Statement</span> to pull everything from January to the current month in one PDF.
         </p>
       )}
 
