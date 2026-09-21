@@ -68,10 +68,12 @@ _LINE = colors.HexColor("#E3DCC9")         # warm hairline
 _LINE_SOFT = colors.HexColor("#F0EBDB")
 
 # ── Bank details (shown on statements) ──────────────────────
-# TODO: replace the placeholders below with the school's real bank details.
-_BANK_NAME = "Bank Name"
-_BANK_ACCOUNT = "0000 000 0000"
-_BANK_BRANCH = "000000"
+# Lambton Christian School's FNB account — printed in the statement footer
+# so parents know exactly where to EFT ("Please make all payments with your
+# reference number to:").
+_BANK_NAME = "FNB Bank"
+_BANK_ACCOUNT = "6262 1212 414"
+_BANK_BRANCH = "251 542"
 
 # ── Light statement palette (mirrors the HTML statement template) ──
 _LIGHT_TEXT = colors.HexColor("#333333")
