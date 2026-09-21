@@ -181,6 +181,21 @@ export default function PaymentsPage() {
     }
   };
 
+  // Delete affordance for EVERY payment. Cash/Card (or already-reversed)
+  // payments are permanently removed; Bank/EFT/Mobile are kept for audit, so
+  // the delete action routes into the Reverse form which voids them instead.
+  const hardDeletable = (p: Payment) => ['Cash', 'Card'].includes(p.payment_method) || p.status === 'reversed';
+
+  const requestDelete = (p: Payment) => {
+    if (hardDeletable(p)) {
+      handleDelete(p);
+    } else {
+      toast('Bank/EFT/Mobile payments are kept for audit — use Reverse to void it instead.', { icon: 'ℹ️' });
+      setShowReverse(p.id);
+      setOpenDropdown(null);
+    }
+  };
+
   const openEdit = (p: Payment) => {
     setEditingPayment(p);
     setEditAmount(String(p.amount));
@@ -378,6 +393,14 @@ export default function PaymentsPage() {
                   <span className={`badge ${statusBadge(p.status)}`}>{p.status}</span>
                 </td>
                 <td className="px-6 py-4 text-right">
+                  {/* Delete on every payment: hard delete or reverse */}
+                  <button
+                    onClick={() => requestDelete(p)}
+                    className="rounded p-1 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                    title={hardDeletable(p) ? 'Permanently delete this payment' : 'Void this payment (kept for audit)'}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                   {/* Quick actions for pending */}
                   {p.status === 'pending' && (
                     <div className="inline-flex items-center gap-1 mr-2">
@@ -406,15 +429,13 @@ export default function PaymentsPage() {
                         >
                           <Pencil className="h-3.5 w-3.5 text-blue-500" /> Edit
                         </button>
-                        {/* Delete — Cash/Card payments, OR any already-reversed payment */}
-                        {(['Cash', 'Card'].includes(p.payment_method) || p.status === 'reversed') && (
-                          <button
-                            onClick={() => handleDelete(p)}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-rose-50 hover:text-rose-700"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-red-500" /> Delete
-                          </button>
-                        )}
+                        {/* Delete — available for every payment; routes to Reverse when audit-kept */}
+                        <button
+                          onClick={() => requestDelete(p)}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-rose-50 hover:text-rose-700"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" /> Delete
+                        </button>
                         {/* Reverse — keeps record, reverses allocations */}
                         {p.status !== 'reversed' && p.status !== 'voided' && (
                           <button
