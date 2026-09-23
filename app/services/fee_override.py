@@ -162,18 +162,19 @@ async def reprice_outstanding_balances(
     sql = text(
         f"""
         UPDATE outstanding_balances ob
-        SET
-            original_amount = {_EFFECTIVE_AMOUNT_CASE},
-            balance = {_EFFECTIVE_AMOUNT_CASE},
-            updated_at = now()
-        FROM monthly_schedules ms
+        JOIN monthly_schedules ms
+          ON ob.monthly_schedule_id = ms.id
         JOIN fee_structures fs
           ON fs.id = ms.fee_structure_id
         LEFT JOIN student_fee_overrides sfo
           ON sfo.fee_structure_id = fs.id
          AND sfo.student_id = ob.student_id
          AND sfo.is_active = true
-        WHERE ob.monthly_schedule_id = ms.id
+        SET
+            ob.original_amount = {_EFFECTIVE_AMOUNT_CASE},
+            ob.balance = {_EFFECTIVE_AMOUNT_CASE},
+            ob.updated_at = now()
+        WHERE ob.amount_paid = 0
           AND {where}
         """
     )

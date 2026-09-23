@@ -72,16 +72,21 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _ensure_async_driver(cls, v: object) -> object:
-        """Render/Heroku hand out plain `postgres://` / `postgresql://` URLs.
+        """Normalize bare scheme URLs to an explicit async SQLAlchemy driver.
 
-        SQLAlchemy async needs the `postgresql+asyncpg://` driver scheme, so
-        rewrite it here rather than forcing an extra env var on every host.
+        Render/Heroku hand out plain `postgres://` / `postgresql://` URLs and
+        cPanel hands out plain `mysql://` URLs. SQLAlchemy async execution
+        needs an explicit `+driver` scheme (`asyncpg` / `aiomysql`), so
+        rewrite here rather than forcing an extra env var on every host.
         """
         if not isinstance(v, str):
             return v
         for prefix in ("postgres://", "postgresql://"):
             if v.startswith(prefix):
                 return "postgresql+asyncpg://" + v[len(prefix):]
+        for prefix in ("mysql://", "mariadb://"):
+            if v.startswith(prefix):
+                return "mysql+aiomysql://" + v[len(prefix):]
         return v
 
     def validate_secrets(self) -> None:

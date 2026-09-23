@@ -138,7 +138,7 @@ class ScheduleService:
                     (id, student_id, monthly_schedule_id, original_amount,
                      rollover_amount, amount_paid, balance, status, created_at, updated_at)
                 SELECT
-                    gen_random_uuid()::text,
+                    UUID(),
                     s.id,
                     ms.id,
                     GREATEST(0,
@@ -199,7 +199,7 @@ class ScheduleService:
                     (id, student_id, monthly_schedule_id, original_amount,
                      rollover_amount, amount_paid, balance, status, created_at, updated_at)
                 SELECT
-                    gen_random_uuid()::text,
+                    UUID(),
                     s.id,
                     ms.id,
                     GREATEST(0,
