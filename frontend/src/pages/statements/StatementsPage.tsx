@@ -165,17 +165,13 @@ export default function StatementsPage() {
 
   useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade, bulkMonth]);
 
-  // Fix: use downloadPdf so auth token is attached (bare <a href> gets 401)
-  // Works for a whole-school summary (no grade selected) or a single grade.
-  const downloadSummary = async () => {
+  const downloadSchoolStatements = async () => {
     if (!bulkMonth) return toast.error('Select a month first');
-    const toastId = toast.loading('Preparing summary PDF…');
+    const toastId = toast.loading('Preparing whole-school statement bundle…');
     try {
       await downloadPdf(
-        bulkGrade
-          ? financialApi.gradeSummaryDownloadUrl(bulkGrade, year, bulkMonth as number)
-          : financialApi.schoolSummaryDownloadUrl(year, bulkMonth as number),
-        bulkGrade ? `grade-summary-${bulkGrade}-${year}-${bulkMonth}.pdf` : `school-summary-${year}-${bulkMonth}.pdf`,
+        financialApi.schoolSummaryDownloadUrl(year, bulkMonth as number),
+        `school-statements-${year}-${bulkMonth}.pdf`,
       );
       toast.success('Download started', { id: toastId });
     } catch {
@@ -210,8 +206,8 @@ export default function StatementsPage() {
       toast.success(`${bulkGrade ? 'Grade' : 'Whole school'}: ${res.data.generated} generated (months 1–${bulkMonth}), ${res.data.skipped} already existed`);
       loadSchoolReport();
       // Generate is now generate-AND-download: once the statements exist,
-      // pull the summary PDF so the admin gets the file in one click.
-      await downloadSummary();
+      // pull the full statement bundle so the admin gets the file in one click.
+      await (bulkGrade ? downloadGradeCumulative() : downloadSchoolStatements());
     } catch {
       toast.error('Bulk generation failed');
     } finally {
@@ -248,6 +244,13 @@ export default function StatementsPage() {
     const endMonth = year === new Date().getFullYear() ? Math.min(12, new Date().getMonth() + 1) : 12;
     const existing = visibleStatements.find((s) => s.month === endMonth) ?? null;
     await generateAndDownload(existing, endMonth, 12);
+  };
+
+  const downloadSelectedStudentStatement = async () => {
+    if (!selectedStudent) return toast.error('Select a student first');
+    if (!bulkMonth) return toast.error('Select a month first');
+    const existing = statements.find((s) => s.month === bulkMonth) ?? null;
+    await generateAndDownload(existing, bulkMonth as number, 12);
   };
 
   const visibleStatements = (() => {
@@ -626,8 +629,16 @@ export default function StatementsPage() {
               <button onClick={handleBulkGenerate} disabled={bulking || !bulkMonth} className="btn btn-primary">
                 <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate & Download'}
               </button>
-              <button onClick={downloadSummary} disabled={!bulkMonth} className="btn btn-secondary">
-                <Download className="h-4 w-4" /> {bulkGrade ? 'Grade Summary PDF' : 'Whole School Summary PDF'}
+              <button onClick={downloadSchoolStatements} disabled={!bulkMonth} className="btn btn-secondary">
+                <Download className="h-4 w-4" /> Whole School Statement Bundle
+              </button>
+              <button
+                onClick={downloadSelectedStudentStatement}
+                disabled={!selectedStudent || !bulkMonth || generatingMonth !== null}
+                className="btn btn-secondary"
+                title="Downloads the selected student's year-to-date statement up to the selected month"
+              >
+                <Download className="h-4 w-4" /> Student Statement
               </button>
               <button
                 onClick={downloadGradeCumulative}

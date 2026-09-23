@@ -180,6 +180,76 @@ async def _generate_student_statements(
 _GENERATE_ALL_CONCURRENCY = 20
 
 
+async def _build_student_statement_sections(
+    db: AsyncSession,
+    service: StatementService,
+    students: list[Student],
+    academic_year: int,
+    month: int,
+) -> list[dict]:
+    """Build full per-student statement sections for a YTD bundle PDF."""
+    from app.services.statement import MONTHS as _MONTHS
+
+    student_sections = []
+    for s in students:
+        statements = await service.get_range_statements(
+            s.id, academic_year, month, month
+        )
+        if not statements:
+            continue
+
+        student_name = f"{s.first_name} {s.last_name}"
+        account_name = student_name
+        account_address = ""
+        guardian = (
+            await db.execute(
+                select(StudentGuardian)
+                .where(StudentGuardian.student_id == s.id)
+                .order_by(
+                    StudentGuardian.guardian_type != "primary",
+                    StudentGuardian.created_at,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if guardian is not None:
+            account_name = guardian.full_name or student_name
+            account_address = ", ".join(
+                bit for bit in (guardian.physical_address, guardian.po_box) if bit
+            )
+
+        ledger = await service.combined_ledger(statements)
+        first = statements[0]
+        last = statements[-1]
+
+        if len(statements) == 1:
+            period_label = ""
+        else:
+            period_label = (
+                f"Year to date — {_MONTHS[first.month - 1]} to "
+                f"{_MONTHS[last.month - 1]} {academic_year}"
+            )
+
+        total_paid = sum(
+            (row.get("credit") or 0)
+            for row in ledger
+            if (row.get("reference") or "").upper().startswith("RCP")
+        )
+
+        student_sections.append({
+            "name": student_name,
+            "student_number": s.student_number or "",
+            "account_name": account_name,
+            "account_address": account_address,
+            "statement": last,
+            "ledger": ledger,
+            "period_label": period_label,
+            "amount_due": last.current_amount_due,
+            "amount_paid": total_paid,
+        })
+    return student_sections
+
+
 @router.post("/statements/generate-all")
 async def generate_all_statements(
     academic_year: int,
@@ -304,8 +374,7 @@ async def download_grade_cumulative(
 
     Every approved student's FULL individual statement (bank-style ledger,
     all transactions January .. selected month, totals and notes) is rendered
-    in one PDF — identical to downloading each student's own statement, with
-    a light cover page and per-student divider banners.
+    in one PDF — identical to downloading each student's own statement.
     """
     if not 1 <= month <= 12:
         raise HTTPException(status_code=422, detail="month must be 1..12")
@@ -327,71 +396,9 @@ async def download_grade_cumulative(
         raise HTTPException(status_code=404, detail="No approved students in this grade")
 
     service = StatementService(db)
-    from app.services.statement import MONTHS as _MONTHS
-
-    student_sections = []
-    skipped = 0
-    for s in students:
-        # Year-to-date statements: January .. selected month.
-        statements = await service.get_range_statements(
-            s.id, academic_year, month, month
-        )
-        if not statements:
-            skipped += 1
-            continue
-
-        student_name = f"{s.first_name} {s.last_name}"
-
-        # Customer for the TO block: primary guardian where possible.
-        account_name = student_name
-        account_address = ""
-        guardian = (
-            await db.execute(
-                select(StudentGuardian)
-                .where(StudentGuardian.student_id == s.id)
-                .order_by(
-                    StudentGuardian.guardian_type != "primary",
-                    StudentGuardian.created_at,
-                )
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if guardian is not None:
-            account_name = guardian.full_name or student_name
-            account_address = ", ".join(
-                bit for bit in (guardian.physical_address, guardian.po_box) if bit
-            )
-
-        ledger = await service.combined_ledger(statements)
-        first = statements[0]
-        last = statements[-1]
-
-        if len(statements) == 1:
-            period_label = ""
-        else:
-            period_label = (
-                f"Year to date — {_MONTHS[first.month - 1]} to "
-                f"{_MONTHS[last.month - 1]} {academic_year}"
-            )
-
-        # "Amount Paid to date" mirrors the Xero footer: RCP receipts only.
-        total_paid = sum(
-            (row.get("credit") or 0)
-            for row in ledger
-            if (row.get("reference") or "").upper().startswith("RCP")
-        )
-
-        student_sections.append({
-            "name": student_name,
-            "student_number": s.student_number or "",
-            "account_name": account_name,
-            "account_address": account_address,
-            "statement": last,
-            "ledger": ledger,
-            "period_label": period_label,
-            "amount_due": last.current_amount_due,
-            "amount_paid": total_paid,
-        })
+    student_sections = await _build_student_statement_sections(
+        db, service, list(students), academic_year, month
+    )
 
     if not student_sections:
         raise HTTPException(
@@ -418,7 +425,13 @@ async def download_school_summary(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
-    """Download a school-wide summary PDF — all approved students across every grade."""
+    """Download a school-wide statement bundle PDF.
+
+    Each approved student is rendered as their full individual statement,
+    matching the single-student download format.
+    """
+    if not 1 <= month <= 12:
+        raise HTTPException(status_code=422, detail="month must be 1..12")
     service = StatementService(db)
     students = (
         await db.execute(
@@ -428,35 +441,23 @@ async def download_school_summary(
         )
     ).scalars().all()
 
-    student_data = []
-    if students:
-        stmts = (await db.execute(
-            select(Statement)
-            .where(
-                Statement.academic_year == academic_year,
-                Statement.month == month,
-                Statement.student_id.in_([s.id for s in students]),
-            )
-        )).scalars().all()
-        stmt_by_student = {st.student_id: st for st in stmts}
-        for s in students:
-            stmt = stmt_by_student.get(s.id)
-            if stmt:
-                paid = stmt.total_payments
-                bal = stmt.closing_balance
-            else:
-                paid = Decimal("0")
-                bal = Decimal("0")
-            student_data.append({
-                "name": f"{s.first_name} {s.last_name}",
-                "student_number": s.student_number or "",
-                "total_paid": paid,
-                "balance": bal,
-                "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
-            })
+    if not students:
+        raise HTTPException(status_code=404, detail="No approved students found")
 
-    pdf = build_grade_summary_pdf("All Grades", academic_year, month, student_data)
-    return pdf_response(pdf, f"school-summary-{academic_year}-{month:02d}.pdf")
+    student_sections = await _build_student_statement_sections(
+        db, service, list(students), academic_year, month
+    )
+    if not student_sections:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No statements found for the school in {academic_year} up to "
+                f"month {month:02d}. Generate them first."
+            ),
+        )
+
+    pdf = build_grade_statements_pdf("All Grades", academic_year, month, student_sections)
+    return pdf_response(pdf, f"school-statements-{academic_year}-{month:02d}.pdf")
 
 
 @router.post("/statements/regenerate")

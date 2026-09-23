@@ -1059,87 +1059,17 @@ def build_grade_statements_pdf(
         ledger (combined YTD ledger rows),
         period_label, amount_due, amount_paid
 
-    A light cover page introduces the grade/period; each student then starts
-    on a fresh page behind a gold divider banner.
+    The bundle intentionally has no summary/cover page: page 1 is the first
+    student's statement, and every following student starts on a fresh page in
+    the same format as the single-student download.
     """
-    from app.services.statement import MONTHS
-
-    month_name = MONTHS[month - 1] if 1 <= month <= 12 else str(month)
-    period_label = f"January – {month_name} {academic_year}"
     issued = datetime.now()
 
     doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))
 
-    # ── Cover page ───────────────────────────────────────────
-    cover_title = Paragraph(
-        f'<b>{grade_name}</b>',
-        ParagraphStyle(
-            "GradeBundleTitle", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=18,
-            textColor=_LIGHT_HEADING, spaceAfter=2,
-        ),
-    )
-    cover_sub = Paragraph(
-        f'<font color="#8A6D1F"><b>GRADE STATEMENTS</b></font>',
-        ParagraphStyle("GradeBundleSub", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=11),
-    )
-    cover_period = Paragraph(
-        f'<font size="10" color="#666666">Full statements — {period_label}<br/>'
-        f'{len(students)} student(s)</font>',
-        ParagraphStyle("GradeBundlePeriod", parent=_NORMAL, fontSize=10, leading=15),
-    )
-    doc.story.extend([
-        Spacer(1, 6 * mm),
-        cover_title,
-        cover_sub,
-        Spacer(1, 4 * mm),
-        cover_period,
-        Spacer(1, 10 * mm),
-        Table(
-            [[Paragraph('<b>STUDENT</b>', _STMT_TABLE_HDR),
-              Paragraph('<b>REG NO</b>', _STMT_TABLE_HDR_R)]],
-            colWidths=[140 * mm, 40 * mm],
-        ),
-    ])
-    for s in students:
-        doc.story.append(
-            Table(
-                [[Paragraph(s.get("name", ""), _STMT_TABLE_BODY),
-                  Paragraph(s.get("student_number", ""), _STMT_TABLE_MONEY)]],
-                colWidths=[140 * mm, 40 * mm],
-                style=TableStyle([
-                    ("LINEBELOW", (0, 0), (-1, -1), 0.4, _LIGHT_BORDER_SOFT),
-                    ("TOPPADDING", (0, 0), (-1, -1), 3),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ]),
-            )
-        )
-
-    # ── One full statement per student ───────────────────────
-    for i, s in enumerate(students, 1):
-        doc.story.append(PageBreak())
-        banner = Table(
-            [[Paragraph(
-                f'<b>Student {i} of {len(students)}</b> — '
-                f'{s.get("name", "")}  '
-                f'<font size="8" color="#8A6D1F">({s.get("student_number", "")})</font>'
-                f'<br/><font size="8" color="#666666">{period_label}</font>',
-                ParagraphStyle(
-                    "GradeBundleBanner", parent=_NORMAL, fontName=_BRAND_BOLD,
-                    fontSize=11, textColor=_LIGHT_HEADING,
-                ),
-            )]],
-            colWidths=[180 * mm],
-        )
-        banner.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), _GOLD_SOFT),
-            ("LINEABOVE", (0, 0), (-1, -1), 2, _LIGHT_GOLD),
-            ("LINEBELOW", (0, 0), (-1, -1), 1.2, _LIGHT_GOLD),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ]))
-        doc.story.extend([Spacer(1, 2 * mm), banner, Spacer(1, 4 * mm)])
+    for i, s in enumerate(students):
+        if i > 0:
+            doc.story.append(PageBreak())
         _append_statement_section(
             doc,
             s["statement"],
