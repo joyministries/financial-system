@@ -190,6 +190,15 @@ def _due_date_for_statement(academic_year: int, month: int) -> datetime:
     return datetime(academic_year, month + 1, 1, tzinfo=UTC)
 
 
+def _monthly_amount_due(statement: Statement) -> Decimal:
+    """Amount outstanding for the statement month only, not year-to-date."""
+    return (
+        Decimal(str(statement.total_installments or 0))
+        + Decimal(str(statement.total_additional_charges or 0))
+        - Decimal(str(statement.total_payments or 0))
+    )
+
+
 def _ledger_for_statement_rows(
     statement: Statement,
     charges: list[AdditionalCharge],
@@ -411,7 +420,7 @@ async def _build_student_statement_sections(
             "statement": last,
             "ledger": ledger,
             "period_label": period_label,
-            "amount_due": last.current_amount_due,
+            "amount_due": _monthly_amount_due(last),
             "amount_paid": total_paid,
         })
     return student_sections
@@ -867,7 +876,7 @@ async def download_statement(
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
-        amount_due=last.current_amount_due,
+        amount_due=_monthly_amount_due(last),
         amount_paid=total_paid,
     )
 

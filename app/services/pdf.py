@@ -713,10 +713,10 @@ def _stmt_transactions(rows: list[dict]) -> Table:
 
 
 def _stmt_totals(amount_due: Decimal, amount_paid: Decimal) -> Table:
-    """Right-aligned 'Amount Due for 2026' / 'Amount Paid to date' rows."""
+    """Right-aligned monthly amount due / paid-to-date rows."""
     rows = [
         [
-            Paragraph("Amount Due for 2026", _STMT_TOTAL_LABEL),
+            Paragraph("Amount Due for Month", _STMT_TOTAL_LABEL),
             Paragraph(money(amount_due), _STMT_TOTAL_VALUE),
         ],
         [
@@ -737,6 +737,14 @@ def _stmt_totals(amount_due: Decimal, amount_paid: Decimal) -> Table:
         )
     )
     return t
+
+
+def _statement_monthly_due(statement: Statement) -> Decimal:
+    return (
+        Decimal(str(statement.total_installments or 0))
+        + Decimal(str(statement.total_additional_charges or 0))
+        - Decimal(str(statement.total_payments or 0))
+    )
 
 
 def _stmt_notes() -> Table:
@@ -829,7 +837,7 @@ def _append_statement_section(
             _stmt_transactions(ledger or []),
             Spacer(1, 8 * mm),
             _stmt_totals(
-                amount_due if amount_due is not None else statement.current_amount_due,
+                amount_due if amount_due is not None else _statement_monthly_due(statement),
                 amount_paid if amount_paid is not None else statement.total_payments,
             ),
             Spacer(1, 10 * mm),
@@ -863,7 +871,7 @@ def build_statement_pdf(
     the FROM/TO parties when present (multi-month statements).
 
     *amount_due* / *amount_paid* — override the totals section (default:
-    statement.current_amount_due / statement.total_payments).
+    monthly amount due / statement.total_payments).
     """
     issued = statement.generated_at or datetime.utcnow()
     doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))

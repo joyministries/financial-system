@@ -363,6 +363,9 @@ export default function StatementsPage() {
     return rows;
   };
 
+  const monthlyAmountDue = (s: Statement) =>
+    s.total_installments + s.total_additional_charges - s.total_payments;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Statements' : 'Student Statements'}</h1>
@@ -489,9 +492,9 @@ export default function StatementsPage() {
               <p className="text-[11px] uppercase tracking-wider text-emerald-700">Total Paid</p>
               <p className="mt-1 font-mono text-lg font-bold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</p>
             </div>
-            <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
-              <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due</p>
-              <p className="mt-1 font-mono text-lg font-bold text-white">R {selectedStatement.current_amount_due.toLocaleString()}</p>
+            <div className={`px-6 py-4 ${monthlyAmountDue(selectedStatement) > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${monthlyAmountDue(selectedStatement) > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
+              <p className="mt-1 font-mono text-lg font-bold text-white">R {monthlyAmountDue(selectedStatement).toLocaleString()}</p>
             </div>
           </div>
 
