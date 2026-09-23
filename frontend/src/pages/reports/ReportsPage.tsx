@@ -25,9 +25,10 @@ export default function ReportsPage() {
   const year = new Date().getFullYear();
   const [tab, setTab] = useState<'income' | 'outstanding' | 'payments' | 'export'>('income');
 
-  // Reports are MONTHLY — every tab reports on the selected month ("as at"
-  // balances use the outstanding position up to that month).
+  // Reports are monthly. Outstanding balances can be shown either as the
+  // position up to month-end or as only this month's billed/paid balance.
   const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [balanceMode, setBalanceMode] = useState<'carry' | 'month'>('carry');
 
   const [summary, setSummary] = useState<MonthlySummaryData>({
     total_income: 0,
@@ -48,19 +49,8 @@ export default function ReportsPage() {
     // Backend returns Decimal values serialized as strings — coerce to numbers
     // so string `+` never concatenates downstream.
     Promise.all([
-      reportsApi.monthlySummary(year, month).then((r) =>
-        setSummary({
-          total_income: Number(r.data.total_income),
-          payment_count: Number(r.data.payment_count),
-          outstanding_total: Number(r.data.outstanding_total),
-          students_owing: Number(r.data.students_owing),
-          students_owing_list: (r.data.students_owing_list || []).map((s: { student_number?: string; name: string; balance: string | number }) => ({
-            student_number: s.student_number,
-            name: s.name,
-            balance: Number(s.balance),
-          })),
-        })
-      ),
+      reportsApi.monthlySummary(year, month),
+      reportsApi.statements(year, 'overdue', undefined, month, balanceMode === 'month'),
       reportsApi.paymentsReceived(year, undefined, undefined, month).then((r) => {
         const by_method: Record<string, number> = {};
         for (const [method, amount] of Object.entries(r.data.by_method)) {
@@ -69,8 +59,22 @@ export default function ReportsPage() {
         setPayments({ total_received: Number(r.data.total_received), by_method });
       }),
       gradesApi.list().then((r) => setGrades(r.data)),
-    ]).finally(() => setLoading(false));
-  }, [year, month]);
+    ])
+      .then(([monthly, statementReport]) => {
+        setSummary({
+          total_income: Number(monthly.data.total_income),
+          payment_count: Number(monthly.data.payment_count),
+          outstanding_total: Number(statementReport.data.total_outstanding),
+          students_owing: Number(statementReport.data.total_students),
+          students_owing_list: (statementReport.data.students || []).map((s: { student_number?: string; name: string; balance: string | number }) => ({
+            student_number: s.student_number,
+            name: s.name,
+            balance: Number(s.balance),
+          })),
+        });
+      })
+      .finally(() => setLoading(false));
+  }, [year, month, balanceMode]);
 
   const tabs = [
     { key: 'income' as const, label: 'Monthly Income' },
@@ -78,6 +82,10 @@ export default function ReportsPage() {
     { key: 'payments' as const, label: 'Payments by Method' },
     { key: 'export' as const, label: 'Export Students' },
   ];
+  const outstandingLabel =
+    balanceMode === 'month'
+      ? `Outstanding this month only — ${MONTH_FULL[month - 1]} ${year}`
+      : `Outstanding with carry-over — ${MONTH_FULL[month - 1]} ${year}`;
 
   const exportStudentExcel = async (gradeId?: string) => {
     if (exporting) return;
@@ -120,7 +128,7 @@ export default function ReportsPage() {
       [],
       ['Income received', summary.total_income],
       ['Payments received', summary.payment_count],
-      ['Outstanding total', summary.outstanding_total],
+      [outstandingLabel, summary.outstanding_total],
       ['Students owing', summary.students_owing],
       [],
       ...(owing.length ? [['Student Number', 'Student Name', 'Balance (R)'] as (string | number)[], ...owing.map((s) => [s.student_number || '', s.name, s.balance] as (string | number)[])] : []),
@@ -132,10 +140,10 @@ export default function ReportsPage() {
     const owing = summary.students_owing_list;
     if (!owing.length) return;
     const rows: (string | number)[][] = [
-      ['Student Number', 'Student Name', 'Outstanding (R)'],
+      ['Student Number', 'Student Name', `${outstandingLabel} (R)`],
       ...owing.map((s) => [s.student_number || '', s.name, s.balance]),
       [],
-      ['', `Total Outstanding (${MONTH_FULL[month - 1]} ${year})`, summary.outstanding_total],
+      ['', `Total ${outstandingLabel}`, summary.outstanding_total],
     ];
     exportCSV(rows, `outstanding-fees-${year}-${String(month).padStart(2, '0')}.csv`);
   };
@@ -161,12 +169,18 @@ export default function ReportsPage() {
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
       <div>
         <p className="text-sm font-medium text-slate-700">Report month</p>
-        <p className="text-xs text-slate-400">Income is what was received in the month; balances are the position up to month-end.</p>
+        <p className="text-xs text-slate-400">
+          Income is received in the month. Choose whether outstanding includes carry-over or only this month.
+        </p>
       </div>
       <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="input w-44">
         {MONTH_FULL.map((name, i) => (
           <option key={name} value={i + 1}>{name} {year}</option>
         ))}
+      </select>
+      <select value={balanceMode} onChange={(e) => setBalanceMode(e.target.value as 'carry' | 'month')} className="input w-52">
+        <option value="carry">Outstanding with carry-over</option>
+        <option value="month">Outstanding this month only</option>
       </select>
     </div>
   );
@@ -212,14 +226,14 @@ export default function ReportsPage() {
               <p className="mt-2 text-3xl font-bold text-slate-900">{summary.payment_count}</p>
             </div>
             <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-              <p className="text-sm text-slate-500">Outstanding as at {MONTH_FULL[month - 1]} {year}</p>
+              <p className="text-sm text-slate-500">{outstandingLabel}</p>
               <p className="mt-2 text-3xl font-bold text-red-600">R {summary.outstanding_total.toLocaleString()}</p>
               <p className="mt-1 text-xs text-slate-400">{summary.students_owing} students owing</p>
             </div>
           </div>
 
           <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-            <h2 className="mb-4 text-lg font-semibold">Top Outstanding — {MONTH_FULL[month - 1]} {year}</h2>
+            <h2 className="mb-4 text-lg font-semibold">Top {outstandingLabel}</h2>
             {loading ? (
               <div className="flex h-64 items-center justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
@@ -238,7 +252,7 @@ export default function ReportsPage() {
                 <p className="mt-2 text-xs text-slate-400">Showing the top 15 of {summary.students_owing_list.length} students owing.</p>
               </>
             ) : (
-              <p className="py-8 text-center text-sm text-slate-500">No outstanding fees as at {MONTH_FULL[month - 1]} {year}.</p>
+              <p className="py-8 text-center text-sm text-slate-500">No fees outstanding for this view.</p>
             )}
           </div>
         </div>
@@ -247,7 +261,7 @@ export default function ReportsPage() {
       {tab === 'outstanding' && (
         <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Outstanding Fees as at {MONTH_FULL[month - 1]} {year} ({summary.students_owing} students)</h2>
+            <h2 className="text-lg font-semibold">{outstandingLabel} ({summary.students_owing} students)</h2>
             {summary.students_owing_list.length > 0 && (
               <span className="text-sm font-medium text-red-600">
                 Total: R {summary.outstanding_total.toLocaleString()}
@@ -280,7 +294,7 @@ export default function ReportsPage() {
               </table>
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-slate-500">No outstanding fees as at {MONTH_FULL[month - 1]} {year}.</p>
+            <p className="py-8 text-center text-sm text-slate-500">No fees outstanding for this view.</p>
           )}
         </div>
       )}
