@@ -1,5 +1,7 @@
 
 import asyncio
+from collections import defaultdict
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -17,6 +19,8 @@ from app.core.deps import (
 from app.core.exceptions import ConflictError
 from app.models.grade import Student, StudentGuardian
 from app.models.financial import Statement
+from app.models.payment import Payment
+from app.models.schedule import AdditionalCharge
 from app.models.user import User
 from app.schemas.common import PageResponse, build_page_response
 from app.schemas.financial import (
@@ -180,9 +184,101 @@ async def _generate_student_statements(
 _GENERATE_ALL_CONCURRENCY = 20
 
 
+def _due_date_for_statement(academic_year: int, month: int) -> datetime:
+    if month == 12:
+        return datetime(academic_year + 1, 1, 1, tzinfo=UTC)
+    return datetime(academic_year, month + 1, 1, tzinfo=UTC)
+
+
+def _ledger_for_statement_rows(
+    statement: Statement,
+    charges: list[AdditionalCharge],
+    payments: list[Payment],
+) -> list[dict]:
+    """Build statement ledger rows from prefetched transactions."""
+    due_date = _due_date_for_statement(statement.academic_year, statement.month)
+    due_str = due_date.strftime("%d %b %Y")
+    balance = Decimal(str(statement.opening_balance or 0))
+    rows: list[dict] = [
+        {
+            "date": due_str,
+            "reference": None,
+            "description": "Balance brought forward",
+            "debit": None,
+            "credit": None,
+            "balance": balance,
+            "bold": True,
+        }
+    ]
+
+    if statement.total_installments > 0:
+        balance += statement.total_installments
+        rows.append(
+            {
+                "date": due_str,
+                "reference": None,
+                "description": f"Fees for {statement.month:02d}/{statement.academic_year}",
+                "debit": statement.total_installments,
+                "credit": None,
+                "balance": balance,
+            }
+        )
+
+    for c in charges:
+        balance += c.amount
+        desc = c.description
+        if c.charge_type:
+            desc = f"{desc} ({c.charge_type})"
+        rows.append(
+            {
+                "date": c.created_at.strftime("%d %b %Y") if c.created_at else due_str,
+                "reference": None,
+                "description": desc,
+                "debit": c.amount,
+                "credit": None,
+                "balance": balance,
+            }
+        )
+
+    for p in payments:
+        balance -= p.amount
+        ref = (p.reference_number or "").strip()
+        if ref.upper().startswith("CRN"):
+            description = f"Credit note — {ref}"
+        elif not ref:
+            description = "Balance brought forward"
+        else:
+            description = f"Payment — {p.payment_method}"
+        rows.append(
+            {
+                "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
+                "reference": ref,
+                "description": description,
+                "debit": None,
+                "credit": p.amount,
+                "balance": balance,
+            }
+        )
+
+    if abs(balance - Decimal(str(statement.closing_balance or 0))) > Decimal("0.01"):
+        balance = Decimal(str(statement.closing_balance or 0))
+
+    rows.append(
+        {
+            "date": due_str,
+            "reference": None,
+            "description": "Balance carried forward",
+            "debit": None,
+            "credit": None,
+            "balance": balance,
+            "bold": True,
+        }
+    )
+    return rows
+
+
 async def _build_student_statement_sections(
     db: AsyncSession,
-    service: StatementService,
     students: list[Student],
     academic_year: int,
     month: int,
@@ -190,35 +286,106 @@ async def _build_student_statement_sections(
     """Build full per-student statement sections for a YTD bundle PDF."""
     from app.services.statement import MONTHS as _MONTHS
 
+    student_ids = [s.id for s in students]
+    if not student_ids:
+        return []
+
+    statement_rows = (
+        await db.execute(
+            select(Statement)
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month <= month,
+                Statement.student_id.in_(student_ids),
+            )
+            .order_by(Statement.student_id, Statement.month)
+        )
+    ).scalars().all()
+    statements_by_student: dict[str, list[Statement]] = defaultdict(list)
+    for st in statement_rows:
+        statements_by_student[st.student_id].append(st)
+
+    guardian_rows = (
+        await db.execute(
+            select(StudentGuardian)
+            .where(StudentGuardian.student_id.in_(student_ids))
+            .order_by(
+                StudentGuardian.student_id,
+                StudentGuardian.guardian_type != "primary",
+                StudentGuardian.created_at,
+            )
+        )
+    ).scalars().all()
+    guardians_by_student: dict[str, StudentGuardian] = {}
+    for guardian in guardian_rows:
+        guardians_by_student.setdefault(guardian.student_id, guardian)
+
+    charge_rows = (
+        await db.execute(
+            select(AdditionalCharge)
+            .where(
+                AdditionalCharge.academic_year == academic_year,
+                AdditionalCharge.month <= month,
+                AdditionalCharge.student_id.in_(student_ids),
+            )
+            .order_by(AdditionalCharge.student_id, AdditionalCharge.month, AdditionalCharge.created_at)
+        )
+    ).scalars().all()
+    charges_by_student_month: dict[tuple[str, int], list[AdditionalCharge]] = defaultdict(list)
+    for charge in charge_rows:
+        charges_by_student_month[(charge.student_id, charge.month)].append(charge)
+
+    start = datetime(academic_year, 1, 1, tzinfo=UTC)
+    end = _due_date_for_statement(academic_year, month)
+    payment_rows = (
+        await db.execute(
+            select(Payment)
+            .where(
+                Payment.status == "verified",
+                Payment.payment_date >= start,
+                Payment.payment_date < end,
+                Payment.student_id.in_(student_ids),
+            )
+            .order_by(Payment.student_id, Payment.payment_date)
+        )
+    ).scalars().all()
+    payments_by_student_month: dict[tuple[str, int], list[Payment]] = defaultdict(list)
+    for payment in payment_rows:
+        payments_by_student_month[
+            (payment.student_id, payment.payment_date.month)
+        ].append(payment)
+
     student_sections = []
     for s in students:
-        statements = await service.get_range_statements(
-            s.id, academic_year, month, month
-        )
+        statements = statements_by_student.get(s.id, [])
         if not statements:
             continue
 
         student_name = f"{s.first_name} {s.last_name}"
         account_name = student_name
         account_address = ""
-        guardian = (
-            await db.execute(
-                select(StudentGuardian)
-                .where(StudentGuardian.student_id == s.id)
-                .order_by(
-                    StudentGuardian.guardian_type != "primary",
-                    StudentGuardian.created_at,
-                )
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+        guardian = guardians_by_student.get(s.id)
         if guardian is not None:
             account_name = guardian.full_name or student_name
             account_address = ", ".join(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
-        ledger = await service.combined_ledger(statements)
+        ledgers = [
+            _ledger_for_statement_rows(
+                st,
+                charges_by_student_month.get((s.id, st.month), []),
+                payments_by_student_month.get((s.id, st.month), []),
+            )
+            for st in statements
+        ]
+        if len(ledgers) == 1:
+            ledger = ledgers[0]
+        else:
+            ledger = list(ledgers[0][:-1])
+            for rows in ledgers[1:-1]:
+                ledger.extend(rows[1:-1])
+            ledger.extend(ledgers[-1][1:])
         first = statements[0]
         last = statements[-1]
 
@@ -248,40 +415,6 @@ async def _build_student_statement_sections(
             "amount_paid": total_paid,
         })
     return student_sections
-
-
-async def _ensure_student_statements(
-    db: AsyncSession,
-    service: StatementService,
-    students: list[Student],
-    academic_year: int,
-    month: int,
-) -> None:
-    """Create any missing Jan..month statement snapshots for bundle downloads."""
-    student_ids = [s.id for s in students]
-    existing = await service.list_existing(academic_year, month, student_ids)
-    breakdowns = await service.bulk_breakdowns(academic_year, student_ids)
-    charges = await service.bulk_charges(academic_year, student_ids)
-
-    for s in students:
-        for m in range(1, month + 1):
-            if (s.id, m) in existing:
-                continue
-            try:
-                await service.generate_from_breakdown(
-                    s.id,
-                    academic_year,
-                    m,
-                    breakdowns.get(s.id, []),
-                    charges=charges.get(s.id, []),
-                )
-                await db.commit()
-                existing.add((s.id, m))
-            except IntegrityError:
-                await db.rollback()
-                existing.add((s.id, m))
-            except Exception:  # noqa: BLE001 - one student/month must not abort the bundle
-                await db.rollback()
 
 
 @router.post("/statements/generate-all")
@@ -429,18 +562,16 @@ async def download_grade_cumulative(
     if not students:
         raise HTTPException(status_code=404, detail="No approved students in this grade")
 
-    service = StatementService(db)
-    await _ensure_student_statements(db, service, list(students), academic_year, month)
     student_sections = await _build_student_statement_sections(
-        db, service, list(students), academic_year, month
+        db, list(students), academic_year, month
     )
 
     if not student_sections:
         raise HTTPException(
             status_code=404,
             detail=(
-                f"No statements found for {grade_name} in {academic_year} up to "
-                f"month {month:02d}. Generate them first."
+                f"No generated statements found for {grade_name} in {academic_year} "
+                f"up to month {month:02d}. Use Generate & Download first."
             ),
         )
 
@@ -467,7 +598,6 @@ async def download_school_summary(
     """
     if not 1 <= month <= 12:
         raise HTTPException(status_code=422, detail="month must be 1..12")
-    service = StatementService(db)
     students = (
         await db.execute(
             select(Student)
@@ -479,16 +609,15 @@ async def download_school_summary(
     if not students:
         raise HTTPException(status_code=404, detail="No approved students found")
 
-    await _ensure_student_statements(db, service, list(students), academic_year, month)
     student_sections = await _build_student_statement_sections(
-        db, service, list(students), academic_year, month
+        db, list(students), academic_year, month
     )
     if not student_sections:
         raise HTTPException(
             status_code=404,
             detail=(
-                f"No statements found for the school in {academic_year} up to "
-                f"month {month:02d}. Generate them first."
+                f"No generated statements found for the school in {academic_year} "
+                f"up to month {month:02d}. Use Generate & Download first."
             ),
         )
 
