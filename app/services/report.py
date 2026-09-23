@@ -246,12 +246,18 @@ class ReportService:
         }
 
     async def statement_report(
-        self, academic_year: int, status_filter: str | None = None, grade_id: str | None = None
+        self,
+        academic_year: int,
+        status_filter: str | None = None,
+        grade_id: str | None = None,
+        month: int | None = None,
     ) -> dict:
         """School-wide statement summary — every approved student with their
-        outstanding balance for the academic year from the Excel-aligned
-        ledger, so admin can see the whole school, not just one child."""
-        rows = await self.ledger.students_outstanding(academic_year, grade_id=grade_id)
+        outstanding balance from the Excel-aligned ledger, scoped to a selected
+        month when supplied."""
+        rows = await self.ledger.students_outstanding(
+            academic_year, grade_id=grade_id, up_to_month=month
+        )
 
         students = []
         total_outstanding = Decimal("0")
@@ -275,6 +281,7 @@ class ReportService:
 
         return {
             "academic_year": academic_year,
+            "month": month,
             "total_students": len(students),
             "total_outstanding": str(total_outstanding),
             "students": students,

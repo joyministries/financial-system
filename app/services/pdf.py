@@ -25,6 +25,7 @@ from reportlab.pdfgen import canvas as _rl_canvas
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
+    PageBreak,
     PageTemplate,
     Paragraph,
     Spacer,
@@ -774,7 +775,8 @@ def _stmt_notes() -> Table:
     return t
 
 
-def build_statement_pdf(
+def _append_statement_section(
+    doc: "_StatementDocument",
     statement: Statement,
     student_name: str,
     ledger: list[dict] | None = None,
@@ -785,25 +787,13 @@ def build_statement_pdf(
     period_label: str = "",
     amount_due: Decimal | None = None,
     amount_paid: Decimal | None = None,
-) -> bytes:
-    """Light bank-style A4 statement matching the HTML statement template.
+) -> None:
+    """Append one student's full statement body (parties, period, ledger,
+    totals, notes) to an existing statement document's story.
 
-    The header (STATEMENT title, DATE/PAGE meta, crest) is drawn on the canvas
-    with real page numbers; body flowables carry the parties, transactions
-    table, totals and payment notes.
-
-    *account_name* / *account_address* identify the customer in the TO block
-    (normally the primary guardian); fall back to the student when absent.
-
-    *period_label* — optional string like "July — September 2026" shown below
-    the FROM/TO parties when present (multi-month statements).
-
-    *amount_due* / *amount_paid* — override the totals section (default:
-    statement.current_amount_due / statement.total_payments).
+    Shared by the single-student download and the grade-level bundle so every
+    student statement renders identically.
     """
-    issued = statement.generated_at or datetime.utcnow()
-    doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))
-
     # TO name in accounting style: (number) LASTNAME, Firstname
     customer = (account_name or student_name or "").split()
     if len(customer) >= 2:
@@ -845,6 +835,49 @@ def build_statement_pdf(
             Spacer(1, 10 * mm),
             _stmt_notes(),
         ]
+    )
+
+
+def build_statement_pdf(
+    statement: Statement,
+    student_name: str,
+    ledger: list[dict] | None = None,
+    *,
+    student_number: str = "",
+    account_name: str = "",
+    account_address: str = "",
+    period_label: str = "",
+    amount_due: Decimal | None = None,
+    amount_paid: Decimal | None = None,
+) -> bytes:
+    """Light bank-style A4 statement matching the HTML statement template.
+
+    The header (STATEMENT title, DATE/PAGE meta, crest) is drawn on the canvas
+    with real page numbers; body flowables carry the parties, transactions
+    table, totals and payment notes.
+
+    *account_name* / *account_address* identify the customer in the TO block
+    (normally the primary guardian); fall back to the student when absent.
+
+    *period_label* — optional string like "July — September 2026" shown below
+    the FROM/TO parties when present (multi-month statements).
+
+    *amount_due* / *amount_paid* — override the totals section (default:
+    statement.current_amount_due / statement.total_payments).
+    """
+    issued = statement.generated_at or datetime.utcnow()
+    doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))
+    _append_statement_section(
+        doc,
+        statement,
+        student_name,
+        ledger,
+        student_number=student_number,
+        account_name=account_name,
+        account_address=account_address,
+        period_label=period_label,
+        amount_due=amount_due,
+        amount_paid=amount_paid,
     )
     return doc.build()
 
@@ -1008,183 +1041,117 @@ def build_grade_summary_pdf(
     return doc.build()
 
 
-def build_grade_cumulative_pdf(
+def build_grade_statements_pdf(
     grade_name: str,
     academic_year: int,
     month: int,
     students: list[dict],
 ) -> bytes:
-    """Build a grade-level CUMULATIVE statement PDF (like the student's own
-    year-to-date statement but aggregated for every student in the grade).
+    """Build a grade-level statement bundle: every student's FULL individual
+    statement (bank-style ledger, totals and notes — identical rendering to
+    the single-student download) in one PDF.
 
-    Each dict in *students* must have:
-        name, student_number, annual_fees, charged_ytd, paid_ytd,
-        balance, status
+    *students* is a list of dicts, each carrying the data needed for one full
+    statement:
+
+        name, student_number, account_name, account_address,
+        statement (Statement — used for header/default totals),
+        ledger (combined YTD ledger rows),
+        period_label, amount_due, amount_paid
+
+    A light cover page introduces the grade/period; each student then starts
+    on a fresh page behind a gold divider banner.
     """
-    doc = _Document("GRADE CUMULATIVE STATEMENT")
-
-    # ── Header ──────────────────────────────────────────────
-    header_title = Paragraph(
-        '<font color="#FFFFFF"><b>Lambton Christian School</b></font>',
-        _NORMAL,
-    )
-    header_sub = Paragraph(
-        '<font color="#C7CFE6">GRADE CUMULATIVE STATEMENT</font>',
-        ParagraphStyle("R", parent=_NORMAL, alignment=TA_RIGHT),
-    )
-    header = Table([[header_title, header_sub]], colWidths=[110 * mm, 70 * mm])
-    header.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING", (0, 0), (-1, -1), 12),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-
     from app.services.statement import MONTHS
+
     month_name = MONTHS[month - 1] if 1 <= month <= 12 else str(month)
     period_label = f"January – {month_name} {academic_year}"
+    issued = datetime.now()
 
-    fields = [
-        ("Grade", grade_name),
-        ("Statement Period", period_label),
-        ("Students", str(len(students))),
-        ("Date Issued", datetime.now().strftime("%-d %b %Y")),
-    ]
-    cells = []
-    for label, value in fields:
-        cells.append(Paragraph(
-            f'<font color="#94A3B8" size="7">{label.upper()}</font><br/>'
-            f'<font color="#FFFFFF"><b>{value}</b></font>',
-            _NORMAL,
-        ))
-    fields_t = Table([cells], colWidths=[45 * mm] * 4)
-    fields_t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
+    doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))
 
-    header_block = Table([[header], [fields_t]], colWidths=[180 * mm])
-    header_block.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _STMT_NAVY),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-
-    doc.story.extend([header_block, Spacer(1, 6 * mm)])
-
-    # ── Student table (cumulative YTD columns) ──────────────
-    _HEAD_STYLE = ParagraphStyle(
-        "GrdHead", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=9, textColor=colors.white
+    # ── Cover page ───────────────────────────────────────────
+    cover_title = Paragraph(
+        f'<b>{grade_name}</b>',
+        ParagraphStyle(
+            "GradeBundleTitle", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=18,
+            textColor=_LIGHT_HEADING, spaceAfter=2,
+        ),
     )
-    _CELL_STYLE = ParagraphStyle("GrdCell", parent=_NORMAL, fontSize=9)
-    _MONEY_C = ParagraphStyle("GrdMoney", parent=_MONEY_STYLE, fontSize=9)
-    _MONEY_R = ParagraphStyle("GrdMoneyR", parent=_MONEY_C, fontName=_BRAND_BOLD)
-    _NAME_STYLE = ParagraphStyle("GrdName", parent=_NORMAL, fontSize=9, fontName=_BRAND_BOLD)
-
-    data = [[
-        Paragraph('<b>#</b>', _HEAD_STYLE),
-        Paragraph('<b>Student Name</b>', _HEAD_STYLE),
-        Paragraph('<b>Reg No</b>', _HEAD_STYLE),
-        Paragraph('<b>Annual Fees</b>', _HEAD_STYLE),
-        Paragraph('<b>Charged YTD</b>', _HEAD_STYLE),
-        Paragraph('<b>Paid YTD</b>', _HEAD_STYLE),
-        Paragraph('<b>Balance Due</b>', _HEAD_STYLE),
-        Paragraph('<b>Status</b>', _HEAD_STYLE),
-    ]]
-
-    total_fees_all = Decimal("0")
-    total_charged_all = Decimal("0")
-    total_paid_all = Decimal("0")
-    total_balance_all = Decimal("0")
-
-    for i, s in enumerate(students, 1):
-        annual = Decimal(str(s.get("annual_fees", 0)))
-        charged = Decimal(str(s.get("charged_ytd", 0)))
-        paid = Decimal(str(s.get("paid_ytd", 0)))
-        bal = Decimal(str(s.get("balance", 0)))
-        total_fees_all += annual
-        total_charged_all += charged
-        total_paid_all += paid
-        total_balance_all += bal
-        status = s.get("status", "")
-        status_color = "#047857" if status == "Paid" else "#BE123C"
-        data.append([
-            Paragraph(str(i), _CELL_STYLE),
-            Paragraph(s.get("name", ""), _NAME_STYLE),
-            Paragraph(s.get("student_number", ""), _CELL_STYLE),
-            Paragraph(money(annual), _MONEY_C),
-            Paragraph(money(charged), _MONEY_C),
-            Paragraph(money(paid), _MONEY_C),
-            Paragraph(money(bal), _MONEY_R),
-            Paragraph(f'<font color="{status_color}"><b>{status}</b></font>', _CELL_STYLE),
-        ])
-
-    # Totals row
-    data.append([
-        "",
-        Paragraph('<b>TOTAL</b>', ParagraphStyle("Tot", parent=_NAME_STYLE, fontSize=10)),
-        "",
-        Paragraph(f'<b>{money(total_fees_all)}</b>', _MONEY_R),
-        Paragraph(f'<b>{money(total_charged_all)}</b>', _MONEY_R),
-        Paragraph(f'<b>{money(total_paid_all)}</b>', _MONEY_R),
-        Paragraph(f'<b>{money(total_balance_all)}</b>', _MONEY_R),
-        "",
-    ])
-
-    col_widths = [10 * mm, 46 * mm, 20 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 22 * mm]
-    t = Table(data, colWidths=col_widths, repeatRows=1)
-
-    style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), _STMT_NAVY),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), _BRAND_BOLD),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, _STMT_ROW_ALT]),
-        # Totals row
-        ("LINEABOVE", (0, -1), (-1, -1), 1.2, _STMT_NAVY),
-        ("BACKGROUND", (0, -1), (-1, -1), _GOLD_SOFT),
-        ("FONTNAME", (0, -1), (-1, -1), _BRAND_BOLD),
-    ]
-    t.setStyle(TableStyle(style_cmds))
-    doc.story.extend([t, Spacer(1, 8 * mm)])
-
-    # ── Footer summary ──────────────────────────────────────
-    paid_pct = (
-        (total_paid_all / (total_paid_all + total_balance_all) * 100)
-        if (total_paid_all + total_balance_all)
-        else 0
+    cover_sub = Paragraph(
+        f'<font color="#8A6D1F"><b>GRADE STATEMENTS</b></font>',
+        ParagraphStyle("GradeBundleSub", parent=_NORMAL, fontName=_BRAND_BOLD, fontSize=11),
     )
-    summary_text = (
-        f'<b>Grade Total ({period_label}):</b>  '
-        f'Charged: <b>{money(total_charged_all)}</b>  |  '
-        f'Paid: <font color="#047857"><b>{money(total_paid_all)}</b></font>  |  '
-        f'Outstanding: <font color="#BE123C"><b>{money(total_balance_all)}</b></font>  |  '
-        f'Collection: <b>{paid_pct:.0f}%</b>'
-    )
-    summary = Paragraph(
-        summary_text, ParagraphStyle("Summary", parent=_NORMAL, fontSize=10, leading=16)
+    cover_period = Paragraph(
+        f'<font size="10" color="#666666">Full statements — {period_label}<br/>'
+        f'{len(students)} student(s)</font>',
+        ParagraphStyle("GradeBundlePeriod", parent=_NORMAL, fontSize=10, leading=15),
     )
     doc.story.extend([
-        Table([[summary]], colWidths=[180 * mm]),
         Spacer(1, 6 * mm),
-        Paragraph(
-            '<font color="#94A3B8">Cumulative statement — January to the selected month, '
-            'generated by Lambton Christian School Financial System</font>',
-            ParagraphStyle("Foot", parent=_NORMAL, fontSize=8),
+        cover_title,
+        cover_sub,
+        Spacer(1, 4 * mm),
+        cover_period,
+        Spacer(1, 10 * mm),
+        Table(
+            [[Paragraph('<b>STUDENT</b>', _STMT_TABLE_HDR),
+              Paragraph('<b>REG NO</b>', _STMT_TABLE_HDR_R)]],
+            colWidths=[140 * mm, 40 * mm],
         ),
     ])
+    for s in students:
+        doc.story.append(
+            Table(
+                [[Paragraph(s.get("name", ""), _STMT_TABLE_BODY),
+                  Paragraph(s.get("student_number", ""), _STMT_TABLE_MONEY)]],
+                colWidths=[140 * mm, 40 * mm],
+                style=TableStyle([
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.4, _LIGHT_BORDER_SOFT),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]),
+            )
+        )
+
+    # ── One full statement per student ───────────────────────
+    for i, s in enumerate(students, 1):
+        doc.story.append(PageBreak())
+        banner = Table(
+            [[Paragraph(
+                f'<b>Student {i} of {len(students)}</b> — '
+                f'{s.get("name", "")}  '
+                f'<font size="8" color="#8A6D1F">({s.get("student_number", "")})</font>'
+                f'<br/><font size="8" color="#666666">{period_label}</font>',
+                ParagraphStyle(
+                    "GradeBundleBanner", parent=_NORMAL, fontName=_BRAND_BOLD,
+                    fontSize=11, textColor=_LIGHT_HEADING,
+                ),
+            )]],
+            colWidths=[180 * mm],
+        )
+        banner.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), _GOLD_SOFT),
+            ("LINEABOVE", (0, 0), (-1, -1), 2, _LIGHT_GOLD),
+            ("LINEBELOW", (0, 0), (-1, -1), 1.2, _LIGHT_GOLD),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        doc.story.extend([Spacer(1, 2 * mm), banner, Spacer(1, 4 * mm)])
+        _append_statement_section(
+            doc,
+            s["statement"],
+            s.get("name", ""),
+            s.get("ledger"),
+            student_number=s.get("student_number", ""),
+            account_name=s.get("account_name", ""),
+            account_address=s.get("account_address", ""),
+            period_label=s.get("period_label", ""),
+            amount_due=s.get("amount_due"),
+            amount_paid=s.get("amount_paid"),
+        )
 
     return doc.build()
 

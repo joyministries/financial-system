@@ -28,7 +28,7 @@ from app.schemas.financial import (
     StudentSummaryResponse,
 )
 from app.services.pdf import (
-    build_grade_cumulative_pdf,
+    build_grade_statements_pdf,
     build_grade_summary_pdf,
     build_receipt_pdf,
     build_statement_pdf,
@@ -300,16 +300,16 @@ async def download_grade_cumulative(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
-    """Download a grade-level CUMULATIVE statement PDF.
+    """Download a grade-level statement bundle PDF.
 
-    Like the per-student year-to-date statement but for the whole grade:
-    every approved student with their annual fees, charged/paid year-to-date
-    (January .. selected month) and the cumulative balance due.
+    Every approved student's FULL individual statement (bank-style ledger,
+    all transactions January .. selected month, totals and notes) is rendered
+    in one PDF — identical to downloading each student's own statement, with
+    a light cover page and per-student divider banners.
     """
     if not 1 <= month <= 12:
         raise HTTPException(status_code=422, detail="month must be 1..12")
     from app.models.grade import Grade
-    from app.services.ledger import LedgerService
 
     grade = await db.get(Grade, grade_id)
     grade_name = grade.name if grade else "Unknown Grade"
@@ -326,60 +326,88 @@ async def download_grade_cumulative(
     if not students:
         raise HTTPException(status_code=404, detail="No approved students in this grade")
 
-    # Cumulative YTD figures from the generated statements (Jan .. selected month).
-    stmts = (
-        await db.execute(
-            select(Statement)
-            .where(
-                Statement.academic_year == academic_year,
-                Statement.month <= month,
-                Statement.student_id.in_([s.id for s in students]),
-            )
-        )
-    ).scalars().all()
+    service = StatementService(db)
+    from app.services.statement import MONTHS as _MONTHS
 
-    by_student: dict[str, dict] = {}
-    for st in stmts:
-        entry = by_student.setdefault(
-            st.student_id,
-            {
-                "annual_fees": Decimal("0"),
-                "charged_ytd": Decimal("0"),
-                "paid_ytd": Decimal("0"),
-            },
-        )
-        entry["annual_fees"] = max(entry["annual_fees"], st.total_fees)
-        entry["charged_ytd"] += st.total_installments + st.total_additional_charges
-        entry["paid_ytd"] += st.total_payments
-
-    # Authoritative outstanding balance as at the selected month (Excel-ledger).
-    ledger_rows = await LedgerService(db).students_outstanding(
-        academic_year, grade_id=grade_id, up_to_month=month
-    )
-    ledger_by_student = {r["student_id"]: r["outstanding"] for r in ledger_rows}
-
-    student_data = []
+    student_sections = []
+    skipped = 0
     for s in students:
-        st = by_student.get(s.id, {
-            "annual_fees": Decimal("0"),
-            "charged_ytd": Decimal("0"),
-            "paid_ytd": Decimal("0"),
-        })
-        bal = ledger_by_student.get(s.id, Decimal("0"))
-        student_data.append({
-            "name": f"{s.first_name} {s.last_name}",
+        # Year-to-date statements: January .. selected month.
+        statements = await service.get_range_statements(
+            s.id, academic_year, month, month
+        )
+        if not statements:
+            skipped += 1
+            continue
+
+        student_name = f"{s.first_name} {s.last_name}"
+
+        # Customer for the TO block: primary guardian where possible.
+        account_name = student_name
+        account_address = ""
+        guardian = (
+            await db.execute(
+                select(StudentGuardian)
+                .where(StudentGuardian.student_id == s.id)
+                .order_by(
+                    StudentGuardian.guardian_type != "primary",
+                    StudentGuardian.created_at,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if guardian is not None:
+            account_name = guardian.full_name or student_name
+            account_address = ", ".join(
+                bit for bit in (guardian.physical_address, guardian.po_box) if bit
+            )
+
+        ledger = await service.combined_ledger(statements)
+        first = statements[0]
+        last = statements[-1]
+
+        if len(statements) == 1:
+            period_label = ""
+        else:
+            period_label = (
+                f"Year to date — {_MONTHS[first.month - 1]} to "
+                f"{_MONTHS[last.month - 1]} {academic_year}"
+            )
+
+        # "Amount Paid to date" mirrors the Xero footer: RCP receipts only.
+        total_paid = sum(
+            (row.get("credit") or 0)
+            for row in ledger
+            if (row.get("reference") or "").upper().startswith("RCP")
+        )
+
+        student_sections.append({
+            "name": student_name,
             "student_number": s.student_number or "",
-            "annual_fees": st["annual_fees"],
-            "charged_ytd": st["charged_ytd"],
-            "paid_ytd": st["paid_ytd"],
-            "balance": bal,
-            "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
+            "account_name": account_name,
+            "account_address": account_address,
+            "statement": last,
+            "ledger": ledger,
+            "period_label": period_label,
+            "amount_due": last.current_amount_due,
+            "amount_paid": total_paid,
         })
 
-    pdf = build_grade_cumulative_pdf(grade_name, academic_year, month, student_data)
+    if not student_sections:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No statements found for {grade_name} in {academic_year} up to "
+                f"month {month:02d}. Generate them first."
+            ),
+        )
+
+    pdf = build_grade_statements_pdf(
+        grade_name, academic_year, month, student_sections
+    )
     return pdf_response(
         pdf,
-        f"grade-cumulative-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf",
+        f"grade-statements-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf",
     )
 
 
@@ -765,13 +793,14 @@ async def payment_trends_report(
 @router.get("/reports/statements")
 async def statement_report(
     academic_year: int,
+    month: int | None = Query(default=None, ge=1, le=12),
     status: str | None = None,
     grade_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = ReportService(db)
-    return await service.statement_report(academic_year, status, grade_id)
+    return await service.statement_report(academic_year, status, grade_id, month)
 
 
 @router.get("/reports/export-students")

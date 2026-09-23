@@ -21,6 +21,7 @@ interface SchoolStatement {
 }
 interface SchoolStatementReport {
   academic_year: number;
+  month?: number | null;
   total_students: number;
   total_outstanding: string;
   students: SchoolStatement[];
@@ -60,6 +61,7 @@ export default function StatementsPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const pagedSchoolStudents = (schoolReport?.students ?? []).slice((page - 1) * pageSize, page * pageSize);
+  const schoolReportMonthLabel = bulkMonth ? MONTHS[(bulkMonth as number) - 1] : 'Full year';
 
   useEffect(() => {
     // Parents only ever see their own children (the backend enforces this too).
@@ -150,13 +152,18 @@ export default function StatementsPage() {
     setLoadingSchool(true);
     setPage(1);
     reportsApi
-      .statements(year, schoolStatus === 'all' ? undefined : schoolStatus, selectedGrade || undefined)
+      .statements(
+        year,
+        schoolStatus === 'all' ? undefined : schoolStatus,
+        selectedGrade || undefined,
+        bulkMonth || undefined,
+      )
       .then((r) => setSchoolReport(r.data))
       .catch(() => toast.error('Could not load the school statement summary'))
       .finally(() => setLoadingSchool(false));
   };
 
-  useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade]);
+  useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade, bulkMonth]);
 
   // Fix: use downloadPdf so auth token is attached (bare <a href> gets 401)
   // Works for a whole-school summary (no grade selected) or a single grade.
@@ -176,18 +183,18 @@ export default function StatementsPage() {
     }
   };
 
-  // Cumulative grade statement: January → selected month, one PDF for the
-  // whole grade with each student's annual fees / charged / paid / balance.
+  // Grade statement bundle: January → selected month, one PDF containing each
+  // approved student's full bank-style statement.
   const downloadGradeCumulative = async () => {
     if (!bulkGrade) return toast.error('Select a grade first');
     if (!bulkMonth) return toast.error('Select a month first');
-    const toastId = toast.loading('Preparing cumulative grade statement…');
+    const toastId = toast.loading('Preparing grade statement bundle…');
     try {
       const grade = grades.find((g) => g.id === bulkGrade);
       const gradeName = grade ? grade.name.replace(/\s+/g, '-') : bulkGrade;
       await downloadPdf(
         financialApi.gradeCumulativeDownloadUrl(bulkGrade, year, bulkMonth as number),
-        `grade-cumulative-${gradeName}-${year}-${bulkMonth}.pdf`,
+        `grade-statements-${gradeName}-${year}-${bulkMonth}.pdf`,
       );
       toast.success('Download started', { id: toastId });
     } catch {
@@ -585,9 +592,9 @@ export default function StatementsPage() {
         <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({year})</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({schoolReportMonthLabel} {year})</h2>
               <p className="text-sm text-slate-500">
-                Every approved student's outstanding balance for the year.
+                Every approved student's outstanding balance for the selected month.
                 {schoolReport && schoolReport.total_students > 0 && (
                   <span> Total outstanding: <span className="font-medium text-red-600">R {Number(schoolReport.total_outstanding).toLocaleString()}</span></span>
                 )}
@@ -626,9 +633,9 @@ export default function StatementsPage() {
                 onClick={downloadGradeCumulative}
                 disabled={!bulkGrade || !bulkMonth}
                 className="btn btn-secondary"
-                title="Downloads the cumulative statement for this grade — every student's annual fees, charged/paid year-to-date and balance in one PDF"
+                title="Downloads one PDF with every approved student's full year-to-date statement for this grade"
               >
-                <Download className="h-4 w-4" /> {bulkGrade ? 'Grade Statement (Cumulative)' : 'Select a grade…'}
+                <Download className="h-4 w-4" /> {bulkGrade ? 'Grade Statement Bundle' : 'Select a grade…'}
               </button>
             </div>
           </div>
