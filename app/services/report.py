@@ -160,9 +160,18 @@ class ReportService:
         academic_year: int,
         grade_id: str | None = None,
         payment_method: str | None = None,
+        month: int | None = None,
     ) -> dict:
-        start = datetime(academic_year, 1, 1, tzinfo=UTC)
-        end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
+        """Payments received, optionally scoped to a single month.
+
+        When *month* is given every figure (totals, breakdown, by-method) is
+        restricted to that month; otherwise the whole academic year is used.
+        """
+        if month is not None:
+            start, end = self._month_range(academic_year, month)
+        else:
+            start = datetime(academic_year, 1, 1, tzinfo=UTC)
+            end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
 
         stmt = select(Payment).where(
             Payment.status == "verified",
@@ -190,6 +199,7 @@ class ReportService:
 
         return {
             "academic_year": academic_year,
+            "month": month,
             "total_payments": str(sum(monthly_breakdown.values(), Decimal("0"))),
             "total_received": str(sum(monthly_breakdown.values(), Decimal("0"))),
             "payment_count": sum(monthly_counts.values()),
@@ -199,7 +209,7 @@ class ReportService:
                     "total": str(monthly_breakdown.get(m, Decimal("0"))),
                     "count": monthly_counts.get(m, 0),
                 }
-                for m in range(1, 13)
+                for m in (sorted(monthly_breakdown) if month is not None else range(1, 13))
             ],
             "by_method": {k: str(v) for k, v in sorted(by_method.items())},
         }

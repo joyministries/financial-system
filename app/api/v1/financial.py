@@ -28,6 +28,7 @@ from app.schemas.financial import (
     StudentSummaryResponse,
 )
 from app.services.pdf import (
+    build_grade_cumulative_pdf,
     build_grade_summary_pdf,
     build_receipt_pdf,
     build_statement_pdf,
@@ -289,6 +290,97 @@ async def download_grade_summary(
 
     pdf = build_grade_summary_pdf(grade_name, academic_year, month, student_data)
     return pdf_response(pdf, f"grade-summary-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf")
+
+
+@router.get("/statements/grade-cumulative/{grade_id}/download")
+async def download_grade_cumulative(
+    grade_id: str,
+    academic_year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Download a grade-level CUMULATIVE statement PDF.
+
+    Like the per-student year-to-date statement but for the whole grade:
+    every approved student with their annual fees, charged/paid year-to-date
+    (January .. selected month) and the cumulative balance due.
+    """
+    if not 1 <= month <= 12:
+        raise HTTPException(status_code=422, detail="month must be 1..12")
+    from app.models.grade import Grade
+    from app.services.ledger import LedgerService
+
+    grade = await db.get(Grade, grade_id)
+    grade_name = grade.name if grade else "Unknown Grade"
+
+    students = (
+        await db.execute(
+            select(Student)
+            .where(Student.grade_id == grade_id)
+            .where(Student.registration_status == "approved")
+            .order_by(Student.last_name, Student.first_name)
+        )
+    ).scalars().all()
+
+    if not students:
+        raise HTTPException(status_code=404, detail="No approved students in this grade")
+
+    # Cumulative YTD figures from the generated statements (Jan .. selected month).
+    stmts = (
+        await db.execute(
+            select(Statement)
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month <= month,
+                Statement.student_id.in_([s.id for s in students]),
+            )
+        )
+    ).scalars().all()
+
+    by_student: dict[str, dict] = {}
+    for st in stmts:
+        entry = by_student.setdefault(
+            st.student_id,
+            {
+                "annual_fees": Decimal("0"),
+                "charged_ytd": Decimal("0"),
+                "paid_ytd": Decimal("0"),
+            },
+        )
+        entry["annual_fees"] = max(entry["annual_fees"], st.total_fees)
+        entry["charged_ytd"] += st.total_installments + st.total_additional_charges
+        entry["paid_ytd"] += st.total_payments
+
+    # Authoritative outstanding balance as at the selected month (Excel-ledger).
+    ledger_rows = await LedgerService(db).students_outstanding(
+        academic_year, grade_id=grade_id, up_to_month=month
+    )
+    ledger_by_student = {r["student_id"]: r["outstanding"] for r in ledger_rows}
+
+    student_data = []
+    for s in students:
+        st = by_student.get(s.id, {
+            "annual_fees": Decimal("0"),
+            "charged_ytd": Decimal("0"),
+            "paid_ytd": Decimal("0"),
+        })
+        bal = ledger_by_student.get(s.id, Decimal("0"))
+        student_data.append({
+            "name": f"{s.first_name} {s.last_name}",
+            "student_number": s.student_number or "",
+            "annual_fees": st["annual_fees"],
+            "charged_ytd": st["charged_ytd"],
+            "paid_ytd": st["paid_ytd"],
+            "balance": bal,
+            "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
+        })
+
+    pdf = build_grade_cumulative_pdf(grade_name, academic_year, month, student_data)
+    return pdf_response(
+        pdf,
+        f"grade-cumulative-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf",
+    )
 
 
 @router.get("/statements/school-summary/download")
@@ -641,11 +733,12 @@ async def payments_received_report(
     academic_year: int,
     grade_id: str | None = None,
     payment_method: str | None = None,
+    month: int | None = Query(default=None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = ReportService(db)
-    return await service.payments_received(academic_year, grade_id, payment_method)
+    return await service.payments_received(academic_year, grade_id, payment_method, month)
 
 
 @router.get("/reports/carry-forward")

@@ -176,6 +176,25 @@ export default function StatementsPage() {
     }
   };
 
+  // Cumulative grade statement: January → selected month, one PDF for the
+  // whole grade with each student's annual fees / charged / paid / balance.
+  const downloadGradeCumulative = async () => {
+    if (!bulkGrade) return toast.error('Select a grade first');
+    if (!bulkMonth) return toast.error('Select a month first');
+    const toastId = toast.loading('Preparing cumulative grade statement…');
+    try {
+      const grade = grades.find((g) => g.id === bulkGrade);
+      const gradeName = grade ? grade.name.replace(/\s+/g, '-') : bulkGrade;
+      await downloadPdf(
+        financialApi.gradeCumulativeDownloadUrl(bulkGrade, year, bulkMonth as number),
+        `grade-cumulative-${gradeName}-${year}-${bulkMonth}.pdf`,
+      );
+      toast.success('Download started', { id: toastId });
+    } catch {
+      toast.error('Download failed', { id: toastId });
+    }
+  };
+
   const handleBulkGenerate = async () => {
     if (!bulkMonth) return toast.error('Select a month');
     setBulking(true);
@@ -602,6 +621,14 @@ export default function StatementsPage() {
               </button>
               <button onClick={downloadSummary} disabled={!bulkMonth} className="btn btn-secondary">
                 <Download className="h-4 w-4" /> {bulkGrade ? 'Grade Summary PDF' : 'Whole School Summary PDF'}
+              </button>
+              <button
+                onClick={downloadGradeCumulative}
+                disabled={!bulkGrade || !bulkMonth}
+                className="btn btn-secondary"
+                title="Downloads the cumulative statement for this grade — every student's annual fees, charged/paid year-to-date and balance in one PDF"
+              >
+                <Download className="h-4 w-4" /> {bulkGrade ? 'Grade Statement (Cumulative)' : 'Select a grade…'}
               </button>
             </div>
           </div>

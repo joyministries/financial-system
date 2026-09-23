@@ -398,6 +398,8 @@ export const financialApi = {
     `/financial/statements/${encodeURIComponent(studentId)}/download?academic_year=${year}&month=${month}${months > 1 ? `&months=${months}` : ''}`,
   gradeSummaryDownloadUrl: (gradeId: string, year: number, month: number) =>
     `/financial/statements/grade-summary/${encodeURIComponent(gradeId)}/download?academic_year=${year}&month=${month}`,
+  gradeCumulativeDownloadUrl: (gradeId: string, year: number, month: number) =>
+    `/financial/statements/grade-cumulative/${encodeURIComponent(gradeId)}/download?academic_year=${year}&month=${month}`,
   schoolSummaryDownloadUrl: (year: number, month: number) =>
     `/financial/statements/school-summary/download?academic_year=${year}&month=${month}`,
   triggerRollover: (year: number) =>
@@ -484,9 +486,9 @@ export const reportsApi = {
     api.get(`/financial/reports/yearly-income?academic_year=${year}`),
   outstanding: (year: number) =>
     api.get(`/financial/reports/outstanding?academic_year=${year}`),
-  paymentsReceived: (year: number, gradeId?: string, method?: string) =>
+  paymentsReceived: (year: number, gradeId?: string, method?: string, month?: number) =>
     api.get('/financial/reports/payments-received', {
-      params: { academic_year: year, grade_id: gradeId, payment_method: method },
+      params: { academic_year: year, grade_id: gradeId, payment_method: method, month },
     }),
   paymentTrends: (year: number) =>
     api.get(`/financial/reports/payment-trends?academic_year=${year}`),

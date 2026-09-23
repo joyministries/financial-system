@@ -1,19 +1,41 @@
 import { useEffect, useState } from 'react';
 import { gradesApi, reportsApi } from '@/api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { Download } from 'lucide-react';
 import type { Grade } from '@/types';
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+interface OwingStudent {
+  student_number?: string;
+  name: string;
+  balance: number;
+}
+
+interface MonthlySummaryData {
+  total_income: number;
+  payment_count: number;
+  outstanding_total: number;
+  students_owing: number;
+  students_owing_list: OwingStudent[];
+}
+
 export default function ReportsPage() {
   const year = new Date().getFullYear();
-  const [tab, setTab] = useState<'trends' | 'outstanding' | 'payments' | 'export'>('trends');
+  const [tab, setTab] = useState<'income' | 'outstanding' | 'payments' | 'export'>('income');
 
-  const [trends, setTrends] = useState<{ month: number; total: number }[]>([]);
-  const [outstanding, setOutstanding] = useState<{ students_with_outstanding: number; students: { student_number?: string; name: string; outstanding: number }[] }>({ students_with_outstanding: 0, students: [] });
+  // Reports are MONTHLY — every tab reports on the selected month ("as at"
+  // balances use the outstanding position up to that month).
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+
+  const [summary, setSummary] = useState<MonthlySummaryData>({
+    total_income: 0,
+    payment_count: 0,
+    outstanding_total: 0,
+    students_owing: 0,
+    students_owing_list: [],
+  });
   const [payments, setPayments] = useState<{ total_received: number; by_method: Record<string, number> }>({ total_received: 0, by_method: {} });
   const [grades, setGrades] = useState<Grade[]>([]);
   const [exportGrade, setExportGrade] = useState('');
@@ -23,28 +45,23 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setLoading(true);
-    // Backend returns Decimal values serialized as strings (avoids float
-    // precision loss). Coerce to numbers here so string `+` never
-    // concatenates downstream (e.g. reduce, charts, toLocaleString).
+    // Backend returns Decimal values serialized as strings — coerce to numbers
+    // so string `+` never concatenates downstream.
     Promise.all([
-      reportsApi.paymentTrends(year).then((r) =>
-        setTrends(
-          r.data.months.map((t: { month: number; total: string | number }) => ({
-            month: t.month,
-            total: Number(t.total),
-          }))
-        )
-      ),
-      reportsApi.outstanding(year).then((r) =>
-        setOutstanding({
-          ...r.data,
-          students: r.data.students.map((s: { student_number?: string; name: string; outstanding: string | number }) => ({
-            ...s,
-            outstanding: Number(s.outstanding),
+      reportsApi.monthlySummary(year, month).then((r) =>
+        setSummary({
+          total_income: Number(r.data.total_income),
+          payment_count: Number(r.data.payment_count),
+          outstanding_total: Number(r.data.outstanding_total),
+          students_owing: Number(r.data.students_owing),
+          students_owing_list: (r.data.students_owing_list || []).map((s: { student_number?: string; name: string; balance: string | number }) => ({
+            student_number: s.student_number,
+            name: s.name,
+            balance: Number(s.balance),
           })),
         })
       ),
-      reportsApi.paymentsReceived(year).then((r) => {
+      reportsApi.paymentsReceived(year, undefined, undefined, month).then((r) => {
         const by_method: Record<string, number> = {};
         for (const [method, amount] of Object.entries(r.data.by_method)) {
           by_method[method] = Number(amount);
@@ -53,10 +70,10 @@ export default function ReportsPage() {
       }),
       gradesApi.list().then((r) => setGrades(r.data)),
     ]).finally(() => setLoading(false));
-  }, [year]);
+  }, [year, month]);
 
   const tabs = [
-    { key: 'trends' as const, label: 'Payment Trends' },
+    { key: 'income' as const, label: 'Monthly Income' },
     { key: 'outstanding' as const, label: 'Outstanding Fees' },
     { key: 'payments' as const, label: 'Payments by Method' },
     { key: 'export' as const, label: 'Export Students' },
@@ -66,15 +83,15 @@ export default function ReportsPage() {
     if (exporting) return;
     setExporting(true);
     try {
-      const month = exportMonth;
-      const resp = await reportsApi.downloadStudentExport(year, gradeId, month);
+      const m = exportMonth;
+      const resp = await reportsApi.downloadStudentExport(year, gradeId, m);
       const selected = gradeId ? grades.find((g) => g.id === gradeId) : null;
       const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       const scope = selected ? `-${selected.name.replace(/\s+/g, '')}` : '';
-      a.download = `LCS-GERMISTON${scope}-SUSPENSION-LIST-${MONTH_FULL[month - 1]}-${year}.xlsx`;
+      a.download = `LCS-GERMISTON${scope}-SUSPENSION-LIST-${MONTH_FULL[m - 1]}-${year}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -85,78 +102,88 @@ export default function ReportsPage() {
     }
   };
 
-  const exportOutstandingExcel = () => {
-    if (!outstanding.students.length) return;
-    const totalOutstanding = outstanding.students.reduce((sum, s) => sum + s.outstanding, 0);
-    const rows = [
-      ['Student Number', 'Student Name', 'Outstanding (R)'],
-      ...outstanding.students.map((s) => [s.student_number || '', s.name, s.outstanding]),
-      [],
-      ['', 'Total Outstanding', totalOutstanding],
-    ];
+  const exportCSV = (rows: (string | number)[][], filename: string) => {
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `outstanding-fees-${year}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const exportPaymentsExcel = () => {
+  const exportIncomeCsv = () => {
+    const owing = summary.students_owing_list;
+    const rows: (string | number)[][] = [
+      ['Month', `${MONTH_FULL[month - 1]} ${year}`],
+      [],
+      ['Income received', summary.total_income],
+      ['Payments received', summary.payment_count],
+      ['Outstanding total', summary.outstanding_total],
+      ['Students owing', summary.students_owing],
+      [],
+      ...(owing.length ? [['Student Number', 'Student Name', 'Balance (R)'] as (string | number)[], ...owing.map((s) => [s.student_number || '', s.name, s.balance] as (string | number)[])] : []),
+    ];
+    exportCSV(rows, `monthly-income-${year}-${String(month).padStart(2, '0')}.csv`);
+  };
+
+  const exportOutstandingCsv = () => {
+    const owing = summary.students_owing_list;
+    if (!owing.length) return;
+    const rows: (string | number)[][] = [
+      ['Student Number', 'Student Name', 'Outstanding (R)'],
+      ...owing.map((s) => [s.student_number || '', s.name, s.balance]),
+      [],
+      ['', `Total Outstanding (${MONTH_FULL[month - 1]} ${year})`, summary.outstanding_total],
+    ];
+    exportCSV(rows, `outstanding-fees-${year}-${String(month).padStart(2, '0')}.csv`);
+  };
+
+  const exportPaymentsCsv = () => {
     if (!Object.keys(payments.by_method).length) return;
-    const rows = [
-      ['Payment Method', 'Amount (R)'],
+    const rows: (string | number)[][] = [
+      ['Payment Method', `Amount (R) — ${MONTH_FULL[month - 1]} ${year}`],
       ...Object.entries(payments.by_method).map(([method, amount]) => [method, amount]),
       [],
       ['Total', payments.total_received],
     ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `payments-by-method-${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportTrendsExcel = () => {
-    if (!trends.length) return;
-    const rows = [
-      ['Month', 'Total Payments (R)'],
-      ...trends.map((t) => [MONTHS[t.month - 1], t.total]),
-      [],
-      ['Total', trends.reduce((sum, t) => sum + t.total, 0)],
-    ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `payment-trends-${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportCSV(rows, `payments-by-method-${year}-${String(month).padStart(2, '0')}.csv`);
   };
 
   const exportExcel = () => {
-    if (tab === 'outstanding') exportOutstandingExcel();
-    else if (tab === 'payments') exportPaymentsExcel();
-    else exportTrendsExcel();
+    if (tab === 'income') exportIncomeCsv();
+    else if (tab === 'outstanding') exportOutstandingCsv();
+    else if (tab === 'payments') exportPaymentsCsv();
   };
+
+  const monthSelector = (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div>
+        <p className="text-sm font-medium text-slate-700">Report month</p>
+        <p className="text-xs text-slate-400">Income is what was received in the month; balances are the position up to month-end.</p>
+      </div>
+      <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="input w-44">
+        {MONTH_FULL.map((name, i) => (
+          <option key={name} value={i + 1}>{name} {year}</option>
+        ))}
+      </select>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Reports</h1>
-        <button
-          onClick={exportExcel}
-          disabled={loading}
-          className="btn btn-secondary"
-        >
-          <Download className="h-4 w-4" /> Export Excel
-        </button>
+        {tab !== 'export' && (
+          <button
+            onClick={exportExcel}
+            disabled={loading}
+            className="btn btn-secondary"
+          >
+            <Download className="h-4 w-4" /> Export Excel
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2">
@@ -171,41 +198,59 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {tab === 'trends' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          <h2 className="mb-4 text-lg font-semibold">Monthly Payment Trends ({year})</h2>
-          {loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+      {tab !== 'export' && monthSelector}
+
+      {tab === 'income' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+              <p className="text-sm text-slate-500">Income received — {MONTH_FULL[month - 1]} {year}</p>
+              <p className="mt-2 text-3xl font-bold text-emerald-700">R {summary.total_income.toLocaleString()}</p>
             </div>
-          ) : (
-          <>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={trends.map((t) => ({ name: MONTHS[t.month - 1], total: t.total }))}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
-              <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          {trends.length > 0 && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <p className="text-sm text-slate-500">Total received: <span className="font-semibold text-slate-900">R {trends.reduce((sum, t) => sum + t.total, 0).toLocaleString()}</span></p>
+            <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+              <p className="text-sm text-slate-500">Payments received — {MONTH_FULL[month - 1]} {year}</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{summary.payment_count}</p>
             </div>
-          )}
-          </>
-          )}
+            <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+              <p className="text-sm text-slate-500">Outstanding as at {MONTH_FULL[month - 1]} {year}</p>
+              <p className="mt-2 text-3xl font-bold text-red-600">R {summary.outstanding_total.toLocaleString()}</p>
+              <p className="mt-1 text-xs text-slate-400">{summary.students_owing} students owing</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <h2 className="mb-4 text-lg font-semibold">Top Outstanding — {MONTH_FULL[month - 1]} {year}</h2>
+            {loading ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+              </div>
+            ) : summary.students_owing_list.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={360}>
+                  <BarChart data={summary.students_owing_list.slice(0, 15).map((s) => ({ name: s.student_number ? `${s.student_number} — ${s.name}` : s.name, balance: s.balance }))}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" interval={0} angle={-35} textAnchor="end" height={100} tick={{ fontSize: 11 }} />
+                    <YAxis />
+                    <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
+                    <Bar dataKey="balance" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <p className="mt-2 text-xs text-slate-400">Showing the top 15 of {summary.students_owing_list.length} students owing.</p>
+              </>
+            ) : (
+              <p className="py-8 text-center text-sm text-slate-500">No outstanding fees as at {MONTH_FULL[month - 1]} {year}.</p>
+            )}
+          </div>
         </div>
       )}
 
       {tab === 'outstanding' && (
         <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Outstanding Fees ({outstanding.students_with_outstanding} students)</h2>
-            {outstanding.students.length > 0 && (
+            <h2 className="text-lg font-semibold">Outstanding Fees as at {MONTH_FULL[month - 1]} {year} ({summary.students_owing} students)</h2>
+            {summary.students_owing_list.length > 0 && (
               <span className="text-sm font-medium text-red-600">
-                Total: R {outstanding.students.reduce((sum, s) => sum + s.outstanding, 0).toLocaleString()}
+                Total: R {summary.outstanding_total.toLocaleString()}
               </span>
             )}
           </div>
@@ -213,30 +258,36 @@ export default function ReportsPage() {
             <div className="flex h-64 items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
             </div>
-          ) : outstanding.students.length > 0 ? (
-          <>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={outstanding.students.map((s) => ({ name: s.student_number ? `${s.student_number} — ${s.name}` : s.name, outstanding: s.outstanding }))}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" interval={0} angle={-35} textAnchor="end" height={100} tick={{ fontSize: 11 }} />
-              <YAxis />
-              <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
-              <Bar dataKey="outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <p className="text-sm text-slate-500">Total outstanding: <span className="font-semibold text-red-600">R {outstanding.students.reduce((sum, s) => sum + s.outstanding, 0).toLocaleString()}</span></p>
-          </div>
-          </>
+          ) : summary.students_owing_list.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student No.</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Outstanding</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {summary.students_owing_list.map((s, i) => (
+                    <tr key={i} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono text-sm text-slate-500">{s.student_number || '—'}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{s.name}</td>
+                      <td className="px-4 py-3 text-right text-sm font-medium text-red-600">R {s.balance.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-          <p className="py-8 text-center text-sm text-slate-500">No outstanding fees.</p>
+            <p className="py-8 text-center text-sm text-slate-500">No outstanding fees as at {MONTH_FULL[month - 1]} {year}.</p>
           )}
         </div>
       )}
 
       {tab === 'payments' && (
         <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          <h2 className="mb-4 text-lg font-semibold">Payments by Method — R {payments.total_received.toLocaleString()} total</h2>
+          <h2 className="mb-4 text-lg font-semibold">Payments by Method — {MONTH_FULL[month - 1]} {year}: R {payments.total_received.toLocaleString()} total</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -303,7 +354,6 @@ export default function ReportsPage() {
               disabled={exporting}
               className="btn btn-primary"
             >
-              <FileSpreadsheet className="h-4 w-4" />
               {exporting ? 'Generating…' : exportGrade ? 'Export this grade' : 'Export all students'}
             </button>
           </div>
