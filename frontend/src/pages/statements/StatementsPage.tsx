@@ -11,6 +11,20 @@ import StudentSearchSelect from '@/components/StudentSearchSelect';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DEFAULT_PAGE_SIZE = 50;
 
+const downloadErrorMessage = async (err: any) => {
+  const data = err?.response?.data;
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const parsed = JSON.parse(text);
+      return parsed.detail || 'Download failed';
+    } catch {
+      return 'Download failed';
+    }
+  }
+  return data?.detail || 'Download failed';
+};
+
 interface SchoolStatement {
   student_id: string;
   student_number: string;
@@ -174,8 +188,8 @@ export default function StatementsPage() {
         `school-statements-${year}-${bulkMonth}.pdf`,
       );
       toast.success('Download started', { id: toastId });
-    } catch {
-      toast.error('Download failed', { id: toastId });
+    } catch (err: any) {
+      toast.error(await downloadErrorMessage(err), { id: toastId });
     }
   };
 
@@ -193,8 +207,8 @@ export default function StatementsPage() {
         `grade-statements-${gradeName}-${year}-${bulkMonth}.pdf`,
       );
       toast.success('Download started', { id: toastId });
-    } catch {
-      toast.error('Download failed', { id: toastId });
+    } catch (err: any) {
+      toast.error(await downloadErrorMessage(err), { id: toastId });
     }
   };
 

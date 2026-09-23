@@ -250,6 +250,40 @@ async def _build_student_statement_sections(
     return student_sections
 
 
+async def _ensure_student_statements(
+    db: AsyncSession,
+    service: StatementService,
+    students: list[Student],
+    academic_year: int,
+    month: int,
+) -> None:
+    """Create any missing Jan..month statement snapshots for bundle downloads."""
+    student_ids = [s.id for s in students]
+    existing = await service.list_existing(academic_year, month, student_ids)
+    breakdowns = await service.bulk_breakdowns(academic_year, student_ids)
+    charges = await service.bulk_charges(academic_year, student_ids)
+
+    for s in students:
+        for m in range(1, month + 1):
+            if (s.id, m) in existing:
+                continue
+            try:
+                await service.generate_from_breakdown(
+                    s.id,
+                    academic_year,
+                    m,
+                    breakdowns.get(s.id, []),
+                    charges=charges.get(s.id, []),
+                )
+                await db.commit()
+                existing.add((s.id, m))
+            except IntegrityError:
+                await db.rollback()
+                existing.add((s.id, m))
+            except Exception:  # noqa: BLE001 - one student/month must not abort the bundle
+                await db.rollback()
+
+
 @router.post("/statements/generate-all")
 async def generate_all_statements(
     academic_year: int,
@@ -396,6 +430,7 @@ async def download_grade_cumulative(
         raise HTTPException(status_code=404, detail="No approved students in this grade")
 
     service = StatementService(db)
+    await _ensure_student_statements(db, service, list(students), academic_year, month)
     student_sections = await _build_student_statement_sections(
         db, service, list(students), academic_year, month
     )
@@ -444,6 +479,7 @@ async def download_school_summary(
     if not students:
         raise HTTPException(status_code=404, detail="No approved students found")
 
+    await _ensure_student_statements(db, service, list(students), academic_year, month)
     student_sections = await _build_student_statement_sections(
         db, service, list(students), academic_year, month
     )
