@@ -712,7 +712,11 @@ def _stmt_transactions(rows: list[dict]) -> Table:
     return t
 
 
-def _stmt_totals(amount_due: Decimal, amount_paid: Decimal) -> Table:
+def _stmt_totals(
+    amount_due: Decimal,
+    amount_paid: Decimal,
+    amount_year_due: Decimal | None = None,
+) -> Table:
     """Right-aligned monthly amount due / paid-to-date rows."""
     rows = [
         [
@@ -724,6 +728,13 @@ def _stmt_totals(amount_due: Decimal, amount_paid: Decimal) -> Table:
             Paragraph(money(amount_paid), _STMT_TOTAL_VALUE),
         ],
     ]
+    if amount_year_due is not None:
+        rows.append(
+            [
+                Paragraph("Outstanding for Year", _STMT_TOTAL_LABEL),
+                Paragraph(money(amount_year_due), _STMT_TOTAL_VALUE),
+            ]
+        )
     t = Table(rows, colWidths=[110 * mm, 70 * mm])
     t.setStyle(
         TableStyle(
@@ -790,10 +801,12 @@ def _append_statement_section(
     ledger: list[dict] | None = None,
     *,
     student_number: str = "",
+    grade: str = "",
     account_name: str = "",
     account_address: str = "",
     period_label: str = "",
     amount_due: Decimal | None = None,
+    amount_year_due: Decimal | None = None,
     amount_paid: Decimal | None = None,
 ) -> None:
     """Append one student's full statement body (parties, period, ledger,
@@ -831,6 +844,20 @@ def _append_statement_section(
                 ),
             ),
         ])
+    if grade:
+        doc.story.extend([
+            Paragraph(
+                f'<font size="9" color="#666666"><b>Grade:</b> {grade}</font>',
+                ParagraphStyle(
+                    "GradeLabel",
+                    fontName=_BRAND_FONT,
+                    fontSize=9,
+                    textColor=colors.HexColor("#666666"),
+                    alignment=TA_LEFT,
+                    spaceAfter=4 * mm,
+                ),
+            ),
+        ])
 
     doc.story.extend(
         [
@@ -839,6 +866,7 @@ def _append_statement_section(
             _stmt_totals(
                 amount_due if amount_due is not None else _statement_monthly_due(statement),
                 amount_paid if amount_paid is not None else statement.total_payments,
+                amount_year_due,
             ),
             Spacer(1, 10 * mm),
             _stmt_notes(),
@@ -852,10 +880,12 @@ def build_statement_pdf(
     ledger: list[dict] | None = None,
     *,
     student_number: str = "",
+    grade: str = "",
     account_name: str = "",
     account_address: str = "",
     period_label: str = "",
     amount_due: Decimal | None = None,
+    amount_year_due: Decimal | None = None,
     amount_paid: Decimal | None = None,
 ) -> bytes:
     """Light bank-style A4 statement matching the HTML statement template.
@@ -881,10 +911,12 @@ def build_statement_pdf(
         student_name,
         ledger,
         student_number=student_number,
+        grade=grade,
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
         amount_due=amount_due,
+        amount_year_due=amount_year_due,
         amount_paid=amount_paid,
     )
     return doc.build()
@@ -1084,10 +1116,12 @@ def build_grade_statements_pdf(
             s.get("name", ""),
             s.get("ledger"),
             student_number=s.get("student_number", ""),
+            grade=s.get("grade", ""),
             account_name=s.get("account_name", ""),
             account_address=s.get("account_address", ""),
             period_label=s.get("period_label", ""),
             amount_due=s.get("amount_due"),
+            amount_year_due=s.get("amount_year_due"),
             amount_paid=s.get("amount_paid"),
         )
 

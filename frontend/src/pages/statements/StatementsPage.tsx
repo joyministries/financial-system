@@ -65,6 +65,7 @@ export default function StatementsPage() {
 
   // Whole-school statement summary (admin / finance only).
   const [schoolStatus, setSchoolStatus] = useState<'all' | 'paid' | 'overdue'>('all');
+  const [schoolBalanceMode, setSchoolBalanceMode] = useState<'carry' | 'month'>('carry');
   const [schoolReport, setSchoolReport] = useState<SchoolStatementReport | null>(null);
   const [loadingSchool, setLoadingSchool] = useState(false);
   const [bulkMonth, setBulkMonth] = useState<number | ''>(1);
@@ -171,13 +172,14 @@ export default function StatementsPage() {
         schoolStatus === 'all' ? undefined : schoolStatus,
         selectedGrade || undefined,
         bulkMonth || undefined,
+        schoolBalanceMode === 'month',
       )
       .then((r) => setSchoolReport(r.data))
       .catch(() => toast.error('Could not load the school statement summary'))
       .finally(() => setLoadingSchool(false));
   };
 
-  useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade, bulkMonth]);
+  useEffect(() => { loadSchoolReport(); }, [year, schoolStatus, selectedGrade, bulkMonth, schoolBalanceMode]);
 
   const downloadSchoolStatements = async () => {
     if (!bulkMonth) return toast.error('Select a month first');
@@ -479,7 +481,7 @@ export default function StatementsPage() {
           </div>
 
           {/* Balance summary strip */}
-          <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Opening Balance</p>
               <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.opening_balance.toLocaleString()}</p>
@@ -495,6 +497,10 @@ export default function StatementsPage() {
             <div className={`px-6 py-4 ${monthlyAmountDue(selectedStatement) > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
               <p className={`text-[11px] uppercase tracking-wider ${monthlyAmountDue(selectedStatement) > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
               <p className="mt-1 font-mono text-lg font-bold text-white">R {monthlyAmountDue(selectedStatement).toLocaleString()}</p>
+            </div>
+            <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
+              <p className={`mt-1 font-mono text-lg font-bold ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {selectedStatement.current_amount_due.toLocaleString()}</p>
             </div>
           </div>
 
@@ -614,7 +620,9 @@ export default function StatementsPage() {
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({schoolReportMonthLabel} {year})</h2>
               <p className="text-sm text-slate-500">
-                Every approved student's outstanding balance for the selected month.
+                {schoolBalanceMode === 'month'
+                  ? "Every approved student's outstanding for this month only."
+                  : "Every approved student's outstanding balance up to the selected month."}
                 {schoolReport && schoolReport.total_students > 0 && (
                   <span> Total outstanding: <span className="font-medium text-red-600">R {Number(schoolReport.total_outstanding).toLocaleString()}</span></span>
                 )}
@@ -625,6 +633,10 @@ export default function StatementsPage() {
                 <option value="all">All statuses</option>
                 <option value="overdue">Overdue</option>
                 <option value="paid">Paid</option>
+              </select>
+              <select value={schoolBalanceMode} onChange={(e) => setSchoolBalanceMode(e.target.value as 'carry' | 'month')} className="input w-48">
+                <option value="carry">With carry-over</option>
+                <option value="month">This month only</option>
               </select>
               <button onClick={exportCsv} className="btn btn-secondary" disabled={!schoolReport || schoolReport.students.length === 0}>
                 <Download className="h-4 w-4" /> Export CSV

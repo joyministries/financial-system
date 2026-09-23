@@ -494,9 +494,9 @@ export const reportsApi = {
     api.get(`/financial/reports/payment-trends?academic_year=${year}`),
   carryForward: (year: number, month: number) =>
     api.get(`/financial/reports/carry-forward?academic_year=${year}&month=${month}`),
-  statements: (year: number, status?: string, gradeId?: string, month?: number) =>
+  statements: (year: number, status?: string, gradeId?: string, month?: number, monthOnly?: boolean) =>
     api.get('/financial/reports/statements', {
-      params: { academic_year: year, status, grade_id: gradeId || undefined, month: month || undefined },
+      params: { academic_year: year, status, grade_id: gradeId || undefined, month: month || undefined, month_only: monthOnly || undefined },
     }),
   downloadStudentExport: (year: number, gradeId?: string, month?: number) =>
     api.get('/financial/reports/export-students', {

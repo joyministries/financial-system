@@ -2,11 +2,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from io import BytesIO
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.grade import Grade, Student
+from app.models.invoice import Invoice
 from app.models.payment import Payment
+from app.models.schedule import AdditionalCharge
 from app.services.ledger import LedgerService
 
 
@@ -251,13 +253,17 @@ class ReportService:
         status_filter: str | None = None,
         grade_id: str | None = None,
         month: int | None = None,
+        month_only: bool = False,
     ) -> dict:
         """School-wide statement summary — every approved student with their
         outstanding balance from the Excel-aligned ledger, scoped to a selected
         month when supplied."""
-        rows = await self.ledger.students_outstanding(
-            academic_year, grade_id=grade_id, up_to_month=month
-        )
+        if month_only and month is not None:
+            rows = await self._monthly_statement_rows(academic_year, month, grade_id)
+        else:
+            rows = await self.ledger.students_outstanding(
+                academic_year, grade_id=grade_id, up_to_month=month
+            )
 
         students = []
         total_outstanding = Decimal("0")
@@ -282,10 +288,98 @@ class ReportService:
         return {
             "academic_year": academic_year,
             "month": month,
+            "month_only": month_only,
             "total_students": len(students),
             "total_outstanding": str(total_outstanding),
             "students": students,
         }
+
+    async def _monthly_statement_rows(
+        self, academic_year: int, month: int, grade_id: str | None = None
+    ) -> list[dict]:
+        """Approved students with only this month's billed/paid balance."""
+        start, end = self._month_range(academic_year, month)
+
+        inv_stmt = (
+            select(
+                Student.id,
+                Student.student_number,
+                Student.first_name,
+                Student.last_name,
+                Grade.name.label("grade_name"),
+                func.coalesce(func.sum(Invoice.subtotal), 0).label("required"),
+            )
+            .join(Grade, Grade.id == Student.grade_id)
+            .outerjoin(
+                Invoice,
+                and_(
+                    Invoice.student_id == Student.id,
+                    Invoice.status != "void",
+                    Invoice.academic_year == academic_year,
+                    Invoice.month == month,
+                ),
+            )
+            .where(Student.registration_status == "approved")
+        )
+        if grade_id:
+            inv_stmt = inv_stmt.where(Student.grade_id == grade_id)
+        inv_stmt = inv_stmt.group_by(
+            Student.id, Student.student_number, Student.first_name,
+            Student.last_name, Grade.name,
+        )
+        inv_rows = (await self.db.execute(inv_stmt)).all()
+
+        pay_stmt = (
+            select(Student.id, func.coalesce(func.sum(Payment.amount), 0))
+            .join(
+                Payment,
+                and_(
+                    Payment.student_id == Student.id,
+                    Payment.status == "verified",
+                    Payment.payment_date >= start,
+                    Payment.payment_date < end,
+                ),
+            )
+            .where(Student.registration_status == "approved")
+            .group_by(Student.id)
+        )
+        if grade_id:
+            pay_stmt = pay_stmt.where(Student.grade_id == grade_id)
+        paid_by_student = dict((await self.db.execute(pay_stmt)).all())
+
+        charge_stmt = (
+            select(Student.id, func.coalesce(func.sum(AdditionalCharge.amount), 0))
+            .join(
+                AdditionalCharge,
+                and_(
+                    AdditionalCharge.student_id == Student.id,
+                    AdditionalCharge.academic_year == academic_year,
+                    AdditionalCharge.month == month,
+                ),
+            )
+            .where(Student.registration_status == "approved")
+            .group_by(Student.id)
+        )
+        if grade_id:
+            charge_stmt = charge_stmt.where(Student.grade_id == grade_id)
+        charges_by_student = dict((await self.db.execute(charge_stmt)).all())
+
+        return [
+            {
+                "student_id": r.id,
+                "student_number": r.student_number,
+                "name": f"{r.first_name} {r.last_name}",
+                "grade": r.grade_name,
+                "required": Decimal(str(r.required)) + charges_by_student.get(r.id, Decimal("0")),
+                "paid": paid_by_student.get(r.id, Decimal("0")),
+                "outstanding": (
+                    Decimal(str(r.required))
+                    + charges_by_student.get(r.id, Decimal("0"))
+                    - paid_by_student.get(r.id, Decimal("0"))
+                ),
+            }
+            for r in inv_rows
+        ]
 
     async def students_xlsx(
         self,

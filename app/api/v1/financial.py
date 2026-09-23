@@ -17,7 +17,7 @@ from app.core.deps import (
     verify_student_access,
 )
 from app.core.exceptions import ConflictError
-from app.models.grade import Student, StudentGuardian
+from app.models.grade import Grade, Student, StudentGuardian
 from app.models.financial import Statement
 from app.models.payment import Payment
 from app.models.schedule import AdditionalCharge
@@ -329,6 +329,12 @@ async def _build_student_statement_sections(
     for guardian in guardian_rows:
         guardians_by_student.setdefault(guardian.student_id, guardian)
 
+    grade_ids = list({s.grade_id for s in students})
+    grade_rows = (
+        await db.execute(select(Grade).where(Grade.id.in_(grade_ids)))
+    ).scalars().all()
+    grade_by_id = {g.id: g.name for g in grade_rows}
+
     charge_rows = (
         await db.execute(
             select(AdditionalCharge)
@@ -415,12 +421,14 @@ async def _build_student_statement_sections(
         student_sections.append({
             "name": student_name,
             "student_number": s.student_number or "",
+            "grade": grade_by_id.get(s.grade_id, ""),
             "account_name": account_name,
             "account_address": account_address,
             "statement": last,
             "ledger": ledger,
             "period_label": period_label,
             "amount_due": _monthly_amount_due(last),
+            "amount_year_due": last.current_amount_due,
             "amount_paid": total_paid,
         })
     return student_sections
@@ -492,8 +500,6 @@ async def download_grade_summary(
     user: User = Depends(require_role("admin", "finance")),
 ):
     """Download a grade-level summary PDF showing all students, payments and balances."""
-    from app.models.grade import Grade
-
     grade = await db.get(Grade, grade_id)
     grade_name = grade.name if grade else "Unknown Grade"
 
@@ -554,8 +560,6 @@ async def download_grade_cumulative(
     """
     if not 1 <= month <= 12:
         raise HTTPException(status_code=422, detail="month must be 1..12")
-    from app.models.grade import Grade
-
     grade = await db.get(Grade, grade_id)
     grade_name = grade.name if grade else "Unknown Grade"
 
@@ -820,6 +824,10 @@ async def download_statement(
     student_name = (
         f"{student.first_name} {student.last_name}" if student else student_id
     )
+    grade_label = ""
+    if student is not None:
+        grade = await db.get(Grade, student.grade_id)
+        grade_label = grade.name if grade else ""
 
     # Customer for the TO block: primary guardian where possible.
     account_name = student_name
@@ -873,10 +881,12 @@ async def download_statement(
         student_name,
         ledger,
         student_number=student.student_number if student else "",
+        grade=grade_label,
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
         amount_due=_monthly_amount_due(last),
+        amount_year_due=last.current_amount_due,
         amount_paid=total_paid,
     )
 
@@ -969,13 +979,16 @@ async def payment_trends_report(
 async def statement_report(
     academic_year: int,
     month: int | None = Query(default=None, ge=1, le=12),
+    month_only: bool = False,
     status: str | None = None,
     grade_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = ReportService(db)
-    return await service.statement_report(academic_year, status, grade_id, month)
+    return await service.statement_report(
+        academic_year, status, grade_id, month, month_only
+    )
 
 
 @router.get("/reports/export-students")
