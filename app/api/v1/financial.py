@@ -17,6 +17,7 @@ from app.core.deps import (
     verify_student_access,
 )
 from app.core.exceptions import ConflictError
+from app.core.money import to_decimal
 from app.models.grade import Grade, Student, StudentGuardian
 from app.models.financial import Statement
 from app.models.payment import Payment
@@ -31,6 +32,7 @@ from app.schemas.financial import (
     StatementResponse,
     StudentSummaryResponse,
 )
+from app.services.ledger import LedgerService
 from app.services.pdf import (
     build_grade_statements_pdf,
     build_grade_summary_pdf,
@@ -40,7 +42,11 @@ from app.services.pdf import (
 )
 from app.services.receipt import ReceiptService
 from app.services.report import ReportService
-from app.services.statement import StatementService
+from app.services.statement import (
+    StatementService,
+    build_statement_ledger,
+    derive_ledger_footer,
+)
 from app.services.student_summary import StudentSummaryService
 
 router = APIRouter(prefix="/financial", tags=["Financial"])
@@ -190,100 +196,51 @@ def _due_date_for_statement(academic_year: int, month: int) -> datetime:
     return datetime(academic_year, month + 1, 1, tzinfo=UTC)
 
 
-def _monthly_amount_due(statement: Statement) -> Decimal:
-    """Amount outstanding for the statement month only, not year-to-date."""
-    return (
-        Decimal(str(statement.total_installments or 0))
-        + Decimal(str(statement.total_additional_charges or 0))
-        - Decimal(str(statement.total_payments or 0))
-    )
-
-
-def _ledger_for_statement_rows(
-    statement: Statement,
+def _ledger_for_window_rows(
+    academic_year: int,
+    start_month: int,
+    end_month: int,
+    annual_fee: tuple[Decimal, datetime | None],
     charges: list[AdditionalCharge],
     payments: list[Payment],
 ) -> list[dict]:
-    """Build statement ledger rows from prefetched transactions."""
-    due_date = _due_date_for_statement(statement.academic_year, statement.month)
-    due_str = due_date.strftime("%d %b %Y")
-    balance = Decimal(str(statement.opening_balance or 0))
-    rows: list[dict] = [
-        {
-            "date": due_str,
-            "reference": None,
-            "description": "Balance brought forward",
-            "debit": None,
-            "credit": None,
-            "balance": balance,
-            "bold": True,
-        }
-    ]
+    """Build canonical ledger rows for a month window from prefetched data.
 
-    if statement.total_installments > 0:
-        balance += statement.total_installments
-        rows.append(
-            {
-                "date": due_str,
-                "reference": None,
-                "description": f"Fees for {statement.month:02d}/{statement.academic_year}",
-                "debit": statement.total_installments,
-                "credit": None,
-                "balance": balance,
-            }
-        )
+    Mirrors ``StatementService.ledger_for_window`` but takes everything it
+    needs already loaded, so the grade/school bundle stays a fixed number of
+    queries instead of one per student.
+    """
+    fee_total, fee_date = annual_fee
+    live_charges = [c for c in charges if c.created_at is not None]
+    live_payments = [p for p in payments if p.payment_date is not None]
 
-    for c in charges:
-        balance += c.amount
-        desc = c.description
-        if c.charge_type:
-            desc = f"{desc} ({c.charge_type})"
-        rows.append(
-            {
-                "date": c.created_at.strftime("%d %b %Y") if c.created_at else due_str,
-                "reference": None,
-                "description": desc,
-                "debit": c.amount,
-                "credit": None,
-                "balance": balance,
-            }
-        )
+    def in_window(value: datetime) -> bool:
+        return start_month <= value.month <= end_month
 
-    for p in payments:
-        balance -= p.amount
-        ref = (p.reference_number or "").strip()
-        if ref.upper().startswith("CRN"):
-            description = f"Credit note — {ref}"
-        elif not ref:
-            description = "Balance brought forward"
-        else:
-            description = f"Payment — {p.payment_method}"
-        rows.append(
-            {
-                "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
-                "reference": ref,
-                "description": description,
-                "debit": None,
-                "credit": p.amount,
-                "balance": balance,
-            }
-        )
+    opening = Decimal("0")
+    if fee_total > 0 and fee_date is not None and fee_date.month < start_month:
+        opening += to_decimal(fee_total)
+    for c in live_charges:
+        if c.created_at.month < start_month:
+            opening += to_decimal(c.amount)
+    for p in live_payments:
+        if p.payment_date.month < start_month:
+            opening -= to_decimal(p.amount)
 
-    if abs(balance - Decimal(str(statement.closing_balance or 0))) > Decimal("0.01"):
-        balance = Decimal(str(statement.closing_balance or 0))
-
-    rows.append(
-        {
-            "date": due_str,
-            "reference": None,
-            "description": "Balance carried forward",
-            "debit": None,
-            "credit": None,
-            "balance": balance,
-            "bold": True,
-        }
+    fee = (
+        to_decimal(fee_total)
+        if fee_total > 0 and fee_date is not None and in_window(fee_date)
+        else Decimal("0")
     )
-    return rows
+
+    return build_statement_ledger(
+        academic_year=academic_year,
+        annual_fee=fee,
+        annual_fee_date=fee_date,
+        opening_balance=opening,
+        charges=[c for c in live_charges if in_window(c.created_at)],
+        payments=[p for p in live_payments if in_window(p.payment_date)],
+    )
 
 
 async def _build_student_statement_sections(
@@ -343,12 +300,15 @@ async def _build_student_statement_sections(
                 AdditionalCharge.month <= month,
                 AdditionalCharge.student_id.in_(student_ids),
             )
-            .order_by(AdditionalCharge.student_id, AdditionalCharge.month, AdditionalCharge.created_at)
+            .order_by(AdditionalCharge.student_id, AdditionalCharge.created_at)
         )
     ).scalars().all()
-    charges_by_student_month: dict[tuple[str, int], list[AdditionalCharge]] = defaultdict(list)
+    # Grouped by student only: the window is derived from each row's real
+    # transaction date by _ledger_for_window_rows, not from the stored
+    # `charge.month`, which can disagree for a backdated charge.
+    charges_by_student: dict[str, list[AdditionalCharge]] = defaultdict(list)
     for charge in charge_rows:
-        charges_by_student_month[(charge.student_id, charge.month)].append(charge)
+        charges_by_student[charge.student_id].append(charge)
 
     start = datetime(academic_year, 1, 1, tzinfo=UTC)
     end = _due_date_for_statement(academic_year, month)
@@ -364,13 +324,12 @@ async def _build_student_statement_sections(
             .order_by(Payment.student_id, Payment.payment_date)
         )
     ).scalars().all()
-    payments_by_student_month: dict[tuple[str, int], list[Payment]] = defaultdict(list)
+    payments_by_student: dict[str, list[Payment]] = defaultdict(list)
     for payment in payment_rows:
-        payments_by_student_month[
-            (payment.student_id, payment.payment_date.month)
-        ].append(payment)
+        payments_by_student[payment.student_id].append(payment)
 
     student_sections = []
+    annual_fees = await LedgerService(db).annual_fees(academic_year, student_ids)
     for s in students:
         statements = statements_by_student.get(s.id, [])
         if not statements:
@@ -386,23 +345,17 @@ async def _build_student_statement_sections(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
-        ledgers = [
-            _ledger_for_statement_rows(
-                st,
-                charges_by_student_month.get((s.id, st.month), []),
-                payments_by_student_month.get((s.id, st.month), []),
-            )
-            for st in statements
-        ]
-        if len(ledgers) == 1:
-            ledger = ledgers[0]
-        else:
-            ledger = list(ledgers[0][:-1])
-            for rows in ledgers[1:-1]:
-                ledger.extend(rows[1:-1])
-            ledger.extend(ledgers[-1][1:])
         first = statements[0]
         last = statements[-1]
+
+        ledger = _ledger_for_window_rows(
+            academic_year,
+            first.month,
+            last.month,
+            annual_fees.get(s.id, (Decimal("0"), None)),
+            charges_by_student.get(s.id, []),
+            payments_by_student.get(s.id, []),
+        )
 
         if len(statements) == 1:
             period_label = ""
@@ -412,11 +365,7 @@ async def _build_student_statement_sections(
                 f"{_MONTHS[last.month - 1]} {academic_year}"
             )
 
-        total_paid = sum(
-            (row.get("credit") or 0)
-            for row in ledger
-            if (row.get("reference") or "").upper().startswith("RCP")
-        )
+        footer = derive_ledger_footer(ledger, month=last.month)
 
         student_sections.append({
             "name": student_name,
@@ -427,9 +376,9 @@ async def _build_student_statement_sections(
             "statement": last,
             "ledger": ledger,
             "period_label": period_label,
-            "amount_due": _monthly_amount_due(last),
-            "amount_year_due": last.current_amount_due,
-            "amount_paid": total_paid,
+            "amount_due": footer["amount_due"],
+            "amount_year_due": footer["amount_year_due"],
+            "amount_paid": footer["amount_paid"],
         })
     return student_sections
 
@@ -778,6 +727,67 @@ async def list_statements(
     return await service.list_for_student(student_id, academic_year)
 
 
+@router.get("/statements/{student_id}/ledger")
+async def statement_ledger(
+    student_id: str,
+    academic_year: int,
+    month: int,
+    months: int = 1,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return the canonical statement ledger for the on-screen statement view.
+
+    The UI renders these rows verbatim instead of rebuilding them from the
+    monthly snapshots, so the screen and the downloaded PDF can never disagree
+    about what was charged.
+    """
+    if user.role == "parent":
+        await verify_student_access(student_id, user, db)
+    from app.services.statement import MONTHS as _MONTHS
+
+    service = StatementService(db)
+    if months <= 1:
+        statements = await service.get_range_statements(
+            student_id, academic_year, month, month
+        )
+    else:
+        statements = await service.get_range_statements(
+            student_id, academic_year, month, months
+        )
+    if not statements:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No statements found for {academic_year} up to month "
+                f"{month:02d}. Generate one first."
+            ),
+        )
+
+    first, last = statements[0], statements[-1]
+    ledger = await service.combined_ledger(statements)
+    footer = derive_ledger_footer(ledger, month=last.month)
+
+    if len(statements) == 1:
+        period_label = ""
+    elif months <= 1:
+        period_label = (
+            f"Year to date — {_MONTHS[first.month - 1]} to "
+            f"{_MONTHS[last.month - 1]} {academic_year}"
+        )
+    else:
+        period_label = f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
+
+    return {
+        "period_label": period_label,
+        "month": last.month,
+        "ledger": ledger,
+        "amount_due": footer["amount_due"],
+        "amount_paid": footer["amount_paid"],
+        "amount_year_due": footer["amount_year_due"],
+    }
+
+
 @router.get("/statements/{student_id}/download")
 async def download_statement(
     student_id: str,
@@ -868,14 +878,9 @@ async def download_statement(
             f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
         )
 
-    # "Amount Paid to date" mirrors the Xero report footer: RCP receipts only.
-    # Brought-forward credits (refless) and credit notes (CRN) are shown as
-    # their own ledger rows, so they must not inflate the paid total.
-    total_paid = sum(
-        (row.get("credit") or 0)
-        for row in ledger
-        if (row.get("reference") or "").upper().startswith("RCP")
-    )
+    # Totals are derived from the rows that are actually printed, so the footer
+    # can never disagree with the ledger above it.
+    footer = derive_ledger_footer(ledger, month=last.month)
     pdf = build_statement_pdf(
         last,
         student_name,
@@ -885,9 +890,9 @@ async def download_statement(
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
-        amount_due=_monthly_amount_due(last),
-        amount_year_due=last.current_amount_due,
-        amount_paid=total_paid,
+        amount_due=footer["amount_due"],
+        amount_year_due=footer["amount_year_due"],
+        amount_paid=footer["amount_paid"],
     )
 
     suffix = f"-{months}m" if months > 1 else ""

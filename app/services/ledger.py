@@ -52,6 +52,50 @@ class LedgerService:
         )
         return (await self.db.execute(stmt)).scalar() or D0
 
+    async def annual_fee(
+        self, student_id: str, academic_year: int
+    ) -> tuple[Decimal, datetime | None]:
+        """Return ``(amount, date)`` for the single annual fee charge.
+
+        The school raises ONE fee per school year (annual fee plus any once-off
+        items), not a fee per month — the monthly instalment is a payment
+        schedule, never a separate charge.  This returns the live total of every
+        non-void invoice for the year together with the issue date of the
+        earliest one, which is the day the charge actually hit the account.
+        """
+        stmt = select(
+            func.coalesce(func.sum(Invoice.subtotal), 0),
+            func.min(Invoice.issue_date),
+        ).where(
+            Invoice.student_id == student_id,
+            Invoice.status != "void",
+            Invoice.academic_year == academic_year,
+        )
+        total, issued = (await self.db.execute(stmt)).one()
+        return (total or D0), issued
+
+    async def annual_fees(
+        self, academic_year: int, student_ids: list[str]
+    ) -> dict[str, tuple[Decimal, datetime | None]]:
+        """Batch form of :meth:`annual_fee` — one query for the whole set."""
+        if not student_ids:
+            return {}
+        stmt = (
+            select(
+                Invoice.student_id,
+                func.coalesce(func.sum(Invoice.subtotal), 0),
+                func.min(Invoice.issue_date),
+            )
+            .where(
+                Invoice.student_id.in_(student_ids),
+                Invoice.status != "void",
+                Invoice.academic_year == academic_year,
+            )
+            .group_by(Invoice.student_id)
+        )
+        rows = (await self.db.execute(stmt)).all()
+        return {sid: (total or D0, issued) for sid, total, issued in rows}
+
     async def paid(self, student_id: str, academic_year: int) -> Decimal:
         start = datetime(academic_year, 1, 1, tzinfo=UTC)
         end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
