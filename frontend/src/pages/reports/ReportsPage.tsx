@@ -21,6 +21,13 @@ interface MonthlySummaryData {
   students_owing_list: OwingStudent[];
 }
 
+interface OutstandingMonth {
+  month: number;
+  period: string;
+  outstanding_total: number;
+  students_owing: number;
+}
+
 export default function ReportsPage() {
   const year = new Date().getFullYear();
   const [tab, setTab] = useState<'income' | 'outstanding' | 'payments' | 'export'>('income');
@@ -38,6 +45,7 @@ export default function ReportsPage() {
     students_owing_list: [],
   });
   const [payments, setPayments] = useState<{ total_received: number; by_method: Record<string, number> }>({ total_received: 0, by_method: {} });
+  const [outstandingByMonth, setOutstandingByMonth] = useState<OutstandingMonth[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [exportGrade, setExportGrade] = useState('');
   const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
@@ -57,6 +65,16 @@ export default function ReportsPage() {
           by_method[method] = Number(amount);
         }
         setPayments({ total_received: Number(r.data.total_received), by_method });
+      }),
+      reportsApi.outstandingByMonth(year, month).then((r) => {
+        setOutstandingByMonth(
+          (r.data.months || []).map((m: OutstandingMonth) => ({
+            month: m.month,
+            period: m.period,
+            outstanding_total: Number(m.outstanding_total),
+            students_owing: Number(m.students_owing),
+          })),
+        );
       }),
       gradesApi.list().then((r) => setGrades(r.data)),
     ])
@@ -138,8 +156,11 @@ export default function ReportsPage() {
 
   const exportOutstandingCsv = () => {
     const owing = summary.students_owing_list;
-    if (!owing.length) return;
     const rows: (string | number)[][] = [
+      ['Outstanding by month (cumulative)'],
+      ['Month', 'Outstanding (R)', 'Students owing'],
+      ...outstandingByMonth.map((m) => [MONTH_FULL[m.month - 1], m.outstanding_total, m.students_owing]),
+      [],
       ['Student Number', 'Student Name', `${outstandingLabel} (R)`],
       ...owing.map((s) => [s.student_number || '', s.name, s.balance]),
       [],
@@ -259,43 +280,95 @@ export default function ReportsPage() {
       )}
 
       {tab === 'outstanding' && (
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{outstandingLabel} ({summary.students_owing} students)</h2>
-            {summary.students_owing_list.length > 0 && (
-              <span className="text-sm font-medium text-red-600">
-                Total: R {summary.outstanding_total.toLocaleString()}
-              </span>
+        <div className="space-y-6">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <h2 className="mb-1 text-lg font-semibold">Outstanding by month — cumulative</h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Total still owed as at the end of each month (January → {MONTH_FULL[month - 1]} {year}).
+              The balance grows as fees are billed and shrinks as payments arrive.
+            </p>
+            {loading ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+              </div>
+            ) : outstandingByMonth.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={outstandingByMonth.map((m) => ({ name: MONTH_FULL[m.month - 1], outstanding_total: m.outstanding_total, students_owing: m.students_owing }))}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis />
+                    <Tooltip formatter={(v: number) => `R ${v.toLocaleString()}`} />
+                    <Bar dataKey="outstanding_total" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Outstanding (R)</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Students owing</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {outstandingByMonth.map((m) => (
+                        <tr key={m.month} className={m.month === month ? 'bg-red-50/50' : 'hover:bg-slate-50'}>
+                          <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                            {MONTH_FULL[m.month - 1]} {year}
+                            {m.month === month && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">SELECTED</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm font-medium text-red-600">R {m.outstanding_total.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-sm text-slate-700">{m.students_owing}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <p className="py-8 text-center text-sm text-slate-500">No outstanding data for this period.</p>
             )}
           </div>
-          {loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{outstandingLabel} ({summary.students_owing} students)</h2>
+              {summary.students_owing_list.length > 0 && (
+                <span className="text-sm font-medium text-red-600">
+                  Total: R {summary.outstanding_total.toLocaleString()}
+                </span>
+              )}
             </div>
-          ) : summary.students_owing_list.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student No.</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Outstanding</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {summary.students_owing_list.map((s, i) => (
-                    <tr key={i} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono text-sm text-slate-500">{s.student_number || '—'}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{s.name}</td>
-                      <td className="px-4 py-3 text-right text-sm font-medium text-red-600">R {s.balance.toLocaleString()}</td>
+            {loading ? (
+              <div className="flex h-64 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+              </div>
+            ) : summary.students_owing_list.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student No.</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Outstanding</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-slate-500">No fees outstanding for this view.</p>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {summary.students_owing_list.map((s, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono text-sm text-slate-500">{s.student_number || '—'}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-slate-900">{s.name}</td>
+                        <td className="px-4 py-3 text-right text-sm font-medium text-red-600">R {s.balance.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-slate-500">No fees outstanding for this view.</p>
+            )}
+          </div>
         </div>
       )}
 

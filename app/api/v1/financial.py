@@ -941,6 +941,19 @@ async def outstanding_fees_report(
     return await service.outstanding_fees(academic_year)
 
 
+@router.get("/reports/outstanding-by-month")
+async def outstanding_by_month_report(
+    academic_year: int,
+    month: int = Query(ge=1, le=12),
+    grade_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Outstanding position as at each month (cumulative progression)."""
+    service = ReportService(db)
+    return await service.outstanding_by_month(academic_year, month, grade_id)
+
+
 @router.get("/reports/payments-received")
 async def payments_received_report(
     academic_year: int,

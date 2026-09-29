@@ -157,6 +157,38 @@ class ReportService:
             ],
         }
 
+    async def outstanding_by_month(
+        self,
+        academic_year: int,
+        up_to_month: int,
+        grade_id: str | None = None,
+    ) -> dict:
+        """Outstanding position as at EACH month (cumulative progression).
+
+        Returns one entry per month from January up to *up_to_month* showing
+        the total still owed and how many students owe, as at that month —
+        the same Excel-ledger position the monthly summary uses.
+        """
+        months = []
+        for m in range(1, up_to_month + 1):
+            rows = await self.ledger.students_outstanding(
+                academic_year, grade_id=grade_id, up_to_month=m
+            )
+            owing = [r for r in rows if r["outstanding"] > 0]
+            months.append({
+                "month": m,
+                "period": f"{academic_year}-{m:02d}",
+                "outstanding_total": str(
+                    sum((r["outstanding"] for r in owing), Decimal("0"))
+                ),
+                "students_owing": len(owing),
+            })
+        return {
+            "academic_year": academic_year,
+            "up_to_month": up_to_month,
+            "months": months,
+        }
+
     async def payments_received(
         self,
         academic_year: int,
