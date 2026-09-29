@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { financialApi, reportsApi, studentsApi, gradesApi, downloadPdf } from '@/api/client';
+import { financialApi, reportsApi, studentsApi, gradesApi, chargesApi, paymentsApi, downloadPdf } from '@/api/client';
 import { getStudentNames } from '@/lib/studentNames';
-import type { Student, Statement, Grade, LedgerRow, StatementLedger } from '@/types';
+import type { Student, Statement, Grade, AdditionalCharge, Payment } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Download, FilePlus2, Landmark, Loader2 } from 'lucide-react';
@@ -57,8 +57,9 @@ export default function StatementsPage() {
   const [loading, setLoading] = useState(false);
   const [namesLoading, setNamesLoading] = useState(true);
 
-  // Canonical statement ledger (built server-side so the screen and the PDF agree).
-  const [statementLedger, setStatementLedger] = useState<StatementLedger | null>(null);
+  // Transaction ledger for the selected bank-style statement.
+  const [ledgerCharges, setLedgerCharges] = useState<AdditionalCharge[]>([]);
+  const [ledgerPayments, setLedgerPayments] = useState<Payment[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [statementMonths, setStatementMonths] = useState<number>(0); // 0=year to date, 3/6/12=range
 
@@ -96,19 +97,28 @@ export default function StatementsPage() {
 
   useEffect(() => { loadStatements(); }, [selectedStudent, year]);
 
-  // Load the canonical ledger from the server — the same rows the PDF prints.
+  // Load the transaction detail behind a statement so it can be rendered as a
+  // bank-style ledger (charges + verified payments for the statement month).
   useEffect(() => {
-    if (!selectedStatement) { setStatementLedger(null); return; }
+    if (!selectedStatement) { setLedgerCharges([]); setLedgerPayments([]); return; }
     const sid = selectedStatement.student_id;
     const y = selectedStatement.academic_year;
     const m = selectedStatement.month;
     setLoadingLedger(true);
-    financialApi
-      .statementLedger(sid, y, m, statementMonths)
-      .then((r) => setStatementLedger(r.data as StatementLedger))
-      .catch(() => setStatementLedger(null))
+    Promise.all([
+      chargesApi.list(sid, y).then((r) => r.data as AdditionalCharge[]).catch(() => [] as AdditionalCharge[]),
+      paymentsApi.list({ student_id: sid, limit: 200 }).then((r) => r.data.items as Payment[]).catch(() => [] as Payment[]),
+    ])
+      .then(([charges, payments]) => {
+        setLedgerCharges(charges.filter((c) => c.academic_year === y && c.month === m));
+        setLedgerPayments(
+          payments.filter(
+            (p) => p.status === 'verified' && p.payment_date?.startsWith(`${y}-${String(m).padStart(2, '0')}`)
+          )
+        );
+      })
       .finally(() => setLoadingLedger(false));
-  }, [selectedStatement, statementMonths]);
+  }, [selectedStatement]);
 
   /**
    * Merged generate-then-download for each row.
@@ -291,13 +301,72 @@ export default function StatementsPage() {
   })();
 
   // ── Bank-style ledger ─────────────────────────────────────
-  // The rows are built and totalled by the server so the on-screen statement
-  // and the downloaded PDF always show exactly the same charges, dates and
-  // running balance. Fees appear once as the annual charge — never as a
-  // per-month instalment debit.
-  const ledgerRows: LedgerRow[] = statementLedger?.ledger ?? [];
+  // Rows: opening balance → installment (debit) → charges (debit) →
+  // payments (credit) → closing balance. Running balance column like a bank
+  // statement so parents see exactly how the month's number was reached.
+  interface LedgerRow { date: string; description: string; debit?: number; credit?: number; balance: number; bold?: boolean }
+  const buildLedger = (s: Statement): LedgerRow[] => {
+    const rows: LedgerRow[] = [];
+    let balance = s.opening_balance;
+    const dueDate = s.due_date ? new Date(s.due_date).toLocaleDateString() : `${MONTHS[s.month - 1]} ${s.academic_year}`;
+    rows.push({
+      date: dueDate,
+      description: 'Balance brought forward',
+      balance,
+      bold: true,
+    });
+    if (s.total_installments > 0) {
+      balance += s.total_installments;
+      rows.push({
+        date: dueDate,
+        description: `Monthly installment — ${MONTHS[s.month - 1]} ${s.academic_year}`,
+        debit: s.total_installments,
+        balance,
+      });
+    }
+    ledgerCharges.forEach((c) => {
+      balance += c.amount;
+      rows.push({
+        date: c.created_at ? new Date(c.created_at).toLocaleDateString() : dueDate,
+        description: `${c.description}${c.charge_type ? ` (${c.charge_type})` : ''}`,
+        debit: c.amount,
+        balance,
+      });
+    });
+    ledgerPayments.forEach((p) => {
+      balance -= p.amount;
+      const ref = (p.reference_number || '').trim();
+      let description: string;
+      if (ref.toUpperCase().startsWith('CRN')) {
+        description = `Credit note — ${ref}`;
+      } else if (!ref) {
+        description = 'Balance brought forward';
+      } else {
+        description = `Payment — ${p.payment_method}${ref ? ` (${ref})` : ''}`;
+      }
+      rows.push({
+        date: new Date(p.payment_date).toLocaleDateString(),
+        description,
+        credit: p.amount,
+        balance,
+      });
+    });
+    if (Math.abs(balance - s.closing_balance) > 0.01) {
+      // Safety net: reconcile to the stored closing balance if the live
+      // transaction list is incomplete.
+      balance = s.closing_balance;
+    }
+    rows.push({
+      date: dueDate,
+      description: 'Balance carried forward',
+      balance,
+      bold: true,
+    });
+    return rows;
+  };
 
-  const monthlyAmountDue = () => statementLedger?.amount_due ?? 0;
+  const monthlyAmountDue = (s: Statement) =>
+    s.total_installments + s.total_additional_charges - s.total_payments;
 
   return (
     <div className="space-y-6">
@@ -415,23 +484,23 @@ export default function StatementsPage() {
           <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Opening Balance</p>
-              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {(ledgerRows[0]?.balance ?? selectedStatement.opening_balance).toLocaleString()}</p>
+              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.opening_balance.toLocaleString()}</p>
             </div>
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Total Charged</p>
-              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {(selectedStatement.total_fees + selectedStatement.total_additional_charges).toLocaleString()}</p>
+              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {(selectedStatement.total_installments + selectedStatement.total_additional_charges).toLocaleString()}</p>
             </div>
             <div className="bg-emerald-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-emerald-700">Total Paid</p>
-              <p className="mt-1 font-mono text-lg font-bold text-emerald-700">R {(statementLedger?.amount_paid ?? selectedStatement.total_payments).toLocaleString()}</p>
+              <p className="mt-1 font-mono text-lg font-bold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</p>
             </div>
-            <div className={`px-6 py-4 ${monthlyAmountDue() > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
-              <p className={`text-[11px] uppercase tracking-wider ${monthlyAmountDue() > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
-              <p className="mt-1 font-mono text-lg font-bold text-white">R {monthlyAmountDue().toLocaleString()}</p>
+            <div className={`px-6 py-4 ${monthlyAmountDue(selectedStatement) > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${monthlyAmountDue(selectedStatement) > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
+              <p className="mt-1 font-mono text-lg font-bold text-white">R {monthlyAmountDue(selectedStatement).toLocaleString()}</p>
             </div>
-            <div className={`px-6 py-4 ${(statementLedger?.amount_year_due ?? selectedStatement.current_amount_due) > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
-              <p className={`text-[11px] uppercase tracking-wider ${(statementLedger?.amount_year_due ?? selectedStatement.current_amount_due) > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
-              <p className={`mt-1 font-mono text-lg font-bold ${(statementLedger?.amount_year_due ?? selectedStatement.current_amount_due) > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {(statementLedger?.amount_year_due ?? selectedStatement.current_amount_due).toLocaleString()}</p>
+            <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
+              <p className={`mt-1 font-mono text-lg font-bold ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {selectedStatement.current_amount_due.toLocaleString()}</p>
             </div>
           </div>
 
@@ -452,15 +521,12 @@ export default function StatementsPage() {
                   </tr>
                 </thead>
                 <tbody className="font-mono">
-                  {ledgerRows.map((row, i) => {
-                    const isClosing = i === ledgerRows.length - 1;
+                  {buildLedger(selectedStatement).map((row, i) => {
+                    const isClosing = i === buildLedger(selectedStatement).length - 1;
                     return (
                       <tr key={i} className={`text-[13px] ${isClosing ? 'border-t-2 border-slate-400 font-bold' : row.bold ? 'font-semibold' : 'text-slate-700'}`}>
                         <td className={`px-4 py-2.5 ${row.bold ? 'text-slate-800' : 'text-slate-600'}`}>{row.date}</td>
-                        <td className={`px-4 py-2.5 ${row.bold ? 'text-slate-900' : 'text-slate-800'}`}>
-                          {row.description}
-                          {row.reference && <span className="ml-1 text-slate-400">{row.reference}</span>}
-                        </td>
+                        <td className={`px-4 py-2.5 ${row.bold ? 'text-slate-900' : 'text-slate-800'}`}>{row.description}</td>
                         <td className="px-4 py-2.5 text-right text-rose-700">{row.debit ? `R ${row.debit.toLocaleString()}` : ''}</td>
                         <td className="px-4 py-2.5 text-right text-emerald-700">{row.credit ? `R ${row.credit.toLocaleString()}` : ''}</td>
                         <td className="px-4 py-2.5 text-right text-slate-900">{`R ${row.balance.toLocaleString()}`}</td>

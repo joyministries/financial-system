@@ -20,167 +20,6 @@ MONTHS = [
     "July", "August", "September", "October", "November", "December",
 ]
 
-_ROW_DATE_FMT = "%d %b %Y"
-
-# Sort keys so transactions landing on the same day keep a stable, sensible
-# order: fees, then charges, then money received.
-_ORDER_FEE, _ORDER_CHARGE, _ORDER_PAYMENT = 0, 1, 2
-
-
-def _as_utc(value: datetime) -> datetime:
-    """Treat naive datetimes coming back from the DB as UTC."""
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
-def _row_month(row: dict) -> int | None:
-    """Calendar month a rendered row belongs to, or None for the bookends."""
-    raw = row.get("date")
-    if not raw:
-        return None
-    try:
-        return datetime.strptime(raw, _ROW_DATE_FMT).month
-    except ValueError:
-        return None
-
-
-def build_statement_ledger(
-    *,
-    academic_year: int,
-    annual_fee: Decimal,
-    annual_fee_date: datetime | None,
-    opening_balance: Decimal,
-    charges: list[AdditionalCharge],
-    payments: list[Payment],
-) -> list[dict]:
-    """Build the canonical bank-style ledger for a statement period.
-
-    The school raises a SINGLE fee per school year, so the ledger carries
-    exactly one fee debit — the live total of the year's non-void invoices,
-    dated the day the earliest invoice was actually issued.  It never emits the
-    per-month "Fees for MM/YYYY" lines the old snapshot-based builder produced,
-    which is what printed phantom fees after an invoice was voided.
-
-    Every line is dated with its own transaction date and the rows are sorted
-    oldest-first, so the running balance is simply the sum of the rows shown and
-    the footer can be derived from them.
-    """
-    entries: list[tuple[datetime, int, int, dict]] = []
-    seq = 0
-
-    if annual_fee > 0:
-        issued = annual_fee_date or datetime(academic_year, 1, 1, tzinfo=UTC)
-        entries.append((
-            _as_utc(issued), _ORDER_FEE, seq,
-            {
-                "date": issued.strftime(_ROW_DATE_FMT),
-                "reference": None,
-                "description": f"Annual school fees {academic_year}",
-                "debit": annual_fee,
-                "credit": None,
-            },
-        ))
-        seq += 1
-
-    for c in charges:
-        if c.created_at is None:
-            continue
-        desc = c.description or "Additional charge"
-        if c.charge_type:
-            desc = f"{desc} ({c.charge_type})"
-        entries.append((
-            _as_utc(c.created_at), _ORDER_CHARGE, seq,
-            {
-                "date": c.created_at.strftime(_ROW_DATE_FMT),
-                "reference": None,
-                "description": desc,
-                "debit": c.amount,
-                "credit": None,
-            },
-        ))
-        seq += 1
-
-    for p in payments:
-        if p.payment_date is None:
-            continue
-        ref = (p.reference_number or "").strip()
-        if ref.upper().startswith("CRN"):
-            # Credit note rows on the Xero report are credit transactions
-            # with their CRN reference — not payments.
-            description = f"Credit note — {ref}"
-        elif not ref:
-            # Refless January Brought-Forward credit (parent overpaid in a
-            # prior year) carried into this year as an opening credit.
-            description = "Balance brought forward"
-        else:
-            description = f"Payment — {p.payment_method}"
-        entries.append((
-            _as_utc(p.payment_date), _ORDER_PAYMENT, seq,
-            {
-                "date": p.payment_date.strftime(_ROW_DATE_FMT),
-                "reference": ref or None,
-                "description": description,
-                "debit": None,
-                "credit": p.amount,
-            },
-        ))
-        seq += 1
-
-    entries.sort(key=lambda e: (e[0], e[1], e[2]))
-
-    opening = to_decimal(opening_balance)
-    first_date = entries[0][3]["date"] if entries else ""
-    rows: list[dict] = [
-        {
-            "date": first_date,
-            "reference": None,
-            "description": "Balance brought forward",
-            "debit": None,
-            "credit": None,
-            "balance": opening,
-            "bold": True,
-        }
-    ]
-
-    balance = opening
-    for _when, _order, _seq, entry in entries:
-        balance += to_decimal(entry["debit"] or 0) - to_decimal(entry["credit"] or 0)
-        entry["balance"] = balance
-        rows.append(entry)
-
-    rows.append(
-        {
-            "date": entries[-1][3]["date"] if entries else "",
-            "reference": None,
-            "description": "Balance carried forward",
-            "debit": None,
-            "credit": None,
-            "balance": balance,
-            "bold": True,
-        }
-    )
-    return rows
-
-
-def derive_ledger_footer(rows: list[dict], month: int | None = None) -> dict:
-    """Derive the statement totals from the rows that are actually displayed.
-
-    Outstanding is the carried-forward balance on the last row, paid-to-date is
-    every credit the ledger shows, and the amount due for the month is that
-    month's debits net of its credits — floored at zero, so an overpayment in a
-    month can never print as a negative charge.
-    """
-    def total(key: str, subset: list[dict]) -> Decimal:
-        return sum((to_decimal(r.get(key) or 0) for r in subset), D0)
-
-    detail = [r for r in rows if not r.get("bold")]
-    period = [r for r in detail if _row_month(r) == month] if month else detail
-
-    return {
-        "amount_due": max(total("debit", period) - total("credit", period), D0),
-        "amount_paid": total("credit", detail),
-        "amount_year_due": to_decimal(rows[-1].get("balance")) if rows else D0,
-    }
-
 
 class StatementService:
     """Monthly statement snapshots derived from the Excel-aligned ledger.
@@ -386,83 +225,27 @@ class StatementService:
         all_stmts = await self.list_for_student(student_id, academic_year)
         return [s for s in all_stmts if start_month <= s.month <= end_month]
 
-    async def ledger_for_window(
-        self, student_id: str, academic_year: int, start_month: int, end_month: int
-    ) -> list[dict]:
-        """Build the canonical ledger for the months *start_month*..*end_month*.
-
-        Everything is derived from live invoices and verified payments rather
-        than from the stored monthly snapshots, so voiding an invoice can never
-        leave a phantom fee behind on a statement that was generated earlier.
-        """
-        annual_fee, annual_fee_date = await self.ledger.annual_fee(
-            student_id, academic_year
-        )
-        charges = [
-            c
-            for c in await self.charge_service.list_for_student(student_id, academic_year)
-            if c.created_at is not None
-        ]
-        payments = await self._verified_payments_for_year(student_id, academic_year)
-
-        def in_window(value: datetime) -> bool:
-            return start_month <= _as_utc(value).month <= end_month
-
-        # Anything raised before the window has already been paid for or
-        # written off, so it belongs in the opening balance, not in the rows.
-        opening = D0
-        if annual_fee > 0 and annual_fee_date is not None:
-            if _as_utc(annual_fee_date).month < start_month:
-                opening += annual_fee
-        for c in charges:
-            if _as_utc(c.created_at).month < start_month:
-                opening += c.amount
-        for p in payments:
-            if p.payment_date is not None and _as_utc(p.payment_date).month < start_month:
-                opening -= p.amount
-
-        # The annual fee only appears as a line when it was raised inside the
-        # window; otherwise it is already carried in the opening balance.
-        fee = (
-            annual_fee
-            if annual_fee > 0 and annual_fee_date is not None and in_window(annual_fee_date)
-            else D0
-        )
-
-        return build_statement_ledger(
-            academic_year=academic_year,
-            annual_fee=fee,
-            annual_fee_date=annual_fee_date,
-            opening_balance=opening,
-            charges=[c for c in charges if in_window(c.created_at)],
-            payments=[
-                p for p in payments if p.payment_date is not None and in_window(p.payment_date)
-            ],
-        )
-
     async def combined_ledger(self, statements: list[Statement]) -> list[dict]:
         """Build a single combined ledger spanning multiple monthly statements.
 
-        The opening row and the closing row bookend a continuous stream of
-        transactions — no duplicate interior opening/closing rows.
+        The opening row of the first month and the closing row of the last
+        month bookend a continuous stream of transactions — no duplicate
+        interior opening/closing rows.
         """
         if not statements:
             return []
-        return await self.ledger_for_window(
-            statements[0].student_id,
-            statements[0].academic_year,
-            statements[0].month,
-            statements[-1].month,
-        )
+        ledgers = [await self.ledger_for_statement(s) for s in statements]
+        if len(ledgers) == 1:
+            return ledgers[0]
 
-    async def ledger_for_statement(self, statement: Statement) -> list[dict]:
-        """Build the bank-style ledger rows for a single generated statement."""
-        return await self.ledger_for_window(
-            statement.student_id,
-            statement.academic_year,
-            statement.month,
-            statement.month,
-        )
+        # First month: opening + all rows except closing.
+        combined: list[dict] = list(ledgers[0][:-1])
+        # Middle months: only the transaction rows (skip opening and closing).
+        for ledger in ledgers[1:-1]:
+            combined.extend(ledger[1:-1])
+        # Last month: skip opening (equals previous closing), include transactions + closing.
+        combined.extend(ledgers[-1][1:])
+        return combined
 
     async def delete_for_student(self, student_id: str, academic_year: int) -> int:
         """Delete all statements for a student+year. Returns count deleted."""
@@ -473,11 +256,15 @@ class StatementService:
         await self.db.flush()
         return count
 
-    async def _verified_payments_for_year(
-        self, student_id: str, academic_year: int
+    async def _verified_payments_for_month(
+        self, student_id: str, academic_year: int, month: int
     ) -> list[Payment]:
-        start = datetime(academic_year, 1, 1, tzinfo=UTC)
-        end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
+        start = datetime(academic_year, month, 1, tzinfo=UTC)
+        if month == 12:
+            end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end = datetime(academic_year, month + 1, 1, tzinfo=UTC)
+
         stmt = select(Payment).where(
             Payment.student_id == student_id,
             Payment.status == "verified",
@@ -492,3 +279,106 @@ class StatementService:
             return datetime(academic_year + 1, 1, 1, tzinfo=UTC)
         return datetime(academic_year, month + 1, 1, tzinfo=UTC)
 
+    async def ledger_for_statement(self, statement: Statement) -> list[dict]:
+        """Build the bank-style ledger rows for a generated statement.
+
+        Mirrors the frontend ledger: opening balance -> fees billed this month
+        (debit) -> additional charges (debit) -> verified payments (credit) ->
+        closing balance, with a running balance column.
+        """
+        charges = await self.charge_service.list_for_student(
+            statement.student_id, statement.academic_year
+        )
+        charges = [c for c in charges if c.month == statement.month]
+        payments = await self._verified_payments_for_month(
+            statement.student_id, statement.academic_year, statement.month
+        )
+
+        due_date = self._due_date_for(statement.academic_year, statement.month)
+        due_str = due_date.strftime("%d %b %Y")
+
+        rows: list[dict] = []
+        balance = to_decimal(statement.opening_balance)
+
+        rows.append(
+            {
+                "date": due_str,
+                "reference": None,
+                "description": "Balance brought forward",
+                "debit": None,
+                "credit": None,
+                "balance": balance,
+                "bold": True,
+            }
+        )
+
+        if statement.total_installments > 0:
+            balance += statement.total_installments
+            rows.append(
+                {
+                    "date": due_str,
+                    "reference": None,
+                    "description": (
+                        f"Fees for {statement.month:02d}/{statement.academic_year}"
+                    ),
+                    "debit": statement.total_installments,
+                    "credit": None,
+                    "balance": balance,
+                }
+            )
+
+        for c in charges:
+            balance += c.amount
+            desc = c.description
+            if c.charge_type:
+                desc = f"{desc} ({c.charge_type})"
+            rows.append(
+                {
+                    "date": c.created_at.strftime("%d %b %Y") if c.created_at else due_str,
+                    "reference": None,
+                    "description": desc,
+                    "debit": c.amount,
+                    "credit": None,
+                    "balance": balance,
+                }
+            )
+
+        for p in payments:
+            balance -= p.amount
+            ref = (p.reference_number or "").strip()
+            if ref.upper().startswith("CRN"):
+                # Credit note rows on the Xero report are credit transactions
+                # with their CRN reference — not payments.
+                description = f"Credit note — {ref}"
+            elif not ref:
+                # Refless January Brought-Forward credit (parent overpaid in a
+                # prior year) carried into this year as an opening credit.
+                description = "Balance brought forward"
+            else:
+                description = f"Payment — {p.payment_method}"
+            rows.append(
+                {
+                    "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
+                    "reference": ref,
+                    "description": description,
+                    "debit": None,
+                    "credit": p.amount,
+                    "balance": balance,
+                }
+            )
+
+        if abs(balance - to_decimal(statement.closing_balance)) > Decimal("0.01"):
+            balance = to_decimal(statement.closing_balance)
+
+        rows.append(
+            {
+                "date": due_str,
+                "reference": None,
+                "description": "Balance carried forward",
+                "debit": None,
+                "credit": None,
+                "balance": balance,
+                "bold": True,
+            }
+        )
+        return rows

@@ -245,25 +245,6 @@ export interface Statement {
   generated_at: string;
 }
 
-export interface LedgerRow {
-  date: string;
-  reference: string | null;
-  description: string;
-  debit: number | null;
-  credit: number | null;
-  balance: number;
-  bold?: boolean;
-}
-
-export interface StatementLedger {
-  period_label: string;
-  month: number;
-  ledger: LedgerRow[];
-  amount_due: number;
-  amount_paid: number;
-  amount_year_due: number;
-}
-
 export interface OutstandingBalance {
   id: string;
   student_id: string;

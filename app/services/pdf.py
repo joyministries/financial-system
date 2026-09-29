@@ -667,9 +667,8 @@ def _stmt_transactions(rows: list[dict]) -> Table:
 
         debit = r.get("debit")
         credit = r.get("credit")
-        if is_open or is_close:
-            # Both bookends carry the running balance: a positive balance is a
-            # debit owed, a negative one (an overpayment in credit) a credit.
+        if is_open:
+            # HTML template opens with a zero credit; keep signed honesty.
             bal = Decimal(str(r.get("balance") or 0))
             if bal > 0:
                 debit, credit = bal, None
@@ -677,6 +676,8 @@ def _stmt_transactions(rows: list[dict]) -> Table:
                 debit, credit = None, -bal
             else:
                 debit, credit = None, Decimal("0")
+        if is_close:
+            debit = credit = None
 
         desc_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_DESC
         date_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_BODY
