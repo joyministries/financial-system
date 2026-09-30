@@ -28,6 +28,24 @@ interface OutstandingMonth {
   students_owing: number;
 }
 
+interface MatrixMonth {
+  month: number;
+  label: string;
+}
+
+interface MatrixStudent {
+  student_number: string;
+  name: string;
+  grade: string;
+  balances: Record<string, string>;
+}
+
+interface OutstandingMatrix {
+  months: MatrixMonth[];
+  students: MatrixStudent[];
+  totals: Record<string, string>;
+}
+
 export default function ReportsPage() {
   const year = new Date().getFullYear();
   const [tab, setTab] = useState<'income' | 'outstanding' | 'payments' | 'export'>('income');
@@ -154,19 +172,47 @@ export default function ReportsPage() {
     exportCSV(rows, `monthly-income-${year}-${String(month).padStart(2, '0')}.csv`);
   };
 
-  const exportOutstandingCsv = () => {
-    const owing = summary.students_owing_list;
-    const rows: (string | number)[][] = [
-      ['Outstanding by month (cumulative)'],
-      ['Month', 'Outstanding (R)', 'Students owing'],
-      ...outstandingByMonth.map((m) => [MONTH_FULL[m.month - 1], m.outstanding_total, m.students_owing]),
-      [],
-      ['Student Number', 'Student Name', `${outstandingLabel} (R)`],
-      ...owing.map((s) => [s.student_number || '', s.name, s.balance]),
-      [],
-      ['', `Total ${outstandingLabel}`, summary.outstanding_total],
-    ];
-    exportCSV(rows, `outstanding-fees-${year}-${String(month).padStart(2, '0')}.csv`);
+  // The Excel/CSV export shows each student's position for EVERY month, as a
+  // student-by-month matrix, rather than one cumulative figure for the year.
+  // The selected carry-over / this-month-only mode decides what each month's
+  // cell means, and the backend computes every column with the same query the
+  // on-screen report uses so the file always matches what is displayed.
+  const exportOutstandingCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const resp = await reportsApi.outstandingMatrix(year, balanceMode === 'month');
+      const data = resp.data as OutstandingMatrix;
+      const months = data.months || [];
+
+      const rows: (string | number)[][] = [
+        [`${outstandingLabel} — per student per month`],
+        [
+          'Student Number',
+          'Student Name',
+          'Grade',
+          ...months.map((m) => `${m.label} (R)`),
+        ],
+        ...(data.students || []).map((s) => [
+          s.student_number || '',
+          s.name,
+          s.grade || '',
+          ...months.map((m) => Number(s.balances?.[String(m.month)] ?? 0)),
+        ]),
+        [],
+        // Per-month column totals replace the old cumulative block.
+        ['', '', 'Total', ...months.map((m) => Number(data.totals?.[String(m.month)] ?? 0))],
+      ];
+
+      exportCSV(rows, `outstanding-by-month-${year}-${balanceMode}.csv`);
+    } catch (err) {
+      // Log the message only — an axios error carries err.config, which
+      // includes the Authorization header.
+      console.error('Outstanding export failed:', err instanceof Error ? err.message : 'unknown error');
+      alert('Export failed — please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const exportPaymentsCsv = () => {

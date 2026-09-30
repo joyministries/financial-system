@@ -1,3 +1,4 @@
+from decimal import Decimal
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import mock
@@ -150,3 +151,120 @@ async def test_students_xlsx_still_uses_openpyxl_when_available():
     assert ws["C2"].value == 1250.5
     assert ws["B3"].value == "OUTSTANDING BALANCE"
     assert ws["C3"].value == "=SUM(C2:C2)"
+
+# ---------------------------------------------------------------------------
+# Per-student x per-month outstanding matrix (the Reports -> Outstanding Fees
+# Excel/CSV export). The export needs one row per student with a column per
+# month instead of a single cumulative figure for the whole year.
+# ---------------------------------------------------------------------------
+
+
+def _matrix_row(student_id, student_number, first_name, last_name, grade, outstanding):
+    """A row shaped like students_outstanding / _monthly_statement_rows."""
+    return {
+        "student_id": student_id,
+        "student_number": student_number,
+        "name": f"{first_name} {last_name}",
+        "grade": grade,
+        "required": Decimal(outstanding),
+        "paid": Decimal("0"),
+        "outstanding": Decimal(outstanding),
+    }
+
+
+class _FakeLedger:
+    """Stand-in for LedgerService.students_outstanding.
+
+    Returns the row set registered for whichever ``up_to_month`` was asked
+    for, so the matrix's per-month columns can be asserted with no database.
+    """
+
+    def __init__(self, by_month):
+        self.by_month = by_month
+        self.calls = []
+
+    async def students_outstanding(self, academic_year, grade_id=None, up_to_month=None):
+        self.calls.append(up_to_month)
+        return self.by_month.get(up_to_month, [])
+
+
+@pytest.mark.asyncio
+async def test_outstanding_matrix_is_running_balance_per_month():
+    """Carry-over mode: every month is the balance at that month's end."""
+    ledger = _FakeLedger({
+        1: [
+            _matrix_row("s1", "1001", "Alex", "Kuti", "GRADE 8", "1000"),
+            _matrix_row("s2", "1002", "Thandi", "Kunene", "GRADE R", "500"),
+        ],
+        2: [
+            _matrix_row("s1", "1001", "Alex", "Kuti", "GRADE 8", "400"),
+            _matrix_row("s2", "1002", "Thandi", "Kunene", "GRADE R", "500"),
+        ],
+        # Thandi has no rows from March on; she must still get a full row.
+        3: [_matrix_row("s1", "1001", "Alex", "Kuti", "GRADE 8", "400")],
+    })
+    service = ReportService(db=SimpleNamespace())
+    service.ledger = ledger
+
+    result = await service.outstanding_matrix(2026, month_only=False, up_to_month=3)
+
+    assert ledger.calls == [1, 2, 3]
+    assert result["month_only"] is False
+    assert [m["label"] for m in result["months"]] == ["January", "February", "March"]
+    assert [s["name"] for s in result["students"]] == ["Alex Kuti", "Thandi Kunene"]
+
+    alex = result["students"][0]
+    assert alex["student_number"] == "1001"
+    assert alex["grade"] == "GRADE 8"
+    assert alex["balances"] == {"1": "1000", "2": "400", "3": "400"}
+
+    # Absent from March -> zero, never a missing key.
+    assert result["students"][1]["balances"] == {"1": "500", "2": "500", "3": "0"}
+
+    # Per-month column totals, which replace the old cumulative block.
+    assert result["totals"] == {"1": "1500", "2": "900", "3": "400"}
+
+
+@pytest.mark.asyncio
+async def test_outstanding_matrix_month_only_uses_that_months_own_rows():
+    """Month-only mode: each column is just that month, not a running total."""
+    service = ReportService(db=SimpleNamespace())
+    seen = []
+
+    async def fake_rows(academic_year, month, grade_id=None):
+        seen.append(month)
+        return [_matrix_row("s1", "1001", "Alex", "Kuti", "GRADE 8", str(month * 100))]
+
+    service._monthly_statement_rows = fake_rows
+
+    result = await service.outstanding_matrix(2026, month_only=True, up_to_month=4)
+
+    assert seen == [1, 2, 3, 4]
+    assert result["month_only"] is True
+    assert result["students"][0]["balances"] == {
+        "1": "100", "2": "200", "3": "300", "4": "400",
+    }
+    assert result["totals"] == {"1": "100", "2": "200", "3": "300", "4": "400"}
+
+
+@pytest.mark.asyncio
+async def test_outstanding_matrix_defaults_to_full_year():
+    """Omitting up_to_month exports Jan..Dec, and a student seen only in a
+    late month still appears with zeros for the earlier months."""
+    ledger = _FakeLedger({
+        11: [_matrix_row("s9", "1009", "Late", "Enrolment", "GRADE 1", "750")],
+    })
+    service = ReportService(db=SimpleNamespace())
+    service.ledger = ledger
+
+    result = await service.outstanding_matrix(2026)
+
+    assert ledger.calls == list(range(1, 13))
+    assert len(result["months"]) == 12
+    assert result["months"][0]["label"] == "January"
+    assert result["months"][11]["label"] == "December"
+
+    balances = result["students"][0]["balances"]
+    assert balances["1"] == "0"
+    assert balances["11"] == "750"
+    assert result["totals"]["11"] == "750"

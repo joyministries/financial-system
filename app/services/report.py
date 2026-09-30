@@ -189,6 +189,85 @@ class ReportService:
             "months": months,
         }
 
+    async def outstanding_matrix(
+        self,
+        academic_year: int,
+        month_only: bool = False,
+        grade_id: str | None = None,
+        up_to_month: int = 12,
+    ) -> dict:
+        """Per-student outstanding for EVERY month, for the Excel export.
+
+        The export needs a student-by-month matrix rather than one cumulative
+        figure for the whole year. Each month is produced by the exact query
+        the on-screen report already uses for the selected mode, so the
+        exported numbers cannot drift from what the user sees on screen:
+
+        - ``month_only`` False reuses :meth:`LedgerService.students_outstanding`
+          capped at each month, i.e. the running balance at that month's end
+          (the "Outstanding with carry-over" view).
+        - ``month_only`` True reuses :meth:`_monthly_statement_rows`, i.e. that
+          month's own invoices and charges minus that month's verified
+          payments (the "Outstanding this month only" view).
+
+        Students are unioned across all months in first-seen order, so someone
+        owing only in January still gets a row for the whole year; months in
+        which they have no rows come back as "0" rather than a missing key.
+        """
+        if up_to_month < 1 or up_to_month > 12:
+            up_to_month = 12
+
+        per_month: list[list[dict]] = []
+        for m in range(1, up_to_month + 1):
+            if month_only:
+                rows = await self._monthly_statement_rows(academic_year, m, grade_id)
+            else:
+                rows = await self.ledger.students_outstanding(
+                    academic_year, grade_id=grade_id, up_to_month=m
+                )
+            per_month.append(rows)
+
+        order: list[str] = []
+        meta: dict[str, dict] = {}
+        for rows in per_month:
+            for r in rows:
+                sid = r["student_id"]
+                if sid not in meta:
+                    order.append(sid)
+                    meta[sid] = {
+                        "student_id": sid,
+                        "student_number": r["student_number"] or "",
+                        "name": r["name"],
+                        "grade": r["grade"] or "",
+                    }
+
+        balances: dict[str, dict[str, str]] = {sid: {} for sid in order}
+        totals: dict[str, str] = {}
+        for index, rows in enumerate(per_month, start=1):
+            by_student = {r["student_id"]: Decimal(str(r["outstanding"])) for r in rows}
+            column = Decimal("0")
+            for sid in order:
+                amount = by_student.get(sid, Decimal("0"))
+                balances[sid][str(index)] = str(amount)
+                column += amount
+            totals[str(index)] = str(column)
+
+        students = [{**meta[sid], "balances": balances[sid]} for sid in order]
+
+        return {
+            "academic_year": academic_year,
+            "month_only": month_only,
+            "months": [
+                {
+                    "month": m,
+                    "label": datetime(2000, m, 1).strftime("%B"),
+                }
+                for m in range(1, up_to_month + 1)
+            ],
+            "students": students,
+            "totals": totals,
+        }
+
     async def payments_received(
         self,
         academic_year: int,

@@ -954,6 +954,36 @@ async def outstanding_by_month_report(
     return await service.outstanding_by_month(academic_year, month, grade_id)
 
 
+@router.get("/reports/outstanding-matrix")
+async def outstanding_matrix_report(
+    academic_year: int,
+    month_only: bool = False,
+    grade_id: str | None = None,
+    up_to_month: int = Query(default=12, ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Per-student outstanding for every month, as a student-by-month matrix.
+
+    Backs the Reports -> Outstanding Fees Excel export so the download shows
+    each student's position month by month instead of one cumulative figure
+    for the year.
+
+    ``month_only=False`` returns the running balance at each month's end
+    ("with carry-over"); ``month_only=True`` returns only that month's own
+    invoices and charges minus that month's verified payments ("this month
+    only"). Each column uses the same query the on-screen report uses, so the
+    export always matches what the user sees.
+    """
+    service = ReportService(db)
+    return await service.outstanding_matrix(
+        academic_year,
+        month_only=month_only,
+        grade_id=grade_id,
+        up_to_month=up_to_month,
+    )
+
+
 @router.get("/reports/payments-received")
 async def payments_received_report(
     academic_year: int,

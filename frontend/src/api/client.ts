@@ -490,6 +490,20 @@ export const reportsApi = {
     api.get('/financial/reports/outstanding-by-month', {
       params: { academic_year: year, month, grade_id: gradeId || undefined },
     }),
+  outstandingMatrix: (
+    year: number,
+    monthOnly: boolean,
+    gradeId?: string,
+    upToMonth = 12,
+  ) =>
+    api.get('/financial/reports/outstanding-matrix', {
+      params: {
+        academic_year: year,
+        month_only: monthOnly,
+        grade_id: gradeId || undefined,
+        up_to_month: upToMonth,
+      },
+    }),
   paymentsReceived: (year: number, gradeId?: string, method?: string, month?: number) =>
     api.get('/financial/reports/payments-received', {
       params: { academic_year: year, grade_id: gradeId, payment_method: method, month },
