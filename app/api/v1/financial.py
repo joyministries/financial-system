@@ -1,4 +1,3 @@
-
 import asyncio
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -17,8 +16,8 @@ from app.core.deps import (
     verify_student_access,
 )
 from app.core.exceptions import ConflictError
-from app.models.grade import Grade, Student, StudentGuardian
 from app.models.financial import Statement
+from app.models.grade import Grade, Student, StudentGuardian
 from app.models.payment import Payment
 from app.models.schedule import AdditionalCharge
 from app.models.user import User
@@ -40,7 +39,7 @@ from app.services.pdf import (
 )
 from app.services.receipt import ReceiptService
 from app.services.report import ReportService
-from app.services.statement import StatementService
+from app.services.statement import StatementService, total_paid_from_ledger
 from app.services.student_summary import StudentSummaryService
 
 router = APIRouter(prefix="/financial", tags=["Financial"])
@@ -65,14 +64,10 @@ async def list_receipts(
         if student_id:
             if student_id not in child_ids:
                 raise HTTPException(status_code=403, detail="Access denied")
-            items = await service.list_for_student(
-                student_id, limit=limit, offset=offset
-            )
+            items = await service.list_for_student(student_id, limit=limit, offset=offset)
             total = await service.count_for_student(student_id)
             return build_page_response(items, total, limit, offset)
-        items = await service.list_all(
-            student_ids=child_ids, limit=limit, offset=offset
-        )
+        items = await service.list_all(student_ids=child_ids, limit=limit, offset=offset)
         total = await service.count_all(student_ids=child_ids)
         return build_page_response(items, total, limit, offset)
     if student_id:
@@ -114,9 +109,7 @@ async def download_receipt(
 
     student = await db.get(Student, receipt.student_id)
     allocator = await db.get(User, receipt.allocated_by)
-    student_name = (
-        f"{student.first_name} {student.last_name}" if student else receipt.student_id
-    )
+    student_name = f"{student.first_name} {student.last_name}" if student else receipt.student_id
     allocator_name = allocator.full_name if allocator else "Lambton School Finance"
 
     pdf = build_receipt_pdf(receipt, student_name, allocator_name)
@@ -199,6 +192,23 @@ def _monthly_amount_due(statement: Statement) -> Decimal:
     )
 
 
+def _approved_students_query(grade_id: str | None = None, include_inactive: bool = False):
+    """Approved students to render in bulk statement PDFs.
+
+    Deactivated students keep ``registration_status == "approved"`` but are
+    hidden from ``GET /students/`` (which filters ``is_active``). Selecting on
+    approval status alone therefore pulled them into the school/grade bundles
+    as zero-payment ghosts. They are excluded by default and only included when
+    finance explicitly opts in.
+    """
+    stmt = select(Student).where(Student.registration_status == "approved")
+    if grade_id is not None:
+        stmt = stmt.where(Student.grade_id == grade_id)
+    if not include_inactive:
+        stmt = stmt.where(Student.is_active == True)  # noqa: E712
+    return stmt
+
+
 def _ledger_for_statement_rows(
     statement: Statement,
     charges: list[AdditionalCharge],
@@ -254,10 +264,13 @@ def _ledger_for_statement_rows(
         ref = (p.reference_number or "").strip()
         if ref.upper().startswith("CRN"):
             description = f"Credit note — {ref}"
+            is_payment = False
         elif not ref:
             description = "Balance brought forward"
+            is_payment = False
         else:
             description = f"Payment — {p.payment_method}"
+            is_payment = True
         rows.append(
             {
                 "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
@@ -266,6 +279,7 @@ def _ledger_for_statement_rows(
                 "debit": None,
                 "credit": p.amount,
                 "balance": balance,
+                "is_payment": is_payment,
             }
         )
 
@@ -300,52 +314,64 @@ async def _build_student_statement_sections(
         return []
 
     statement_rows = (
-        await db.execute(
-            select(Statement)
-            .where(
-                Statement.academic_year == academic_year,
-                Statement.month <= month,
-                Statement.student_id.in_(student_ids),
+        (
+            await db.execute(
+                select(Statement)
+                .where(
+                    Statement.academic_year == academic_year,
+                    Statement.month <= month,
+                    Statement.student_id.in_(student_ids),
+                )
+                .order_by(Statement.student_id, Statement.month)
             )
-            .order_by(Statement.student_id, Statement.month)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     statements_by_student: dict[str, list[Statement]] = defaultdict(list)
     for st in statement_rows:
         statements_by_student[st.student_id].append(st)
 
     guardian_rows = (
-        await db.execute(
-            select(StudentGuardian)
-            .where(StudentGuardian.student_id.in_(student_ids))
-            .order_by(
-                StudentGuardian.student_id,
-                StudentGuardian.guardian_type != "primary",
-                StudentGuardian.created_at,
+        (
+            await db.execute(
+                select(StudentGuardian)
+                .where(StudentGuardian.student_id.in_(student_ids))
+                .order_by(
+                    StudentGuardian.student_id,
+                    StudentGuardian.guardian_type != "primary",
+                    StudentGuardian.created_at,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     guardians_by_student: dict[str, StudentGuardian] = {}
     for guardian in guardian_rows:
         guardians_by_student.setdefault(guardian.student_id, guardian)
 
     grade_ids = list({s.grade_id for s in students})
-    grade_rows = (
-        await db.execute(select(Grade).where(Grade.id.in_(grade_ids)))
-    ).scalars().all()
+    grade_rows = (await db.execute(select(Grade).where(Grade.id.in_(grade_ids)))).scalars().all()
     grade_by_id = {g.id: g.name for g in grade_rows}
 
     charge_rows = (
-        await db.execute(
-            select(AdditionalCharge)
-            .where(
-                AdditionalCharge.academic_year == academic_year,
-                AdditionalCharge.month <= month,
-                AdditionalCharge.student_id.in_(student_ids),
+        (
+            await db.execute(
+                select(AdditionalCharge)
+                .where(
+                    AdditionalCharge.academic_year == academic_year,
+                    AdditionalCharge.month <= month,
+                    AdditionalCharge.student_id.in_(student_ids),
+                )
+                .order_by(
+                    AdditionalCharge.student_id, AdditionalCharge.month, AdditionalCharge.created_at
+                )
             )
-            .order_by(AdditionalCharge.student_id, AdditionalCharge.month, AdditionalCharge.created_at)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     charges_by_student_month: dict[tuple[str, int], list[AdditionalCharge]] = defaultdict(list)
     for charge in charge_rows:
         charges_by_student_month[(charge.student_id, charge.month)].append(charge)
@@ -353,22 +379,24 @@ async def _build_student_statement_sections(
     start = datetime(academic_year, 1, 1, tzinfo=UTC)
     end = _due_date_for_statement(academic_year, month)
     payment_rows = (
-        await db.execute(
-            select(Payment)
-            .where(
-                Payment.status == "verified",
-                Payment.payment_date >= start,
-                Payment.payment_date < end,
-                Payment.student_id.in_(student_ids),
+        (
+            await db.execute(
+                select(Payment)
+                .where(
+                    Payment.status == "verified",
+                    Payment.payment_date >= start,
+                    Payment.payment_date < end,
+                    Payment.student_id.in_(student_ids),
+                )
+                .order_by(Payment.student_id, Payment.payment_date)
             )
-            .order_by(Payment.student_id, Payment.payment_date)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     payments_by_student_month: dict[tuple[str, int], list[Payment]] = defaultdict(list)
     for payment in payment_rows:
-        payments_by_student_month[
-            (payment.student_id, payment.payment_date.month)
-        ].append(payment)
+        payments_by_student_month[(payment.student_id, payment.payment_date.month)].append(payment)
 
     student_sections = []
     for s in students:
@@ -412,25 +440,23 @@ async def _build_student_statement_sections(
                 f"{_MONTHS[last.month - 1]} {academic_year}"
             )
 
-        total_paid = sum(
-            (row.get("credit") or 0)
-            for row in ledger
-            if (row.get("reference") or "").upper().startswith("RCP")
-        )
+        total_paid = total_paid_from_ledger(ledger)
 
-        student_sections.append({
-            "name": student_name,
-            "student_number": s.student_number or "",
-            "grade": grade_by_id.get(s.grade_id, ""),
-            "account_name": account_name,
-            "account_address": account_address,
-            "statement": last,
-            "ledger": ledger,
-            "period_label": period_label,
-            "amount_due": _monthly_amount_due(last),
-            "amount_year_due": last.current_amount_due,
-            "amount_paid": total_paid,
-        })
+        student_sections.append(
+            {
+                "name": student_name,
+                "student_number": s.student_number or "",
+                "grade": grade_by_id.get(s.grade_id, ""),
+                "account_name": account_name,
+                "account_address": account_address,
+                "statement": last,
+                "ledger": ledger,
+                "period_label": period_label,
+                "amount_due": _monthly_amount_due(last),
+                "amount_year_due": last.current_amount_due,
+                "amount_paid": total_paid,
+            }
+        )
     return student_sections
 
 
@@ -496,6 +522,10 @@ async def download_grade_summary(
     grade_id: str,
     academic_year: int,
     month: int,
+    include_inactive: bool = Query(
+        default=False,
+        description="Include deactivated students (they are excluded by default)",
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
@@ -504,25 +534,28 @@ async def download_grade_summary(
     grade_name = grade.name if grade else "Unknown Grade"
 
     service = StatementService(db)
+    students_q = _approved_students_query(grade_id, include_inactive)
     students = (
-        await db.execute(
-            select(Student)
-            .where(Student.grade_id == grade_id)
-            .where(Student.registration_status == "approved")
-            .order_by(Student.last_name, Student.first_name)
-        )
-    ).scalars().all()
+        (await db.execute(students_q.order_by(Student.last_name, Student.first_name)))
+        .scalars()
+        .all()
+    )
 
     student_data = []
     if students:
-        stmts = (await db.execute(
-            select(Statement)
-            .where(
-                Statement.academic_year == academic_year,
-                Statement.month == month,
-                Statement.student_id.in_([s.id for s in students]),
+        stmts = (
+            (
+                await db.execute(
+                    select(Statement).where(
+                        Statement.academic_year == academic_year,
+                        Statement.month == month,
+                        Statement.student_id.in_([s.id for s in students]),
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
         stmt_by_student = {st.student_id: st for st in stmts}
         for s in students:
             stmt = stmt_by_student.get(s.id)
@@ -532,16 +565,20 @@ async def download_grade_summary(
             else:
                 paid = Decimal("0")
                 bal = Decimal("0")
-            student_data.append({
-                "name": f"{s.first_name} {s.last_name}",
-                "student_number": s.student_number or "",
-                "total_paid": paid,
-                "balance": bal,
-                "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
-            })
+            student_data.append(
+                {
+                    "name": f"{s.first_name} {s.last_name}",
+                    "student_number": s.student_number or "",
+                    "total_paid": paid,
+                    "balance": bal,
+                    "status": "Paid" if bal <= Decimal("0.01") else "Outstanding",
+                }
+            )
 
     pdf = build_grade_summary_pdf(grade_name, academic_year, month, student_data)
-    return pdf_response(pdf, f"grade-summary-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf")
+    return pdf_response(
+        pdf, f"grade-summary-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf"
+    )
 
 
 @router.get("/statements/grade-cumulative/{grade_id}/download")
@@ -549,6 +586,10 @@ async def download_grade_cumulative(
     grade_id: str,
     academic_year: int,
     month: int,
+    include_inactive: bool = Query(
+        default=False,
+        description="Include deactivated students (they are excluded by default)",
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
@@ -563,14 +604,12 @@ async def download_grade_cumulative(
     grade = await db.get(Grade, grade_id)
     grade_name = grade.name if grade else "Unknown Grade"
 
+    students_q = _approved_students_query(grade_id, include_inactive)
     students = (
-        await db.execute(
-            select(Student)
-            .where(Student.grade_id == grade_id)
-            .where(Student.registration_status == "approved")
-            .order_by(Student.last_name, Student.first_name)
-        )
-    ).scalars().all()
+        (await db.execute(students_q.order_by(Student.last_name, Student.first_name)))
+        .scalars()
+        .all()
+    )
 
     if not students:
         raise HTTPException(status_code=404, detail="No approved students in this grade")
@@ -588,9 +627,7 @@ async def download_grade_cumulative(
             ),
         )
 
-    pdf = build_grade_statements_pdf(
-        grade_name, academic_year, month, student_sections
-    )
+    pdf = build_grade_statements_pdf(grade_name, academic_year, month, student_sections)
     return pdf_response(
         pdf,
         f"grade-statements-{grade_name.replace(' ', '-')}-{academic_year}-{month:02d}.pdf",
@@ -601,6 +638,10 @@ async def download_grade_cumulative(
 async def download_school_summary(
     academic_year: int,
     month: int,
+    include_inactive: bool = Query(
+        default=False,
+        description="Include deactivated students (they are excluded by default)",
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
@@ -611,13 +652,12 @@ async def download_school_summary(
     """
     if not 1 <= month <= 12:
         raise HTTPException(status_code=422, detail="month must be 1..12")
+    students_q = _approved_students_query(include_inactive=include_inactive)
     students = (
-        await db.execute(
-            select(Student)
-            .where(Student.registration_status == "approved")
-            .order_by(Student.last_name, Student.first_name)
-        )
-    ).scalars().all()
+        (await db.execute(students_q.order_by(Student.last_name, Student.first_name)))
+        .scalars()
+        .all()
+    )
 
     if not students:
         raise HTTPException(status_code=404, detail="No approved students found")
@@ -707,7 +747,7 @@ async def get_next_due_date(
 
     from datetime import UTC, datetime
 
-    from app.models.grade import Student, StudentGuardian
+    from app.models.grade import Student
     from app.models.invoice import Invoice
     from app.services.ledger import LedgerService
 
@@ -744,8 +784,18 @@ async def get_next_due_date(
         )
 
     MONTHS = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
     ]
     month_name = (
         MONTHS[next_invoice.month - 1]
@@ -802,14 +852,10 @@ async def download_statement(
 
     if months <= 1:
         # Year-to-date: January .. selected month.
-        statements = await service.get_range_statements(
-            student_id, academic_year, month, month
-        )
+        statements = await service.get_range_statements(student_id, academic_year, month, month)
     else:
         # N most recent months up to the selected month.
-        statements = await service.get_range_statements(
-            student_id, academic_year, month, months
-        )
+        statements = await service.get_range_statements(student_id, academic_year, month, months)
 
     if not statements:
         raise HTTPException(
@@ -821,9 +867,7 @@ async def download_statement(
         )
 
     student = await db.get(Student, student_id)
-    student_name = (
-        f"{student.first_name} {student.last_name}" if student else student_id
-    )
+    student_name = f"{student.first_name} {student.last_name}" if student else student_id
     grade_label = ""
     if student is not None:
         grade = await db.get(Grade, student.grade_id)
@@ -860,22 +904,15 @@ async def download_statement(
     elif months <= 1:
         yr = first.academic_year
         period_label = (
-            f"Year to date — {_MONTHS[first.month - 1]} to "
-            f"{_MONTHS[last.month - 1]} {yr}"
+            f"Year to date — {_MONTHS[first.month - 1]} to {_MONTHS[last.month - 1]} {yr}"
         )
     else:
-        period_label = (
-            f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
-        )
+        period_label = f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
 
-    # "Amount Paid to date" mirrors the Xero report footer: RCP receipts only.
-    # Brought-forward credits (refless) and credit notes (CRN) are shown as
-    # their own ledger rows, so they must not inflate the paid total.
-    total_paid = sum(
-        (row.get("credit") or 0)
-        for row in ledger
-        if (row.get("reference") or "").upper().startswith("RCP")
-    )
+    # "Amount Paid to date" sums genuine receipt rows only. Brought-forward
+    # credits and credit notes (CRN) share the credit column but must not
+    # inflate the paid total — see total_paid_from_ledger().
+    total_paid = total_paid_from_ledger(ledger)
     pdf = build_statement_pdf(
         last,
         student_name,
@@ -1029,9 +1066,7 @@ async def statement_report(
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = ReportService(db)
-    return await service.statement_report(
-        academic_year, status, grade_id, month, month_only
-    )
+    return await service.statement_report(academic_year, status, grade_id, month, month_only)
 
 
 @router.get("/reports/export-students")

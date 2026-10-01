@@ -16,8 +16,18 @@ from app.services.ledger import LedgerService
 D0 = Decimal("0")
 
 MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ]
 
 
@@ -44,14 +54,11 @@ class StatementService:
         existing = await self.get(student_id, academic_year, month)
         if existing:
             raise ConflictError(
-                f"Statement already exists for student {student_id}, "
-                f"{academic_year}-{month:02d}"
+                f"Statement already exists for student {student_id}, {academic_year}-{month:02d}"
             )
 
         breakdown = await self.ledger.monthly_breakdown(student_id, academic_year)
-        return await self.generate_from_breakdown(
-            student_id, academic_year, month, breakdown
-        )
+        return await self.generate_from_breakdown(student_id, academic_year, month, breakdown)
 
     async def generate_from_breakdown(
         self,
@@ -75,9 +82,7 @@ class StatementService:
 
         if charges is None:
             charges = await self.charge_service.list_for_student(student_id, academic_year)
-        total_additional = sum(
-            (c.amount for c in charges if c.month == month), D0
-        )
+        total_additional = sum((c.amount for c in charges if c.month == month), D0)
 
         total_payments = month_row["paid"] if month_row else D0
 
@@ -108,13 +113,10 @@ class StatementService:
         """Return {(student_id, month)} pairs that already have statements."""
         if not student_ids:
             return set()
-        stmt = (
-            select(Statement.student_id, Statement.month)
-            .where(
-                Statement.academic_year == academic_year,
-                Statement.month <= up_to_month,
-                Statement.student_id.in_(student_ids),
-            )
+        stmt = select(Statement.student_id, Statement.month).where(
+            Statement.academic_year == academic_year,
+            Statement.month <= up_to_month,
+            Statement.student_id.in_(student_ids),
         )
         rows = (await self.db.execute(stmt)).all()
         return {(r[0], r[1]) for r in rows}
@@ -144,13 +146,10 @@ class StatementService:
 
         start = datetime(academic_year, 1, 1, tzinfo=UTC)
         end = datetime(academic_year + 1, 1, 1, tzinfo=UTC)
-        pay_stmt = (
-            select(Payment.student_id, Payment.payment_date, Payment.amount)
-            .where(
-                Payment.status == "verified",
-                Payment.payment_date >= start,
-                Payment.payment_date < end,
-            )
+        pay_stmt = select(Payment.student_id, Payment.payment_date, Payment.amount).where(
+            Payment.status == "verified",
+            Payment.payment_date >= start,
+            Payment.payment_date < end,
         )
         if student_ids:
             pay_stmt = pay_stmt.where(Payment.student_id.in_(student_ids))
@@ -169,12 +168,14 @@ class StatementService:
                 req = req_m.get(m, D0)
                 paid = paid_m.get(m, D0)
                 running += req - paid
-                rows.append({
-                    "month": m,
-                    "required": req,
-                    "paid": paid,
-                    "outstanding": running,
-                })
+                rows.append(
+                    {
+                        "month": m,
+                        "required": req,
+                        "paid": paid,
+                        "outstanding": running,
+                    }
+                )
             out[sid] = rows
         return out
 
@@ -182,9 +183,7 @@ class StatementService:
         self, academic_year: int, student_ids: list[str]
     ) -> dict[str, list[AdditionalCharge]]:
         """Load all additional charges for the student set in one query."""
-        stmt = select(AdditionalCharge).where(
-            AdditionalCharge.academic_year == academic_year
-        )
+        stmt = select(AdditionalCharge).where(AdditionalCharge.academic_year == academic_year)
         if student_ids:
             stmt = stmt.where(AdditionalCharge.student_id.in_(student_ids))
         out: dict[str, list[AdditionalCharge]] = {}
@@ -318,9 +317,7 @@ class StatementService:
                 {
                     "date": due_str,
                     "reference": None,
-                    "description": (
-                        f"Fees for {statement.month:02d}/{statement.academic_year}"
-                    ),
+                    "description": (f"Fees for {statement.month:02d}/{statement.academic_year}"),
                     "debit": statement.total_installments,
                     "credit": None,
                     "balance": balance,
@@ -350,12 +347,15 @@ class StatementService:
                 # Credit note rows on the Xero report are credit transactions
                 # with their CRN reference — not payments.
                 description = f"Credit note — {ref}"
+                is_payment = False
             elif not ref:
                 # Refless January Brought-Forward credit (parent overpaid in a
                 # prior year) carried into this year as an opening credit.
                 description = "Balance brought forward"
+                is_payment = False
             else:
                 description = f"Payment — {p.payment_method}"
+                is_payment = True
             rows.append(
                 {
                     "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
@@ -364,6 +364,10 @@ class StatementService:
                     "debit": None,
                     "credit": p.amount,
                     "balance": balance,
+                    # Marks a genuine receipt so the paid total can be summed by
+                    # row type instead of by reference format — receipts are
+                    # legitimately referenced "FNB", "REC 42", "ABSA", etc.
+                    "is_payment": is_payment,
                 }
             )
 
@@ -382,3 +386,22 @@ class StatementService:
             }
         )
         return rows
+
+
+def total_paid_from_ledger(rows: list[dict]) -> Decimal:
+    """Sum receipt credits for the statement footer "Amount Paid to date".
+
+    Counts rows the ledger builders flagged ``is_payment``. Brought-forward
+    credits and credit notes share the credit column but must not inflate the
+    paid total. Crucially this keys off row type, not the reference prefix:
+    receipts are legitimately referenced "FNB", "REC 42", "ABSA" and others, so
+    a prefix match on "RCP" silently under-reported paid amounts.
+    """
+    return sum(
+        (
+            to_decimal(row["credit"])
+            for row in rows
+            if row.get("is_payment") and row.get("credit") is not None
+        ),
+        Decimal("0"),
+    )
