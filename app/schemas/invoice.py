@@ -1,7 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class InvoiceItem(BaseModel):
@@ -27,6 +28,18 @@ class InvoiceResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def _default_null_items(cls, value: Any) -> Any:
+        """Treat a NULL ``items`` column as an empty line-item list.
+
+        Invoices imported by ``scripts/import_real_data.py`` were inserted with
+        raw SQL that omitted the ``items`` column, so those rows hold NULL and
+        used to fail validation here — turning every ``GET /invoices/`` page
+        containing a legacy invoice into an HTTP 500.
+        """
+        return [] if value is None else value
 
 
 class InvoiceGenerateRequest(BaseModel):
