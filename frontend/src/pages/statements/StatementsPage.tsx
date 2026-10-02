@@ -311,14 +311,14 @@ export default function StatementsPage() {
   interface LedgerRow { date: string; description: string; debit?: number; credit?: number; balance: number; bold?: boolean }
 
   // Months February..December have no invoice of their own — the year is
-  // billed by January's annual invoice — so they report total_installments 0.
-  // Fall back to the grade's monthly tuition instalment so the parent still
-  // sees what falls due that month. The fallback is display-only: the annual
-  // invoice already sits in the balance, so adding it again would double-bill
-  // the rest of the year. Mirrors fee_installment_for_statement() on the backend.
+  // billed by January's annual invoice — so they report total_installments 0
+  // and draw no fee row. grade_monthly_fee is still returned by the API but is
+  // deliberately not rendered: it does not reconcile with the annual invoice
+  // (R2,980 x 12 vs the R37,360 charged) and would present a second bill the
+  // family never received. Mirrors fee_installment_for_statement() on the
+  // backend, which the bulk path also calls with no fee.
   const feeInstallment = (s: Statement): { amount: number; movesBalance: boolean } => {
     if (s.total_installments > 0) return { amount: s.total_installments, movesBalance: true };
-    if (s.grade_monthly_fee > 0) return { amount: s.grade_monthly_fee, movesBalance: false };
     return { amount: 0, movesBalance: false };
   };
 
@@ -385,6 +385,10 @@ export default function StatementsPage() {
 
   const monthlyAmountDue = (s: Statement) =>
     feeInstallment(s).amount + s.total_additional_charges - s.total_payments;
+
+  // Zero means nothing falls due this month — hide the cell so the strip
+  // never advertises an amount that isn't there.
+  const dueThisMonth = selectedStatement ? monthlyAmountDue(selectedStatement) : 0;
 
   return (
     <div className="space-y-6">
@@ -499,7 +503,7 @@ export default function StatementsPage() {
           </div>
 
           {/* Balance summary strip */}
-          <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
+          <div className={`grid grid-cols-1 divide-y divide-slate-200 sm:divide-x sm:divide-y-0 ${dueThisMonth > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Opening Balance</p>
               <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.opening_balance.toLocaleString()}</p>
@@ -512,10 +516,12 @@ export default function StatementsPage() {
               <p className="text-[11px] uppercase tracking-wider text-emerald-700">Total Paid</p>
               <p className="mt-1 font-mono text-lg font-bold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</p>
             </div>
-            <div className={`px-6 py-4 ${monthlyAmountDue(selectedStatement) > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
-              <p className={`text-[11px] uppercase tracking-wider ${monthlyAmountDue(selectedStatement) > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
-              <p className="mt-1 font-mono text-lg font-bold text-white">R {monthlyAmountDue(selectedStatement).toLocaleString()}</p>
-            </div>
+            {dueThisMonth > 0 && (
+              <div className="px-6 py-4 bg-[#131d3c]">
+                <p className="text-[11px] uppercase tracking-wider text-slate-300">Amount Due This Month</p>
+                <p className="mt-1 font-mono text-lg font-bold text-white">R {dueThisMonth.toLocaleString()}</p>
+              </div>
+            )}
             <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
               <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
               <p className={`mt-1 font-mono text-lg font-bold ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {selectedStatement.current_amount_due.toLocaleString()}</p>
@@ -598,7 +604,7 @@ export default function StatementsPage() {
             {visibleStatements.map((s) => (
               <tr key={s.id} className={`cursor-pointer hover:bg-slate-50 ${'_pending' in s ? 'text-slate-400' : ''}`} onClick={() => !('_pending' in s) && setSelectedStatement(s)}>
                 <td className="px-6 py-4 text-sm font-medium text-slate-900">{MONTHS[s.month - 1]}</td>
-                <td className="px-6 py-4 text-sm text-slate-700">{'_pending' in s ? '—' : `R ${feeInstallment(s).amount.toLocaleString()}`}</td>
+                <td className="px-6 py-4 text-sm text-slate-700">{('_pending' in s || feeInstallment(s).amount === 0) ? '—' : `R ${feeInstallment(s).amount.toLocaleString()}`}</td>
                 <td className="px-6 py-4 text-sm text-emerald-600 font-medium">{'_pending' in s ? '—' : `R ${s.total_payments.toLocaleString()}`}</td>
                 <td className={`px-6 py-4 text-sm font-medium ${'_pending' in s ? '' : (s.closing_balance > 0 ? 'text-red-600' : 'text-emerald-600')}`}>{'_pending' in s ? '—' : `R ${s.closing_balance.toLocaleString()}`}</td>
                 <td className="px-6 py-4">

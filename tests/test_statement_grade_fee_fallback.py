@@ -1,21 +1,22 @@
-"""Regression tests for the empty-month grade-fee fallback.
+"""Unit tests for the optional grade-fee argument on statement helpers.
 
 Every student is billed once in January: the annual payment plan produces a
 single ``MonthlySchedule`` row at month 1 covering the whole year. February
 through December therefore have no invoice of their own, so
-``Statement.total_installments`` is ``0`` and:
+``Statement.total_installments`` is ``0``.
 
-* the statement ledger printed no ``Fees for MM/YYYY`` row at all, and
-* ``Amount Due for Month`` rendered ``R 0.00`` for a family that clearly still
-  owes money.
-
-The grade's monthly tuition instalment now fills both, **display-only**: the
-annual invoice already sits in the statement balance, so adding the instalment
-again would double-bill the rest of the year (Grade 8 would jump from
+The grade's monthly tuition instalment can fill the ``Fees for MM/YYYY`` row
+and ``Amount Due for Month`` for such months, **display-only**: the annual
+invoice already sits in the statement balance, so adding the instalment again
+would double-bill the rest of the year (Grade 8 would jump from
 R8,940 outstanding to R41,720).
 
-``fee_installment_for_statement()`` is the single decision point both the
-single-student PDF path and the bulk school/grade bundle path go through.
+**No production caller supplies it any more.** It does not reconcile with the
+annual invoice (Grade 8: R2,980 x 12 = R35,760 against an R37,360 invoice),
+so rendering it presented families with a bill they never received.
+``app/services/monthly_fee.py`` and the ``grade_monthly_fee`` response field
+are retained for reporting; these tests pin the helper's behaviour so the
+fallback stays a conscious opt-in rather than a forgotten default.
 """
 
 from decimal import Decimal

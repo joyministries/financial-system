@@ -648,6 +648,31 @@ def _stmt_parties(to_name: str, *, to_address: str = "") -> Table:
     return t
 
 
+def _statement_row_amounts(row: dict) -> tuple[Decimal | None, Decimal | None]:
+    """Debit/Credit to print for one ledger row.
+
+    ``Balance brought forward`` / ``Balance carried forward`` are structural
+    lines, not transactions, so they carry no debit/credit of their own — the
+    carried balance is printed instead, and only when it is non-zero: a
+    printed ``R 0.00`` reads as a placeholder rather than a figure a parent
+    has to do something about.
+    """
+    desc = str(row.get("description", ""))
+    bold = bool(row.get("bold"))
+    debit = row.get("debit")
+    credit = row.get("credit")
+    if bold and "carried forward" in desc.lower():
+        return None, None
+    if bold and "brought forward" in desc.lower():
+        bal = Decimal(str(row.get("balance") or 0))
+        if bal > 0:
+            return bal, None
+        if bal < 0:
+            return None, -bal
+        return None, None
+    return debit, credit
+
+
 def _stmt_transactions(rows: list[dict]) -> Table:
     """Date | Reference | Description | Debit | Credit table (HTML statement)."""
     data = [
@@ -662,22 +687,7 @@ def _stmt_transactions(rows: list[dict]) -> Table:
     for r in rows:
         desc = r.get("description", "")
         bold = bool(r.get("bold"))
-        is_open = bold and "brought forward" in desc.lower()
-        is_close = bold and "carried forward" in desc.lower()
-
-        debit = r.get("debit")
-        credit = r.get("credit")
-        if is_open:
-            # HTML template opens with a zero credit; keep signed honesty.
-            bal = Decimal(str(r.get("balance") or 0))
-            if bal > 0:
-                debit, credit = bal, None
-            elif bal < 0:
-                debit, credit = None, -bal
-            else:
-                debit, credit = None, Decimal("0")
-        if is_close:
-            debit = credit = None
+        debit, credit = _statement_row_amounts(r)
 
         desc_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_DESC
         date_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_BODY
@@ -712,29 +722,37 @@ def _stmt_transactions(rows: list[dict]) -> Table:
     return t
 
 
+def _stmt_total_rows(
+    amount_due: Decimal,
+    amount_paid: Decimal,
+    amount_year_due: Decimal | None = None,
+) -> list[tuple[str, Decimal]]:
+    """Labels/values for the statement summary block.
+
+    ``Amount Due for Month`` is dropped when nothing falls due that month.
+    Months billed through January's annual invoice have no instalment of their
+    own, so they compute to zero — printing ``R 0.00`` would claim money is
+    owed in a month where the statement shows no charge at all.
+    """
+    rows: list[tuple[str, Decimal]] = []
+    if amount_due > 0:
+        rows.append(("Amount Due for Month", amount_due))
+    rows.append(("Amount Paid to date", amount_paid))
+    if amount_year_due is not None:
+        rows.append(("Outstanding for Year", amount_year_due))
+    return rows
+
+
 def _stmt_totals(
     amount_due: Decimal,
     amount_paid: Decimal,
     amount_year_due: Decimal | None = None,
 ) -> Table:
-    """Right-aligned monthly amount due / paid-to-date rows."""
+    """Right-aligned amount due / paid-to-date rows."""
     rows = [
-        [
-            Paragraph("Amount Due for Month", _STMT_TOTAL_LABEL),
-            Paragraph(money(amount_due), _STMT_TOTAL_VALUE),
-        ],
-        [
-            Paragraph("Amount Paid to date", _STMT_TOTAL_LABEL),
-            Paragraph(money(amount_paid), _STMT_TOTAL_VALUE),
-        ],
+        [Paragraph(label, _STMT_TOTAL_LABEL), Paragraph(money(value), _STMT_TOTAL_VALUE)]
+        for label, value in _stmt_total_rows(amount_due, amount_paid, amount_year_due)
     ]
-    if amount_year_due is not None:
-        rows.append(
-            [
-                Paragraph("Outstanding for Year", _STMT_TOTAL_LABEL),
-                Paragraph(money(amount_year_due), _STMT_TOTAL_VALUE),
-            ]
-        )
     t = Table(rows, colWidths=[110 * mm, 70 * mm])
     t.setStyle(
         TableStyle(
