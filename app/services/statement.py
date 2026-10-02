@@ -1,17 +1,22 @@
+import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import async_session_factory
 from app.core.exceptions import ConflictError
 from app.core.money import to_decimal
 from app.models.financial import Statement
+from app.models.grade import Student
 from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.schedule import AdditionalCharge
 from app.services.charge import ChargeService
 from app.services.ledger import LedgerService
+from app.services.monthly_fee import monthly_fee_for_student
 
 D0 = Decimal("0")
 
@@ -224,16 +229,28 @@ class StatementService:
         all_stmts = await self.list_for_student(student_id, academic_year)
         return [s for s in all_stmts if start_month <= s.month <= end_month]
 
-    async def combined_ledger(self, statements: list[Statement]) -> list[dict]:
+    async def combined_ledger(
+        self,
+        statements: list[Statement],
+        grade_monthly_fee: Decimal | None = None,
+    ) -> list[dict]:
         """Build a single combined ledger spanning multiple monthly statements.
 
         The opening row of the first month and the closing row of the last
         month bookend a continuous stream of transactions — no duplicate
         interior opening/closing rows.
+
+        ``grade_monthly_fee`` is resolved once here rather than per month so a
+        year-to-date statement costs one lookup instead of one per month.
         """
         if not statements:
             return []
-        ledgers = [await self.ledger_for_statement(s) for s in statements]
+        if grade_monthly_fee is None:
+            first = statements[0]
+            grade_monthly_fee = await monthly_fee_for_student(
+                self.db, first.student_id, first.academic_year
+            )
+        ledgers = [await self.ledger_for_statement(s, grade_monthly_fee) for s in statements]
         if len(ledgers) == 1:
             return ledgers[0]
 
@@ -278,12 +295,21 @@ class StatementService:
             return datetime(academic_year + 1, 1, 1, tzinfo=UTC)
         return datetime(academic_year, month + 1, 1, tzinfo=UTC)
 
-    async def ledger_for_statement(self, statement: Statement) -> list[dict]:
+    async def ledger_for_statement(
+        self,
+        statement: Statement,
+        grade_monthly_fee: Decimal | None = None,
+    ) -> list[dict]:
         """Build the bank-style ledger rows for a generated statement.
 
         Mirrors the frontend ledger: opening balance -> fees billed this month
         (debit) -> additional charges (debit) -> verified payments (credit) ->
         closing balance, with a running balance column.
+
+        Months with no invoice of their own (billed by January's annual
+        invoice) fall back to ``grade_monthly_fee`` for the fee row without
+        moving the balance — see :func:`fee_installment_for_statement`. Pass
+        ``None`` to resolve it; pass ``Decimal("0")`` to assert there is none.
         """
         charges = await self.charge_service.list_for_student(
             statement.student_id, statement.academic_year
@@ -311,14 +337,23 @@ class StatementService:
             }
         )
 
-        if statement.total_installments > 0:
-            balance += statement.total_installments
+        if grade_monthly_fee is None:
+            grade_monthly_fee = await monthly_fee_for_student(
+                self.db, statement.student_id, statement.academic_year
+            )
+        fee_debit, moves_balance = fee_installment_for_statement(
+            to_decimal(statement.total_installments),
+            grade_monthly_fee,
+        )
+        if fee_debit > 0:
+            if moves_balance:
+                balance += fee_debit
             rows.append(
                 {
                     "date": due_str,
                     "reference": None,
                     "description": (f"Fees for {statement.month:02d}/{statement.academic_year}"),
-                    "debit": statement.total_installments,
+                    "debit": fee_debit,
                     "credit": None,
                     "balance": balance,
                 }
@@ -388,6 +423,34 @@ class StatementService:
         return rows
 
 
+def fee_installment_for_statement(
+    total_installments: Decimal, grade_monthly_fee: Decimal
+) -> tuple[Decimal, bool]:
+    """Resolve the debit to print on a statement's ``Fees for MM/YYYY`` row.
+
+    Returns ``(amount, moves_balance)``.
+
+    * Invoice-derived instalments are real charges already recorded on the
+      ledger, so they are added to the running balance (January's annual
+      invoice bills the whole year in one line).
+    * Months February..December have no invoice at all — the year was billed
+      in January — so ``total_installments`` is ``0``. For those months the
+      grade's *monthly* tuition instalment is printed so the parent can see
+      what falls due, but it must **not** move the balance: the money is
+      already in the January line, and adding it again would double-bill the
+      rest of the year.
+
+    Amount ``0`` means no fee row is rendered for the month.
+    """
+    billed = to_decimal(total_installments)
+    if billed > D0:
+        return billed, True
+    fee = to_decimal(grade_monthly_fee)
+    if fee > D0:
+        return fee, False
+    return D0, False
+
+
 def total_paid_from_ledger(rows: list[dict]) -> Decimal:
     """Sum receipt credits for the statement footer "Amount Paid to date".
 
@@ -405,3 +468,108 @@ def total_paid_from_ledger(rows: list[dict]) -> Decimal:
         ),
         Decimal("0"),
     )
+
+
+# Whole-school generation runs this many students concurrently. With the data
+# pre-fetched, workers only insert, so concurrency is bounded by round trips.
+GENERATE_ALL_CONCURRENCY = 20
+
+
+async def generate_student_statements(
+    student_id: str,
+    academic_year: int,
+    up_to_month: int,
+    existing: set[tuple[str, int]],
+    breakdown: list[dict],
+    charges: list,
+) -> tuple[int, int, int, list[str]]:
+    """Insert every missing statement for one student from pre-fetched data.
+
+    The expensive ledger breakdown was already computed once for the whole
+    school, so this worker only performs INSERTs. Each worker owns its own
+    session and commits its own writes.
+    Returns (generated, skipped, failed, errors).
+    """
+    async with async_session_factory() as db:
+        service = StatementService(db)
+        generated = skipped = failed = 0
+        errors: list[str] = []
+        for m in range(1, up_to_month + 1):
+            if (student_id, m) in existing:
+                skipped += 1
+                continue
+            try:
+                await service.generate_from_breakdown(
+                    student_id, academic_year, m, breakdown, charges=charges
+                )
+                generated += 1
+            except IntegrityError:
+                await db.rollback()
+                skipped += 1
+            except ConflictError:
+                skipped += 1
+            except Exception as exc:  # noqa: BLE001 - one student must not abort the run
+                failed += 1
+                errors.append(f"{student_id} m{m}: {exc}")
+        await db.commit()
+        return generated, skipped, failed, errors
+
+
+async def bulk_generate_statements(
+    db: AsyncSession,
+    academic_year: int,
+    month: int,
+    grade_id: str | None = None,
+) -> dict:
+    """Generate statements accumulatively from month 1 up to the given month.
+
+    When ``grade_id`` is provided, only students in that grade are processed.
+    Existing statements are skipped — only missing ones are created. Ledger
+    breakdowns are prefetched in a few aggregate queries and workers only
+    insert, keeping a whole-school run well under the serverless timeout.
+
+    Shared by ``POST /financial/statements/generate-all`` and the scheduled
+    auto-generation beat task so a manual run and a scheduled run behave
+    identically.
+    """
+    service = StatementService(db)
+    stmt = select(Student).where(Student.registration_status == "approved")
+    if grade_id:
+        stmt = stmt.where(Student.grade_id == grade_id)
+    students = (await db.execute(stmt)).scalars().all()
+    student_ids = [s.id for s in students]
+
+    existing = await service.list_existing(academic_year, month, student_ids)
+    breakdowns = await service.bulk_breakdowns(academic_year, student_ids)
+    charges = await service.bulk_charges(academic_year, student_ids)
+
+    sem = asyncio.Semaphore(GENERATE_ALL_CONCURRENCY)
+
+    async def _run(sid: str):
+        async with sem:
+            return await generate_student_statements(
+                sid,
+                academic_year,
+                month,
+                existing,
+                breakdowns.get(sid, []),
+                charges.get(sid, []),
+            )
+
+    results = await asyncio.gather(*(_run(sid) for sid in student_ids))
+
+    generated = sum(r[0] for r in results)
+    skipped = sum(r[1] for r in results)
+    failed = sum(r[2] for r in results)
+    errors: list[str] = []
+    for r in results:
+        errors.extend(r[3])
+    return {
+        "academic_year": academic_year,
+        "up_to_month": month,
+        "grade_id": grade_id,
+        "generated": generated,
+        "skipped": skipped,
+        "failed": failed,
+        "errors": errors[:20],
+    }

@@ -294,6 +294,7 @@ export default function StatementsPage() {
           current_amount_due: 0,
           due_date: '',
           generated_at: '',
+          grade_monthly_fee: 0,
           _pending: true,
         } satisfies Statement & { _pending?: boolean };
       })
@@ -305,6 +306,19 @@ export default function StatementsPage() {
   // payments (credit) → closing balance. Running balance column like a bank
   // statement so parents see exactly how the month's number was reached.
   interface LedgerRow { date: string; description: string; debit?: number; credit?: number; balance: number; bold?: boolean }
+
+  // Months February..December have no invoice of their own — the year is
+  // billed by January's annual invoice — so they report total_installments 0.
+  // Fall back to the grade's monthly tuition instalment so the parent still
+  // sees what falls due that month. The fallback is display-only: the annual
+  // invoice already sits in the balance, so adding it again would double-bill
+  // the rest of the year. Mirrors fee_installment_for_statement() on the backend.
+  const feeInstallment = (s: Statement): { amount: number; movesBalance: boolean } => {
+    if (s.total_installments > 0) return { amount: s.total_installments, movesBalance: true };
+    if (s.grade_monthly_fee > 0) return { amount: s.grade_monthly_fee, movesBalance: false };
+    return { amount: 0, movesBalance: false };
+  };
+
   const buildLedger = (s: Statement): LedgerRow[] => {
     const rows: LedgerRow[] = [];
     let balance = s.opening_balance;
@@ -315,12 +329,13 @@ export default function StatementsPage() {
       balance,
       bold: true,
     });
-    if (s.total_installments > 0) {
-      balance += s.total_installments;
+    const fee = feeInstallment(s);
+    if (fee.amount > 0) {
+      if (fee.movesBalance) balance += fee.amount;
       rows.push({
         date: dueDate,
         description: `Monthly installment — ${MONTHS[s.month - 1]} ${s.academic_year}`,
-        debit: s.total_installments,
+        debit: fee.amount,
         balance,
       });
     }
@@ -366,7 +381,7 @@ export default function StatementsPage() {
   };
 
   const monthlyAmountDue = (s: Statement) =>
-    s.total_installments + s.total_additional_charges - s.total_payments;
+    feeInstallment(s).amount + s.total_additional_charges - s.total_payments;
 
   return (
     <div className="space-y-6">
@@ -488,7 +503,7 @@ export default function StatementsPage() {
             </div>
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Total Charged</p>
-              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {(selectedStatement.total_installments + selectedStatement.total_additional_charges).toLocaleString()}</p>
+              <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {(feeInstallment(selectedStatement).amount + selectedStatement.total_additional_charges).toLocaleString()}</p>
             </div>
             <div className="bg-emerald-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-emerald-700">Total Paid</p>
@@ -580,7 +595,7 @@ export default function StatementsPage() {
             {visibleStatements.map((s) => (
               <tr key={s.id} className={`cursor-pointer hover:bg-slate-50 ${'_pending' in s ? 'text-slate-400' : ''}`} onClick={() => !('_pending' in s) && setSelectedStatement(s)}>
                 <td className="px-6 py-4 text-sm font-medium text-slate-900">{MONTHS[s.month - 1]}</td>
-                <td className="px-6 py-4 text-sm text-slate-700">{'_pending' in s ? '—' : `R ${s.total_installments.toLocaleString()}`}</td>
+                <td className="px-6 py-4 text-sm text-slate-700">{'_pending' in s ? '—' : `R ${feeInstallment(s).amount.toLocaleString()}`}</td>
                 <td className="px-6 py-4 text-sm text-emerald-600 font-medium">{'_pending' in s ? '—' : `R ${s.total_payments.toLocaleString()}`}</td>
                 <td className={`px-6 py-4 text-sm font-medium ${'_pending' in s ? '' : (s.closing_balance > 0 ? 'text-red-600' : 'text-emerald-600')}`}>{'_pending' in s ? '—' : `R ${s.closing_balance.toLocaleString()}`}</td>
                 <td className="px-6 py-4">

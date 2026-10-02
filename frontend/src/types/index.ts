@@ -243,6 +243,13 @@ export interface Statement {
   current_amount_due: number;
   due_date: string;
   generated_at: string;
+  /**
+   * Grade's monthly tuition instalment. Months billed by January's annual
+   * invoice report `total_installments: 0` but still owe an instalment — use
+   * this for the fee row / amount due. It is display-only: it never moves the
+   * balance, because the annual invoice already carries the year's fees.
+   */
+  grade_monthly_fee: number;
 }
 
 export interface OutstandingBalance {

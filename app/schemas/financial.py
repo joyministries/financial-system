@@ -31,6 +31,10 @@ class StatementResponse(BaseModel):
     current_amount_due: Decimal
     due_date: datetime
     generated_at: datetime
+    #: Grade's monthly tuition instalment. ``total_installments`` is 0 for
+    #: months billed by January's annual invoice; clients use this to show the
+    #: fee that actually falls due (it never moves the balance).
+    grade_monthly_fee: Decimal = Decimal("0")
 
     model_config = {"from_attributes": True}
 

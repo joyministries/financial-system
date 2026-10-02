@@ -1,21 +1,18 @@
-import asyncio
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import async_session_factory, get_db
+from app.core.database import get_db
 from app.core.deps import (
     get_current_user,
     get_parent_student_ids,
     require_role,
     verify_student_access,
 )
-from app.core.exceptions import ConflictError
 from app.models.financial import Statement
 from app.models.grade import Grade, Student, StudentGuardian
 from app.models.payment import Payment
@@ -30,6 +27,7 @@ from app.schemas.financial import (
     StatementResponse,
     StudentSummaryResponse,
 )
+from app.services.monthly_fee import load_monthly_fee_lookup, monthly_fee_for_student
 from app.services.pdf import (
     build_grade_statements_pdf,
     build_grade_summary_pdf,
@@ -39,8 +37,15 @@ from app.services.pdf import (
 )
 from app.services.receipt import ReceiptService
 from app.services.report import ReportService
-from app.services.statement import StatementService, total_paid_from_ledger
+from app.services.statement import (
+    StatementService,
+    bulk_generate_statements,
+    fee_installment_for_statement,
+    total_paid_from_ledger,
+)
 from app.services.student_summary import StudentSummaryService
+
+D0 = Decimal("0")
 
 router = APIRouter(prefix="/financial", tags=["Financial"])
 
@@ -132,61 +137,26 @@ async def generate_statement(
     return await service.generate(data.student_id, data.academic_year, data.month)
 
 
-async def _generate_student_statements(
-    student_id: str,
-    academic_year: int,
-    up_to_month: int,
-    existing: set[tuple[str, int]],
-    breakdown: list[dict],
-    charges: list,
-) -> tuple[int, int, int, list[str]]:
-    """Insert every missing statement for one student from pre-fetched data.
-
-    The expensive ledger breakdown was already computed once for the whole
-    school, so this worker only performs INSERTs. Each worker owns its own
-    session and commits its own writes.
-    Returns (generated, skipped, failed, errors).
-    """
-    async with async_session_factory() as db:
-        service = StatementService(db)
-        generated = skipped = failed = 0
-        errors: list[str] = []
-        for m in range(1, up_to_month + 1):
-            if (student_id, m) in existing:
-                skipped += 1
-                continue
-            try:
-                await service.generate_from_breakdown(
-                    student_id, academic_year, m, breakdown, charges=charges
-                )
-                generated += 1
-            except IntegrityError:
-                await db.rollback()
-                skipped += 1
-            except ConflictError:
-                skipped += 1
-            except Exception as exc:  # noqa: BLE001 - one student must not abort the run
-                failed += 1
-                errors.append(f"{student_id} m{m}: {exc}")
-        await db.commit()
-        return generated, skipped, failed, errors
-
-
-# Whole-school generation runs this many students concurrently. With the data
-# pre-fetched, workers only insert, so concurrency is bounded by round trips.
-_GENERATE_ALL_CONCURRENCY = 20
-
-
 def _due_date_for_statement(academic_year: int, month: int) -> datetime:
     if month == 12:
         return datetime(academic_year + 1, 1, 1, tzinfo=UTC)
     return datetime(academic_year, month + 1, 1, tzinfo=UTC)
 
 
-def _monthly_amount_due(statement: Statement) -> Decimal:
-    """Amount outstanding for the statement month only, not year-to-date."""
+def _monthly_amount_due(statement: Statement, grade_monthly_fee: Decimal = D0) -> Decimal:
+    """Amount outstanding for the statement month only, not year-to-date.
+
+    Months billed through January's annual invoice have no invoice-derived
+    instalment of their own, so fall back to the grade's monthly tuition
+    instalment — that is what the parent actually owes for the month. Payments
+    and additional charges are still deducted, so a month already settled
+    reports ``0`` rather than a phantom due amount.
+    """
+    instalment = Decimal(str(statement.total_installments or 0))
+    if instalment <= D0:
+        instalment = grade_monthly_fee
     return (
-        Decimal(str(statement.total_installments or 0))
+        instalment
         + Decimal(str(statement.total_additional_charges or 0))
         - Decimal(str(statement.total_payments or 0))
     )
@@ -213,8 +183,14 @@ def _ledger_for_statement_rows(
     statement: Statement,
     charges: list[AdditionalCharge],
     payments: list[Payment],
+    grade_monthly_fee: Decimal = D0,
 ) -> list[dict]:
-    """Build statement ledger rows from prefetched transactions."""
+    """Build statement ledger rows from prefetched transactions.
+
+    ``grade_monthly_fee`` fills the ``Fees for MM/YYYY`` row for months billed
+    through January's annual invoice — see
+    :func:`fee_installment_for_statement`; such a row never moves the balance.
+    """
     due_date = _due_date_for_statement(statement.academic_year, statement.month)
     due_str = due_date.strftime("%d %b %Y")
     balance = Decimal(str(statement.opening_balance or 0))
@@ -230,14 +206,18 @@ def _ledger_for_statement_rows(
         }
     ]
 
-    if statement.total_installments > 0:
-        balance += statement.total_installments
+    fee_debit, moves_balance = fee_installment_for_statement(
+        Decimal(str(statement.total_installments or 0)), grade_monthly_fee
+    )
+    if fee_debit > 0:
+        if moves_balance:
+            balance += fee_debit
         rows.append(
             {
                 "date": due_str,
                 "reference": None,
                 "description": f"Fees for {statement.month:02d}/{statement.academic_year}",
-                "debit": statement.total_installments,
+                "debit": fee_debit,
                 "credit": None,
                 "balance": balance,
             }
@@ -355,6 +335,10 @@ async def _build_student_statement_sections(
     grade_rows = (await db.execute(select(Grade).where(Grade.id.in_(grade_ids)))).scalars().all()
     grade_by_id = {g.id: g.name for g in grade_rows}
 
+    # Grade tuition instalment per student: fills the fee row for months that
+    # were billed by January's annual invoice instead of their own.
+    fee_by_student = await load_monthly_fee_lookup(db, students, academic_year)
+
     charge_rows = (
         (
             await db.execute(
@@ -414,11 +398,13 @@ async def _build_student_statement_sections(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
+        student_fee = fee_by_student.get(s.id, D0)
         ledgers = [
             _ledger_for_statement_rows(
                 st,
                 charges_by_student_month.get((s.id, st.month), []),
                 payments_by_student_month.get((s.id, st.month), []),
+                student_fee,
             )
             for st in statements
         ]
@@ -452,7 +438,7 @@ async def _build_student_statement_sections(
                 "statement": last,
                 "ledger": ledger,
                 "period_label": period_label,
-                "amount_due": _monthly_amount_due(last),
+                "amount_due": _monthly_amount_due(last, student_fee),
                 "amount_year_due": last.current_amount_due,
                 "amount_paid": total_paid,
             }
@@ -471,50 +457,12 @@ async def generate_all_statements(
     """Generate statements accumulatively from month 1 up to the selected month.
 
     When grade_id is provided, only students in that grade are processed.
-    Existing statements are skipped — only missing ones are created. Ledger
-    breakdowns are prefetched in a few aggregate queries and workers only
-    insert, keeping a whole-school run well under the serverless timeout.
+    Existing statements are skipped — only missing ones are created. The heavy
+    lifting lives in
+    :func:`app.services.statement.bulk_generate_statements`, shared with the
+    scheduled auto-generation beat task so both paths behave identically.
     """
-    service = StatementService(db)
-    stmt = select(Student).where(Student.registration_status == "approved")
-    if grade_id:
-        stmt = stmt.where(Student.grade_id == grade_id)
-    students = (await db.execute(stmt)).scalars().all()
-    student_ids = [s.id for s in students]
-
-    existing = await service.list_existing(academic_year, month, student_ids)
-    breakdowns = await service.bulk_breakdowns(academic_year, student_ids)
-    charges = await service.bulk_charges(academic_year, student_ids)
-
-    sem = asyncio.Semaphore(_GENERATE_ALL_CONCURRENCY)
-
-    async def _run(sid: str):
-        async with sem:
-            return await _generate_student_statements(
-                sid,
-                academic_year,
-                month,
-                existing,
-                breakdowns.get(sid, []),
-                charges.get(sid, []),
-            )
-
-    results = await asyncio.gather(*(_run(sid) for sid in student_ids))
-
-    generated = sum(r[0] for r in results)
-    skipped = sum(r[1] for r in results)
-    failed = sum(r[2] for r in results)
-    errors: list[str] = []
-    for r in results:
-        errors.extend(r[3])
-    return {
-        "academic_year": academic_year,
-        "up_to_month": month,
-        "generated": generated,
-        "skipped": skipped,
-        "failed": failed,
-        "errors": errors[:20],
-    }
+    return await bulk_generate_statements(db, academic_year, month, grade_id)
 
 
 @router.get("/statements/grade-summary/{grade_id}/download")
@@ -825,7 +773,16 @@ async def list_statements(
     if user.role == "parent":
         await verify_student_access(student_id, user, db)
     service = StatementService(db)
-    return await service.list_for_student(student_id, academic_year)
+    statements = await service.list_for_student(student_id, academic_year)
+    if not statements:
+        return []
+    grade_monthly_fee = await monthly_fee_for_student(db, student_id, academic_year)
+    return [
+        StatementResponse.model_validate(s).model_copy(
+            update={"grade_monthly_fee": grade_monthly_fee}
+        )
+        for s in statements
+    ]
 
 
 @router.get("/statements/{student_id}/download")
@@ -894,7 +851,8 @@ async def download_statement(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
-    ledger = await service.combined_ledger(statements)
+    grade_monthly_fee = await monthly_fee_for_student(db, student_id, academic_year)
+    ledger = await service.combined_ledger(statements, grade_monthly_fee)
     first = statements[0]
     last = statements[-1]
 
@@ -922,7 +880,7 @@ async def download_statement(
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
-        amount_due=_monthly_amount_due(last),
+        amount_due=_monthly_amount_due(last, grade_monthly_fee),
         amount_year_due=last.current_amount_due,
         amount_paid=total_paid,
     )
