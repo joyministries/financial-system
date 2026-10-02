@@ -1,15 +1,15 @@
 """Statement PDF rendering rules for structural rows and the summary block.
 
-Two placeholder artefacts were printing on generated statements:
+``Balance brought forward`` rendered ``R 0.00`` in the Credit column for any
+student who started the year owing nothing. That placeholder is gone: a
+structural row now prints its carried balance only when the balance is
+non-zero, so a figure on a statement always means money is actually owed or
+was actually paid.
 
-* ``Balance brought forward`` rendered ``R 0.00`` in the Credit column for any
-  student who started the year owing nothing, and
-* ``Amount Due for Month`` rendered ``R 0.00`` for every month billed through
-  January's annual invoice (February..December), which by definition has no
-  instalment of its own.
-
-Both now print nothing at all, so a figure on a statement always means money
-is actually owed or was actually paid.
+``Amount Due for Month`` deliberately does the opposite — it prints for every
+statement, including ``R 0.00``, because it answers "what do I owe this
+month?" and omitting the question would read as a missing figure rather than
+as a nil one.
 """
 
 from decimal import Decimal
@@ -70,18 +70,24 @@ class TestStructuralRowAmounts:
 
 
 class TestSummaryRows:
-    def test_zero_monthly_due_is_omitted_entirely(self):
-        labels = [label for label, _ in _stmt_total_rows(D("0"), PAID, D("13280.00"))]
-        assert "Amount Due for Month" not in labels
-        assert labels == ["Amount Paid to date", "Outstanding for Year"]
+    def test_monthly_due_line_is_printed_even_when_zero(self):
+        rows = dict(_stmt_total_rows(D("0"), PAID, D("13280.00")))
+        assert rows["Amount Due for Month"] == D("0")
 
-    def test_settled_month_with_a_credit_balance_is_also_omitted(self):
-        labels = [label for label, _ in _stmt_total_rows(D("-2980.00"), PAID)]
-        assert "Amount Due for Month" not in labels
+    def test_monthly_due_line_is_printed_when_in_credit(self):
+        # A month paid ahead still gets the line; the value carries the sign.
+        assert dict(_stmt_total_rows(D("-2980.00"), PAID))["Amount Due for Month"] == D(
+            "-2980.00"
+        )
 
     def test_money_owed_keeps_the_line(self):
-        rows = dict(_stmt_total_rows(D("2980.00"), PAID, D("13280.00")))
-        assert rows["Amount Due for Month"] == D("2980.00")
+        assert dict(_stmt_total_rows(D("2980.00"), PAID))["Amount Due for Month"] == D(
+            "2980.00"
+        )
+
+    def test_order_is_due_then_paid_then_year(self):
+        labels = [label for label, _ in _stmt_total_rows(D("0"), PAID, D("13280.00"))]
+        assert labels == ["Amount Due for Month", "Amount Paid to date", "Outstanding for Year"]
 
     def test_paid_and_year_rows_are_always_present(self):
         assert dict(_stmt_total_rows(D("0"), PAID))["Amount Paid to date"] == PAID

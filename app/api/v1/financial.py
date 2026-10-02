@@ -149,10 +149,10 @@ def _monthly_amount_due(statement: Statement, grade_monthly_fee: Decimal = D0) -
     Months billed through January's annual invoice report ``0`` here: they
     have no instalment of their own, and the grade tuition instalment is
     deliberately not substituted for it (it does not reconcile with the annual
-    invoice). Callers therefore leave *grade_monthly_fee* unset and
-    ``build_statement_pdf()`` omits the line entirely rather than printing a
-    zero. Charges are still added and payments deducted, so a month with an
-    extra charge reports that charge.
+    invoice). The line still prints that ``0`` — it is the statement's answer
+    to what is owed this month, and leaving it out would read as a missing
+    figure rather than a nil one. Charges are still added and payments
+    deducted, so a month with an extra charge reports that charge.
     """
     instalment = Decimal(str(statement.total_installments or 0))
     if instalment <= D0:
@@ -854,7 +854,8 @@ async def download_statement(
             )
 
     # No grade tuition instalment: months beyond January are covered by
-    # January's annual invoice, so they show no monthly due amount.
+    # January's annual invoice, so Amount Due for Month reports R 0.00 there
+    # rather than a fee the family was never billed.
     ledger = await service.combined_ledger(statements, D0)
     first = statements[0]
     last = statements[-1]

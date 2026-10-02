@@ -386,8 +386,8 @@ export default function StatementsPage() {
   const monthlyAmountDue = (s: Statement) =>
     feeInstallment(s).amount + s.total_additional_charges - s.total_payments;
 
-  // Zero means nothing falls due this month — hide the cell so the strip
-  // never advertises an amount that isn't there.
+  // Amount Due This Month always shows, including R 0 — omitting the line
+  // would read as a missing figure rather than as "nothing owed this month".
   const dueThisMonth = selectedStatement ? monthlyAmountDue(selectedStatement) : 0;
 
   return (
@@ -503,7 +503,7 @@ export default function StatementsPage() {
           </div>
 
           {/* Balance summary strip */}
-          <div className={`grid grid-cols-1 divide-y divide-slate-200 sm:divide-x sm:divide-y-0 ${dueThisMonth > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
+          <div className="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
             <div className="bg-slate-50 px-6 py-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-500">Opening Balance</p>
               <p className="mt-1 font-mono text-lg font-bold text-slate-900">R {selectedStatement.opening_balance.toLocaleString()}</p>
@@ -516,12 +516,10 @@ export default function StatementsPage() {
               <p className="text-[11px] uppercase tracking-wider text-emerald-700">Total Paid</p>
               <p className="mt-1 font-mono text-lg font-bold text-emerald-700">R {selectedStatement.total_payments.toLocaleString()}</p>
             </div>
-            {dueThisMonth > 0 && (
-              <div className="px-6 py-4 bg-[#131d3c]">
-                <p className="text-[11px] uppercase tracking-wider text-slate-300">Amount Due This Month</p>
-                <p className="mt-1 font-mono text-lg font-bold text-white">R {dueThisMonth.toLocaleString()}</p>
-              </div>
-            )}
+            <div className={`px-6 py-4 ${dueThisMonth > 0 ? 'bg-[#131d3c]' : 'bg-emerald-600'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${dueThisMonth > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
+              <p className="mt-1 font-mono text-lg font-bold text-white">R {dueThisMonth.toLocaleString()}</p>
+            </div>
             <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
               <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
               <p className={`mt-1 font-mono text-lg font-bold ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {selectedStatement.current_amount_due.toLocaleString()}</p>

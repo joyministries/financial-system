@@ -729,15 +729,14 @@ def _stmt_total_rows(
 ) -> list[tuple[str, Decimal]]:
     """Labels/values for the statement summary block.
 
-    ``Amount Due for Month`` is dropped when nothing falls due that month.
-    Months billed through January's annual invoice have no instalment of their
-    own, so they compute to zero — printing ``R 0.00`` would claim money is
-    owed in a month where the statement shows no charge at all.
+    ``Amount Due for Month`` always prints, including ``R 0.00``: the line is
+    the statement's answer to "what do I owe this month?", and omitting the
+    question entirely reads as a missing figure rather than as a nil one.
     """
-    rows: list[tuple[str, Decimal]] = []
-    if amount_due > 0:
-        rows.append(("Amount Due for Month", amount_due))
-    rows.append(("Amount Paid to date", amount_paid))
+    rows: list[tuple[str, Decimal]] = [
+        ("Amount Due for Month", amount_due),
+        ("Amount Paid to date", amount_paid),
+    ]
     if amount_year_due is not None:
         rows.append(("Outstanding for Year", amount_year_due))
     return rows
