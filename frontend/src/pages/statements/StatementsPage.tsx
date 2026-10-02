@@ -216,14 +216,17 @@ export default function StatementsPage() {
 
   const handleBulkGenerate = async () => {
     if (!bulkMonth) return toast.error('Select a month');
+    // Whole-school generation runs from the Admin Settings schedule; this button
+    // is scoped to a single grade.
+    if (!bulkGrade) return toast.error('Select a grade first');
     setBulking(true);
     try {
-      const res = await financialApi.generateAllStatements(year, bulkMonth as number, bulkGrade || undefined);
-      toast.success(`${bulkGrade ? 'Grade' : 'Whole school'}: ${res.data.generated} generated (months 1–${bulkMonth}), ${res.data.skipped} already existed`);
+      const res = await financialApi.generateAllStatements(year, bulkMonth as number, bulkGrade);
+      toast.success(`${grades.find((g) => g.id === bulkGrade)?.name ?? 'Grade'}: ${res.data.generated} generated (months 1–${bulkMonth}), ${res.data.skipped} already existed`);
       loadSchoolReport();
       // Generate is now generate-AND-download: once the statements exist,
       // pull the full statement bundle so the admin gets the file in one click.
-      await (bulkGrade ? downloadGradeCumulative() : downloadSchoolStatements());
+      await downloadGradeCumulative();
     } catch {
       toast.error('Bulk generation failed');
     } finally {
@@ -661,16 +664,21 @@ export default function StatementsPage() {
 
           <div className="border-b border-slate-100 bg-slate-50/60 px-6 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-slate-500">Generate statements:</span>
+              <span className="text-sm font-medium text-slate-500">Generate statements for a grade:</span>
               <select value={bulkGrade} onChange={(e) => setBulkGrade(e.target.value)} className="input w-48">
-                <option value="">All grades (whole school)</option>
+                <option value="">Select grade</option>
                 {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
               <select value={bulkMonth} onChange={(e) => setBulkMonth(parseInt(e.target.value))} className="input w-44">
                 <option value="">Select month…</option>
                 {MONTHS.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
               </select>
-              <button onClick={handleBulkGenerate} disabled={bulking || !bulkMonth} className="btn btn-primary">
+              <button
+                onClick={handleBulkGenerate}
+                disabled={bulking || !bulkMonth || !bulkGrade}
+                className="btn btn-primary"
+                title="Creates this grade's statements up to the selected month, then downloads them. Whole-school runs happen from Admin Settings → Invoice & Statement Auto-generation."
+              >
                 <FilePlus2 className="h-4 w-4" /> {bulking ? 'Generating…' : 'Generate & Download'}
               </button>
               <button onClick={downloadSchoolStatements} disabled={!bulkMonth} className="btn btn-secondary">

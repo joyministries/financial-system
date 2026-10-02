@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import require_role
 from app.schemas.setting import (
+    AutoGenerationSettingsIn,
+    AutoGenerationSettingsOut,
     EmailSettingsIn,
     EmailSettingsOut,
     NotificationSettingsOut,
@@ -84,6 +86,46 @@ async def update_reminder_settings(
     """Save the reminder schedule. Admin only."""
     config = await SettingService(db).update_reminder_config(payload, user.id)
     return _reminder_out(config)
+
+
+# ── monthly invoice + statement auto-generation ─────────────
+# Replaces the whole-school "Generate" buttons: on the configured day the
+# scheduler creates that month's invoices for every approved student, then
+# that month's statements. Existing rows are skipped, so a re-run never
+# duplicates invoices, statements or parent SMS.
+
+def _auto_generation_out(config: dict) -> AutoGenerationSettingsOut:
+    from app.services.setting import next_auto_generation_date
+
+    next_run = next_auto_generation_date(config)
+    return AutoGenerationSettingsOut(
+        enabled=bool(config.get("enabled", False)),
+        day_of_month=int(config.get("day_of_month", 1)),
+        notify_parents=bool(config.get("notify_parents", True)),
+        last_run_date=config.get("last_run_date") or None,
+        next_run_date=next_run.isoformat() if next_run else None,
+    )
+
+
+@router.get("/auto-generation", response_model=AutoGenerationSettingsOut)
+async def get_auto_generation_settings(
+    _user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> AutoGenerationSettingsOut:
+    """Current invoice + statement auto-generation schedule (admin only)."""
+    config = await SettingService(db).get_auto_generation_config()
+    return _auto_generation_out(config)
+
+
+@router.put("/auto-generation", response_model=AutoGenerationSettingsOut)
+async def update_auto_generation_settings(
+    payload: AutoGenerationSettingsIn,
+    user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> AutoGenerationSettingsOut:
+    """Save the invoice + statement auto-generation schedule. Admin only."""
+    config = await SettingService(db).update_auto_generation_config(payload, user.id)
+    return _auto_generation_out(config)
 
 
 # ── registration fee ─────────────────────────────────────────

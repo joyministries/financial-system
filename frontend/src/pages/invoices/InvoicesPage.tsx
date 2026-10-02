@@ -45,8 +45,8 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [namesLoading, setNamesLoading] = useState(true);
 
-  // Bulk generation (whole grade / whole school)
-  const [bulkScope, setBulkScope] = useState<'all' | 'grade'>('all');
+  // Bulk generation by grade. Whole-school runs are scheduled instead — see
+  // Admin Settings → Invoice & Statement Auto-generation.
   const [bulkGradeId, setBulkGradeId] = useState('');
   const [bulkYear, setBulkYear] = useState(yearNow);
   const [bulkMonth, setBulkMonth] = useState(monthNow);
@@ -119,7 +119,7 @@ export default function InvoicesPage() {
   };
 
   const handleBulkGenerate = async () => {
-    if (bulkScope === 'grade' && !bulkGradeId) return toast.error('Select a grade');
+    if (!bulkGradeId) return toast.error('Select a grade');
     setBulking(true);
     let generated = 0;
     let skipped = 0;
@@ -129,12 +129,12 @@ export default function InvoicesPage() {
       // The endpoint self-limits to fit the serverless timeout and reports
       // complete=false when it still has students left. Re-invoking with the
       // same params resumes because already-generated invoices are skipped, so
-      // loop until the whole school / grade is done.
+      // loop until the whole grade is done.
       for (let attempt = 1; attempt <= 30; attempt++) {
         const res = await invoicesApi.generateAll({
           academic_year: bulkYear,
           month: bulkMonth,
-          grade_id: bulkScope === 'grade' ? bulkGradeId : undefined,
+          grade_id: bulkGradeId,
           notify_parents: bulkNotify,
         });
         generated += res.data.generated;
@@ -234,42 +234,22 @@ export default function InvoicesPage() {
 
       {!isParent && (
         <div className="space-y-6 rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-          {/* Bulk generation: whole grade / whole school */}
+          {/* Bulk generation: one grade (whole school is scheduled instead) */}
           <div>
             <h2 className="mb-1 text-lg font-semibold text-slate-900">Generate Invoices (Bulk)</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Create the monthly invoice for every student in a grade — or the whole school.
-              Parents automatically receive an SMS with their invoice amount.
+              Create the monthly invoice for every student in a grade. Parents automatically
+              receive an SMS with their invoice amount. Whole-school runs are handled by the
+              schedule in Admin Settings → Invoice &amp; Statement Auto-generation.
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Scope</label>
-                <div className="flex gap-1 rounded-lg border border-slate-200 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setBulkScope('grade')}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium ${bulkScope === 'grade' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                  >
-                    By Grade
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBulkScope('all')}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium ${bulkScope === 'all' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                  >
-                    Whole School
-                  </button>
-                </div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Grade</label>
+                <select value={bulkGradeId} onChange={(e) => setBulkGradeId(e.target.value)} className="input min-w-40">
+                  <option value="">Select grade</option>
+                  {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
               </div>
-              {bulkScope === 'grade' && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Grade</label>
-                  <select value={bulkGradeId} onChange={(e) => setBulkGradeId(e.target.value)} className="input min-w-40">
-                    <option value="">Select grade</option>
-                    {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </div>
-              )}
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">Year</label>
                 <select value={bulkYear} onChange={(e) => setBulkYear(parseInt(e.target.value))} className="input">
@@ -302,7 +282,7 @@ export default function InvoicesPage() {
                 className="btn btn-primary"
               >
                 {bulking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
-                {bulking ? 'Generating…' : `Generate for ${bulkScope === 'grade' ? 'Grade' : 'School'}`}
+                {bulking ? 'Generating…' : 'Generate for Grade'}
               </button>
             </div>
           </div>

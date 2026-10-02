@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+from datetime import date
 
 from cryptography.fernet import Fernet
 from fastapi import HTTPException, status
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.models.setting import SystemSetting
 from app.schemas.setting import (
+    AutoGenerationSettingsIn,
     EmailSettingsIn,
     EmailSettingsOut,
     NotificationSettingsOut,
@@ -22,6 +24,30 @@ settings = get_settings()
 
 # Sentinel the UI sends for a secret it did not touch. We keep the stored value.
 KEEP_SECRET = "********"
+
+AUTO_GENERATION_KEY = "auto_generation"
+
+
+def next_auto_generation_date(config: dict, today: date | None = None) -> date | None:
+    """Next date the scheduled invoice + statement run fires (server time).
+
+    Returns ``None`` when the schedule is disabled. The run is due once
+    ``today.day >= day_of_month`` and this calendar month has not run yet, so
+    a day the worker was down is caught up on the next beat instead of being
+    skipped. Anything in the past for this month reports "today" — the next
+    beat will pick it up.
+    """
+    if not config.get("enabled"):
+        return None
+    today = today or date.today()
+    day = max(1, min(28, int(config.get("day_of_month") or 1)))
+    ran_this_month = (config.get("last_run_date") or "")[:7] == today.strftime("%Y-%m")
+    if not ran_this_month and today.day >= day:
+        return today
+    if today.day < day:
+        return date(today.year, today.month, day)
+    year, month = (today.year, today.month + 1) if today.month < 12 else (today.year + 1, 1)
+    return date(year, month, day)
 
 
 class SettingService:
@@ -62,6 +88,12 @@ class SettingService:
             "last_run_date": "",
             "last_reminder_index": 0,
         },
+        "auto_generation": {
+            "enabled": False,
+            "day_of_month": 1,
+            "notify_parents": True,
+            "last_run_date": "",
+        },
     }
 
     def __init__(self, db: AsyncSession):
@@ -100,9 +132,13 @@ class SettingService:
     # ── shaping ───────────────────────────────────────────────
     @classmethod
     def _masked(cls, channel: str, config: dict) -> dict:
-        """Replace stored secrets with `*_set` booleans — never leak plaintext."""
+        """Replace stored secrets with `*_set` booleans — never leak plaintext.
+
+        Channels without secret fields (reminders, auto-generation) are
+        returned unchanged.
+        """
         out = dict(config)
-        for field in cls.SECRET_FIELDS[channel]:
+        for field in cls.SECRET_FIELDS.get(channel, set()):
             raw = out.pop(field, None)
             out[f"{field}_set"] = bool(raw)
         return out
@@ -285,5 +321,59 @@ class SettingService:
             )
         else:
             row.value_json = _json.dumps(raw)
+            row.updated_by = None
+        await self.db.flush()
+
+    # ── monthly invoice + statement auto-generation ──────────
+    async def get_auto_generation_config(self) -> dict:
+        """Raw auto-generation schedule config merged over defaults."""
+        raw = await self._get_raw(AUTO_GENERATION_KEY)
+        return {**self.DEFAULTS[AUTO_GENERATION_KEY], **raw}
+
+    async def update_auto_generation_config(
+        self, data: AutoGenerationSettingsIn, user_id: str
+    ) -> dict:
+        """Save the auto-generation schedule (admin only)."""
+        raw = await self._get_raw(AUTO_GENERATION_KEY)
+        new = {
+            "enabled": data.enabled,
+            "day_of_month": data.day_of_month,
+            "notify_parents": data.notify_parents,
+            "last_run_date": raw.get("last_run_date", ""),
+        }
+        # Enabling (or moving the day) restarts the schedule so the new slot
+        # is not treated as already fired by a run under the previous setting.
+        if new["enabled"] and new["day_of_month"] != raw.get("day_of_month"):
+            new["last_run_date"] = ""
+
+        old = self._masked(AUTO_GENERATION_KEY, raw)
+        await self._store(AUTO_GENERATION_KEY, new, user_id)
+        await AuditService(self.db).log(
+            "system_setting",
+            AUTO_GENERATION_KEY,
+            "update",
+            user_id,
+            old_values=old,
+            new_values=dict(new),
+        )
+        return new
+
+    async def record_auto_generation_run(self) -> None:
+        """Persist that the scheduled run fired today (beat task)."""
+        raw = await self._get_raw(AUTO_GENERATION_KEY)
+        raw["last_run_date"] = date.today().isoformat()
+        # _store needs a user_id for audit; the scheduler has no actor, so write
+        # the row directly without audit logging.
+        row = await self.db.get(SystemSetting, AUTO_GENERATION_KEY)
+        if row is None:
+            self.db.add(
+                SystemSetting(
+                    key=AUTO_GENERATION_KEY,
+                    value_json=json.dumps(raw),
+                    updated_by=None,
+                )
+            )
+        else:
+            row.value_json = json.dumps(raw)
             row.updated_by = None
         await self.db.flush()

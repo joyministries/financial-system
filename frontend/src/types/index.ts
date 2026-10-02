@@ -416,6 +416,20 @@ export interface ReminderSettings {
   next_run_date: string | null;
 }
 
+/**
+ * Monthly whole-school invoice + statement auto-generation. On
+ * `day_of_month` the scheduler creates that month's invoices for every
+ * approved student and then that month's statements. Existing rows are
+ * skipped, so a re-run never duplicates invoices or parent SMS.
+ */
+export interface AutoGenerationSettings {
+  enabled: boolean;
+  day_of_month: number;
+  notify_parents: boolean;
+  last_run_date: string | null;
+  next_run_date: string | null;
+}
+
 export interface ReminderRunResult {
   sent: number;
   skipped_no_phone: number;

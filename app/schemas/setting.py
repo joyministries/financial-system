@@ -80,3 +80,25 @@ class ReminderSettingsOut(BaseModel):
     count: int
     last_run_date: str | None = None
     next_run_date: str | None = None
+
+
+class AutoGenerationSettingsIn(BaseModel):
+    """Monthly whole-school invoice + statement auto-generation (admin configured).
+
+    On ``day_of_month`` the scheduler generates that month's invoices for every
+    approved student, then that month's statements for every student. Existing
+    invoices and statements are skipped, so a re-run never duplicates them or
+    re-sends SMS. The day is capped at 28 so the slot fires in every month,
+    including February.
+    """
+
+    enabled: bool = False
+    day_of_month: int = Field(default=1, ge=1, le=28)
+    notify_parents: bool = True
+
+
+class AutoGenerationSettingsOut(AutoGenerationSettingsIn):
+    """Schedule state returned to the UI (no secrets involved)."""
+
+    last_run_date: str | None = None
+    next_run_date: str | None = None

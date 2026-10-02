@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   AdminStudentRegisterResponse,
   AppNotification,
+  AutoGenerationSettings,
   CreditNote,
   EmailSettings,
   FeeStructure,
@@ -552,6 +553,12 @@ export const settingsApi = {
     interval_days: number;
     count: number;
   }) => api.put<ReminderSettings>('/settings/reminders', data),
+  getAutoGeneration: () => api.get<AutoGenerationSettings>('/settings/auto-generation'),
+  updateAutoGeneration: (data: {
+    enabled: boolean;
+    day_of_month: number;
+    notify_parents: boolean;
+  }) => api.put<AutoGenerationSettings>('/settings/auto-generation', data),
   getRegistrationFee: () => api.get<{ amount: string }>('/settings/registration-fee'),
   updateRegistrationFee: (value: string) =>
     api.put<{ amount: string }>('/settings/registration-fee', { value }),

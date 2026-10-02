@@ -214,3 +214,126 @@ def run_reminder_scheduler() -> dict:
             return {"status": "sent", "reminder": idx + 1, **result}
 
     return asyncio.run(_run())
+
+
+@celery_app.task(name="tasks.run_auto_generation_scheduler")
+def run_auto_generation_scheduler() -> dict:
+    """Daily beat task: generate the month's invoices, then its statements.
+
+    Fires once the admin-configured day of month arrives and this calendar
+    month has not run yet. Invoices go out first for every approved student;
+    existing invoices are skipped and parent SMS only fires for invoices the
+    round actually created, so a repeat run is harmless. Statements are
+    generated accumulatively from month 1 once every invoice round reports
+    ``complete``.
+
+    The run is recorded only after both halves succeed — an interrupted month
+    is retried on the next beat until it finishes, rather than silently
+    skipped for the rest of the month.
+    """
+    from datetime import date
+
+    from sqlalchemy import select
+
+    from app.core.database import async_session_factory
+    from app.models.user import User
+    from app.services.invoice import InvoiceService
+    from app.services.notification import NotificationService
+    from app.services.setting import SettingService
+    from app.services.statement import bulk_generate_statements
+
+    # generate_all self-limits to ~45s per round; a few rounds cover a whole
+    # school that outlives the first budget without ever duplicating work.
+    max_invoice_rounds = 10
+
+    async def _run():
+        async with async_session_factory() as db:
+            settings_service = SettingService(db)
+            config = await settings_service.get_auto_generation_config()
+            if not config.get("enabled"):
+                return {"status": "skipped_disabled"}
+
+            today = date.today()
+            day = max(1, min(28, int(config.get("day_of_month") or 1)))
+            ran_this_month = (config.get("last_run_date") or "")[:7] == today.strftime("%Y-%m")
+            if ran_this_month:
+                return {"status": "already_fired_this_month"}
+            if today.day < day:
+                return {"status": "not_due", "day_of_month": day}
+
+            actor_id = (
+                await db.execute(
+                    select(User.id)
+                    .where(User.role.in_(["admin", "finance", "super_admin"]))
+                    .order_by(User.created_at)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if actor_id is None:
+                return {
+                    "status": "error",
+                    "error": "No admin/finance user to attribute the run to",
+                }
+
+            academic_year = today.year
+            month = today.month
+            notify_parents = bool(config.get("notify_parents", True))
+
+            invoice_service = InvoiceService(db)
+            created = skipped = failed = 0
+            errors: list[str] = []
+            complete = False
+            for _ in range(max_invoice_rounds):
+                result = await invoice_service.generate_all(
+                    academic_year,
+                    month,
+                    actor_id,
+                    grade_id=None,
+                    notify_parents=notify_parents,
+                )
+                created += result.get("generated", 0)
+                skipped += result.get("skipped", 0)
+                failed += result.get("failed", 0)
+                errors.extend(result.get("errors") or [])
+                if result.get("complete"):
+                    complete = True
+                    break
+
+            if not complete:
+                # Nothing recorded: the next beat resumes, invoices skip.
+                return {
+                    "status": "invoices_incomplete",
+                    "academic_year": academic_year,
+                    "month": month,
+                    "generated": created,
+                    "skipped": skipped,
+                }
+
+            statements = await bulk_generate_statements(db, academic_year, month)
+            await settings_service.record_auto_generation_run()
+            await db.commit()
+
+            await NotificationService(db).notify_staff(
+                title="Scheduled invoice + statement generation complete",
+                message=(
+                    f"{academic_year}-{month:02d}: {created} invoices created, "
+                    f"{skipped} already existed"
+                    f"{f', {failed} failed' if failed else ''}; "
+                    f"{statements.get('generated', 0)} statements created."
+                ),
+                category="system",
+            )
+            await db.commit()
+
+            return {
+                "status": "generated",
+                "academic_year": academic_year,
+                "month": month,
+                "generated_invoices": created,
+                "skipped_invoices": skipped,
+                "failed_invoices": failed,
+                "generated_statements": statements.get("generated", 0),
+                "errors": errors[:20],
+            }
+
+    return asyncio.run(_run())

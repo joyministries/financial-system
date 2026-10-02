@@ -3,6 +3,7 @@ import { authApi, settingsApi, smsApi } from '@/api/client';
 import type { SmsMessage } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
+  AutoGenerationSettings,
   EmailSettings,
   NotificationSettings,
   ReminderSettings,
@@ -13,6 +14,7 @@ import toast from 'react-hot-toast';
 import {
   AlertCircle,
   BellRing,
+  CalendarClock,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -105,6 +107,8 @@ export default function SettingsPage() {
   const [reminders, setReminders] = useState<ReminderSettings | null>(null);
   const [savingReminders, setSavingReminders] = useState(false);
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [autoGen, setAutoGen] = useState<AutoGenerationSettings | null>(null);
+  const [savingAutoGen, setSavingAutoGen] = useState(false);
 
   const [registrationFee, setRegistrationFee] = useState('');
   const [savingRegistrationFee, setSavingRegistrationFee] = useState(false);
@@ -168,6 +172,10 @@ export default function SettingsPage() {
       .getReminders()
       .then((res) => setReminders(res.data))
       .catch(() => toast.error('Failed to load reminder settings'));
+    settingsApi
+      .getAutoGeneration()
+      .then((res) => setAutoGen(res.data))
+      .catch(() => toast.error('Failed to load auto-generation settings'));
     settingsApi
       .getRegistrationFee()
       .then((res) => setRegistrationFee(res.data.amount || ''))
@@ -268,6 +276,30 @@ export default function SettingsPage() {
       toast.error('Failed to save reminder settings');
     } finally {
       setSavingReminders(false);
+    }
+  };
+
+  const saveAutoGeneration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!autoGen) return;
+    setSavingAutoGen(true);
+    try {
+      const res = await settingsApi.updateAutoGeneration({
+        enabled: autoGen.enabled,
+        day_of_month: autoGen.day_of_month,
+        notify_parents: autoGen.notify_parents,
+      });
+      setAutoGen(res.data);
+      toast.success(
+        autoGen.enabled
+          ? `Auto-generation scheduled for day ${autoGen.day_of_month} of each month`
+          : 'Auto-generation saved (disabled)',
+      );
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to save auto-generation settings');
+    } finally {
+      setSavingAutoGen(false);
     }
   };
 
@@ -802,6 +834,116 @@ export default function SettingsPage() {
                 <p className="text-xs text-slate-400">
                   "Send Now" ignores the schedule and immediately SMSes every parent with an
                   outstanding balance. Each parent receives a link for only what they owe.
+                </p>
+              </form>
+            )}
+          </div>
+
+          {/* ── Invoice & Statement Auto-generation ──────────── */}
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-primary-600" />
+                <h3 className="text-base font-semibold text-slate-900">
+                  Invoice &amp; Statement Auto-generation
+                </h3>
+              </div>
+              {autoGen &&
+                (autoGen.enabled ? (
+                  <span className="badge badge-success">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> On — day {autoGen.day_of_month}
+                  </span>
+                ) : (
+                  <span className="badge badge-neutral">Off</span>
+                ))}
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Runs unattended each month instead of the whole-school "Generate" button: on the
+              chosen day it creates that month's invoices for every approved student, then that
+              month's statements. Rows that already exist are skipped, so a re-run never
+              duplicates invoices or re-sends parent SMS.
+            </p>
+
+            {!autoGen && !loadingSettings ? (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <AlertCircle className="h-4 w-4" /> Unable to load auto-generation settings.
+              </div>
+            ) : (
+              <form onSubmit={saveAutoGeneration} className="mt-4 space-y-4">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={autoGen?.enabled ?? false}
+                    onChange={(e) =>
+                      setAutoGen((p) => (p ? { ...p, enabled: e.target.checked } : p))
+                    }
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  Enable monthly auto-generation
+                </label>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Day of month</label>
+                    <select
+                      value={autoGen?.day_of_month ?? 1}
+                      onChange={(e) =>
+                        setAutoGen((p) => (p ? { ...p, day_of_month: Number(e.target.value) } : p))
+                      }
+                      className={inputCls}
+                    >
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">SMS parents</label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAutoGen((p) => (p ? { ...p, notify_parents: !p.notify_parents } : p))
+                      }
+                      className={`mt-1 rounded-lg px-3 py-2 text-sm font-medium ${
+                        autoGen?.notify_parents
+                          ? 'bg-green-600 text-white'
+                          : 'border border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      {autoGen?.notify_parents ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                </div>
+
+                {(autoGen?.last_run_date || autoGen?.next_run_date) && (
+                  <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    {autoGen.next_run_date && (
+                      <p>
+                        Next run:{' '}
+                        <b>
+                          {new Date(`${autoGen.next_run_date}T00:00:00`).toLocaleDateString()}
+                        </b>
+                      </p>
+                    )}
+                    {autoGen.last_run_date && (
+                      <p>
+                        Last run:{' '}
+                        {new Date(`${autoGen.last_run_date}T00:00:00`).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <button type="submit" disabled={savingAutoGen} className="btn btn-primary">
+                  <Save className="h-4 w-4" />
+                  {savingAutoGen ? 'Saving...' : 'Save Schedule'}
+                </button>
+                <p className="text-xs text-slate-400">
+                  The scheduler checks every day and only fires once the configured day arrives —
+                  if the service was down that day it catches up on the next run instead of
+                  skipping the month. Changing the day restarts the schedule.
                 </p>
               </form>
             )}
