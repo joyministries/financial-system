@@ -11,12 +11,12 @@ invoice already sits in the statement balance, so adding the instalment again
 would double-bill the rest of the year (Grade 8 would jump from
 R8,940 outstanding to R41,720).
 
-**No production caller supplies it any more.** It does not reconcile with the
-annual invoice (Grade 8: R2,980 x 12 = R35,760 against an R37,360 invoice),
-so rendering it presented families with a bill they never received.
-``app/services/monthly_fee.py`` and the ``grade_monthly_fee`` response field
-are retained for reporting; these tests pin the helper's behaviour so the
-fallback stays a conscious opt-in rather than a forgotten default.
+**Callers pass it for ``Amount Due for Month`` only.** The summary line
+should quote the grade's fee for the month; the ledger debit must not, since
+the annual invoice already sits in the statement balance (Grade 8 would jump
+from R8,940 outstanding to R41,720 if it did). ``app/services/monthly_fee.py``
+and the ``grade_monthly_fee`` response field feed that line and reporting.
+These tests pin both halves of the helper so neither behaviour drifts.
 """
 
 from decimal import Decimal

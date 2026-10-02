@@ -312,15 +312,18 @@ export default function StatementsPage() {
 
   // Months February..December have no invoice of their own — the year is
   // billed by January's annual invoice — so they report total_installments 0
-  // and draw no fee row. grade_monthly_fee is still returned by the API but is
-  // deliberately not rendered: it does not reconcile with the annual invoice
-  // (R2,980 x 12 vs the R37,360 charged) and would present a second bill the
-  // family never received. Mirrors fee_installment_for_statement() on the
-  // backend, which the bulk path also calls with no fee.
+  // and draw no fee row. This drives the ledger debit only: it must show
+  // just what the school actually invoiced. Mirrors the ledger argument of
+  // fee_installment_for_statement() on the backend.
   const feeInstallment = (s: Statement): { amount: number; movesBalance: boolean } => {
     if (s.total_installments > 0) return { amount: s.total_installments, movesBalance: true };
     return { amount: 0, movesBalance: false };
   };
+
+  // The grade's fee for this month: the month's own invoice where it has one,
+  // otherwise the grade tuition instalment. Summary line only — never a debit.
+  const monthFee = (s: Statement) =>
+    s.total_installments > 0 ? s.total_installments : s.grade_monthly_fee;
 
   const buildLedger = (s: Statement): LedgerRow[] => {
     const rows: LedgerRow[] = [];
@@ -384,7 +387,7 @@ export default function StatementsPage() {
   };
 
   const monthlyAmountDue = (s: Statement) =>
-    feeInstallment(s).amount + s.total_additional_charges - s.total_payments;
+    monthFee(s) + s.total_additional_charges - s.total_payments;
 
   // Amount Due This Month always shows, including R 0 — omitting the line
   // would read as a missing figure rather than as "nothing owed this month".

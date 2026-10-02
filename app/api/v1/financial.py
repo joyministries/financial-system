@@ -27,7 +27,7 @@ from app.schemas.financial import (
     StatementResponse,
     StudentSummaryResponse,
 )
-from app.services.monthly_fee import monthly_fee_for_student
+from app.services.monthly_fee import load_monthly_fee_lookup, monthly_fee_for_student
 from app.services.pdf import (
     build_grade_statements_pdf,
     build_grade_summary_pdf,
@@ -146,13 +146,16 @@ def _due_date_for_statement(academic_year: int, month: int) -> datetime:
 def _monthly_amount_due(statement: Statement, grade_monthly_fee: Decimal = D0) -> Decimal:
     """Amount outstanding for the statement month only, not year-to-date.
 
-    Months billed through January's annual invoice report ``0`` here: they
-    have no instalment of their own, and the grade tuition instalment is
-    deliberately not substituted for it (it does not reconcile with the annual
-    invoice). The line still prints that ``0`` — it is the statement's answer
-    to what is owed this month, and leaving it out would read as a missing
-    figure rather than a nil one. Charges are still added and payments
-    deducted, so a month with an extra charge reports that charge.
+    Months billed through January's annual invoice carry no instalment of
+    their own, so the grade tuition instalment is substituted for the month —
+    that is the fee the grade charges for this month, and it is what the
+    parent is being asked to settle. Payments and additional charges are
+    still deducted, so a month already paid reports ``0`` rather than a
+    phantom due amount.
+
+    This drives the *summary line only*. It never reaches the ledger: the
+    annual invoice already sits in the statement balance, so printing the
+    instalment as a debit too would double-bill the rest of the year.
     """
     instalment = Decimal(str(statement.total_installments or 0))
     if instalment <= D0:
@@ -338,10 +341,10 @@ async def _build_student_statement_sections(
     grade_by_id = {g.id: g.name for g in grade_rows}
 
     # Months February..December are billed by January's annual invoice, so
-    # they carry no instalment of their own. The grade tuition instalment is
-    # deliberately NOT resolved here: it does not match the annual invoice and
-    # must not be presented as a debit the family has to settle. The lookup
-    # stays available (app.services.monthly_fee) for reporting.
+    # they carry no instalment of their own. The grade tuition instalment
+    # feeds the "Amount Due for Month" summary line only — it is never passed
+    # to the ledger, which must show just what was actually invoiced.
+    fee_by_student = await load_monthly_fee_lookup(db, students, academic_year)
 
     charge_rows = (
         (
@@ -402,6 +405,8 @@ async def _build_student_statement_sections(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
+        # Summary line only — deliberately not handed to the ledger below.
+        student_fee = fee_by_student.get(s.id, D0)
         ledgers = [
             _ledger_for_statement_rows(
                 st,
@@ -440,7 +445,7 @@ async def _build_student_statement_sections(
                 "statement": last,
                 "ledger": ledger,
                 "period_label": period_label,
-                "amount_due": _monthly_amount_due(last),
+                "amount_due": _monthly_amount_due(last, student_fee),
                 "amount_year_due": last.current_amount_due,
                 "amount_paid": total_paid,
             }
@@ -853,9 +858,10 @@ async def download_statement(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
-    # No grade tuition instalment: months beyond January are covered by
-    # January's annual invoice, so Amount Due for Month reports R 0.00 there
-    # rather than a fee the family was never billed.
+    # Grade tuition instalment feeds the "Amount Due for Month" summary line
+    # only; combined_ledger() gets D0 so the debit column shows nothing but
+    # what the school actually invoiced.
+    grade_monthly_fee = await monthly_fee_for_student(db, student_id, academic_year)
     ledger = await service.combined_ledger(statements, D0)
     first = statements[0]
     last = statements[-1]
@@ -884,7 +890,7 @@ async def download_statement(
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
-        amount_due=_monthly_amount_due(last),
+        amount_due=_monthly_amount_due(last, grade_monthly_fee),
         amount_year_due=last.current_amount_due,
         amount_paid=total_paid,
     )
