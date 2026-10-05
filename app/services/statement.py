@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -17,6 +18,8 @@ from app.models.schedule import AdditionalCharge
 from app.services.charge import ChargeService
 from app.services.ledger import LedgerService
 from app.services.monthly_fee import monthly_fee_for_student
+
+logger = logging.getLogger(__name__)
 
 D0 = Decimal("0")
 
@@ -263,6 +266,30 @@ class StatementService:
         combined.extend(ledgers[-1][1:])
         return combined
 
+    async def footer_for_statements(
+        self,
+        statements: list[Statement],
+        include_brought_forward_in_arrears: bool = False,
+    ) -> dict[str, Decimal]:
+        """Footer totals for a year-to-date statement (computed, nothing stored)."""
+        if not statements:
+            return {}
+        last = statements[-1]
+        fee = await monthly_fee_for_student(self.db, last.student_id, last.academic_year)
+        rows = await self.combined_ledger(statements, fee)
+
+        prior = await self.ledger.monthly_breakdown(last.student_id, last.academic_year - 1)
+        brought_forward = max(D0, prior[-1]["outstanding"]) if prior else D0
+
+        return statement_footer(
+            total_billed=to_decimal(last.total_fees),
+            total_paid=total_paid_from_ledger(rows),
+            monthly_fee=fee,
+            months_due=last.month,
+            brought_forward=brought_forward,
+            include_brought_forward_in_arrears=include_brought_forward_in_arrears,
+        )
+
     async def delete_for_student(self, student_id: str, academic_year: int) -> int:
         """Delete all statements for a student+year. Returns count deleted."""
         stmts = await self.list_for_student(student_id, academic_year)
@@ -345,9 +372,11 @@ class StatementService:
             to_decimal(statement.total_installments),
             grade_monthly_fee,
         )
-        if fee_debit > 0:
-            if moves_balance:
-                balance += fee_debit
+        # Months Feb..Dec carry no invoice of their own (the year was billed in
+        # January), so their fallback instalment must NOT be printed as a debit:
+        # it would make the visible rows disagree with the printed balance.
+        if fee_debit > 0 and moves_balance:
+            balance += fee_debit
             rows.append(
                 {
                     "date": due_str,
@@ -407,6 +436,14 @@ class StatementService:
             )
 
         if abs(balance - to_decimal(statement.closing_balance)) > Decimal("0.01"):
+            logger.warning(
+                "Statement ledger mismatch student=%s %s-%02d: rows=%s stored closing=%s",
+                statement.student_id,
+                statement.academic_year,
+                statement.month,
+                balance,
+                statement.closing_balance,
+            )
             balance = to_decimal(statement.closing_balance)
 
         rows.append(
@@ -468,6 +505,50 @@ def total_paid_from_ledger(rows: list[dict]) -> Decimal:
         ),
         Decimal("0"),
     )
+
+
+def statement_footer(
+    *,
+    total_billed: Decimal,
+    total_paid: Decimal,
+    monthly_fee: Decimal,
+    months_due: int,
+    brought_forward: Decimal = D0,
+    include_brought_forward_in_arrears: bool = False,
+    months_in_year: int = 12,
+) -> dict[str, Decimal]:
+    """Footer figures matching the school's printed statement.
+
+    * amount_due_for_year -> "Amount Due for <year>"  = billed - paid
+    * amount_paid         -> "Amount Paid to date"
+    * balance             -> the overdue (arrears) figure: what should have been
+      paid by now = outstanding for the year minus instalments not yet due.
+
+    Example (Grade 2, 31 Oct 2026): billed 25,320, paid 16,920, fee 1,940,
+    10 months due, brought forward 1,940:
+        amount_due_for_year = 8,400
+        not yet due (Nov, Dec) = 3,880
+        balance = 8,400 - 3,880 - 1,940 = 2,580
+    """
+    billed = to_decimal(total_billed)
+    paid = to_decimal(total_paid)
+    fee = to_decimal(monthly_fee)
+    bf = to_decimal(brought_forward)
+
+    amount_due_for_year = billed - paid
+    not_yet_due = fee * max(0, months_in_year - months_due)
+    arrears = amount_due_for_year - not_yet_due
+    if not include_brought_forward_in_arrears:
+        arrears -= bf
+    arrears = max(D0, arrears)
+
+    return {
+        "amount_due_for_year": to_decimal(amount_due_for_year),
+        "amount_paid": to_decimal(paid),
+        "not_yet_due": to_decimal(not_yet_due),
+        "brought_forward": to_decimal(bf),
+        "balance": to_decimal(arrears),
+    }
 
 
 # Whole-school generation runs this many students concurrently. With the data
