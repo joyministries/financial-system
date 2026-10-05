@@ -5,21 +5,25 @@ single ``MonthlySchedule`` row at month 1 covering the whole year. February
 through December therefore have no invoice of their own, so
 ``Statement.total_installments`` is ``0``.
 
-The grade's monthly tuition instalment can fill the ``Fees for MM/YYYY`` row
-and ``Amount Due for Month`` for such months, **display-only**: the annual
-invoice already sits in the statement balance, so adding the instalment again
-would double-bill the rest of the year (Grade 8 would jump from
-R8,940 outstanding to R41,720).
+The grade's monthly tuition instalment can fill the ``Fees for MM/YYYY`` ledger
+row for such months, **display-only**: the annual invoice already sits in the
+statement balance, so adding the instalment again would double-bill the rest of
+the year (Grade 8 would jump from R8,940 outstanding to R41,720).
 
-**Callers pass it for ``Amount Due for Month`` only.** The summary line
-should quote the grade's fee for the month; the ledger debit must not, since
-the annual invoice already sits in the statement balance (Grade 8 would jump
-from R8,940 outstanding to R41,720 if it did). ``app/services/monthly_fee.py``
-and the ``grade_monthly_fee`` response field feed that line and reporting.
+**The grade fee no longer feeds ``Amount Due for Month``.** That line used to
+be ``instalment - month's payments``, which substituted the grade fee for empty
+months and produced a negative figure (``1,940 - 2,000 = -60``) on (1982)
+Hlelolwenkosi Mazibuko's September statement while its neighbours read 8,400.
+It now quotes ``Statement.current_amount_due`` — the balance owed at the
+statement date — so all three summary lines agree by construction. See
+``test_statement_amount_due.py``. ``app/services/monthly_fee.py`` and the
+``grade_monthly_fee`` response field remain for reporting and the ledger row.
 These tests pin both halves of the helper so neither behaviour drifts.
 """
 
 from decimal import Decimal
+
+import pytest
 
 from app.api.v1.financial import _ledger_for_statement_rows, _monthly_amount_due
 from app.services.statement import fee_installment_for_statement
@@ -114,20 +118,42 @@ class TestLedgerFeeRow:
 
 
 class TestMonthlyAmountDue:
-    def test_empty_month_reports_the_grade_fee(self):
-        assert _monthly_amount_due(_statement(), D("2980.00")) == D("2980.00")
+    """``Amount Due for Month`` is the statement's own stored balance.
 
-    def test_settled_empty_month_reports_zero(self):
-        stmt = _statement(total_payments=D("2980.00"))
-        assert _monthly_amount_due(stmt, D("2980.00")) == D("0")
+    The grade fee no longer reaches this line — see ``test_statement_amount_due.py``
+    for why it produced a negative figure on (1982)'s September statement.
+    """
 
-    def test_invoice_derived_month_ignores_the_fallback(self):
-        stmt = _statement(month=1, total_installments=D("37360.00"), total_payments=D("1000"))
-        assert _monthly_amount_due(stmt, D("2980.00")) == D("36360.00")
+    def test_reports_the_stored_balance(self):
+        assert _monthly_amount_due(_statement()) == D("8940.00")
 
-    def test_default_is_zero_due_unchanged_from_before(self):
-        assert _monthly_amount_due(_statement()) == D("0")
+    def test_settled_month_reports_zero(self):
+        stmt = _statement(
+            total_payments=D("2980.00"),
+            closing_balance=D("0"),
+            current_amount_due=D("0"),
+        )
+        assert _monthly_amount_due(stmt) == D("0")
 
-    def test_additional_charges_still_add_on_top_of_the_fallback(self):
-        stmt = _statement(total_additional_charges=D("500.00"))
-        assert _monthly_amount_due(stmt, D("2980.00")) == D("3480.00")
+    def test_invoice_derived_month_reports_the_balance(self):
+        stmt = _statement(
+            month=1,
+            total_installments=D("37360.00"),
+            total_payments=D("1000"),
+            closing_balance=D("36360.00"),
+            current_amount_due=D("36360.00"),
+        )
+        assert _monthly_amount_due(stmt) == D("36360.00")
+
+    def test_takes_no_grade_fee_argument(self):
+        # The grade fee was this line's fallback; passing one is now a TypeError.
+        with pytest.raises(TypeError):
+            _monthly_amount_due(_statement(), D("2980.00"))
+
+    def test_additional_charges_are_already_inside_the_stored_balance(self):
+        stmt = _statement(
+            total_additional_charges=D("500.00"),
+            closing_balance=D("9440.00"),
+            current_amount_due=D("9440.00"),
+        )
+        assert _monthly_amount_due(stmt) == D("9440.00")

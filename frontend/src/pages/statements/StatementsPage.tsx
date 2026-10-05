@@ -320,11 +320,6 @@ export default function StatementsPage() {
     return { amount: 0, movesBalance: false };
   };
 
-  // The grade's fee for this month: the month's own invoice where it has one,
-  // otherwise the grade tuition instalment. Summary line only — never a debit.
-  const monthFee = (s: Statement) =>
-    s.total_installments > 0 ? s.total_installments : s.grade_monthly_fee;
-
   const buildLedger = (s: Statement): LedgerRow[] => {
     const rows: LedgerRow[] = [];
     let balance = s.opening_balance;
@@ -386,8 +381,13 @@ export default function StatementsPage() {
     return rows;
   };
 
-  const monthlyAmountDue = (s: Statement) =>
-    monthFee(s) + s.total_additional_charges - s.total_payments;
+  // Amount owed at the statement date — the same stored balance as
+  // Outstanding Year and as the PDF's Balance carried forward. It used to be
+  // `month's fee + charges - payments`, which substituted the grade fee for
+  // months billed by January's annual invoice and then subtracted a payment
+  // the balance already reflected: (1982)'s September statement showed R -60
+  // next to two lines reading R 8,400.
+  const monthlyAmountDue = (s: Statement) => s.current_amount_due;
 
   // Amount Due This Month always shows, including R 0 — omitting the line
   // would read as a missing figure rather than as "nothing owed this month".
