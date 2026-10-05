@@ -652,10 +652,10 @@ def _statement_row_amounts(row: dict) -> tuple[Decimal | None, Decimal | None]:
     """Debit/Credit to print for one ledger row.
 
     ``Balance brought forward`` / ``Balance carried forward`` are structural
-    lines, not transactions, so they carry no debit/credit of their own — the
-    carried balance is printed instead, and only when it is non-zero: a
-    printed ``R 0.00`` reads as a placeholder rather than a figure a parent
-    has to do something about.
+    lines, not transactions, so they carry no debit/credit of their own. The
+    carried balance is reported as its own summary line instead (see
+    ``_stmt_total_rows``) and no longer reaches the ledger at all; this branch
+    is the policy for that row type should one slip through.
     """
     desc = str(row.get("description", ""))
     bold = bool(row.get("bold"))
@@ -687,6 +687,10 @@ def _stmt_transactions(rows: list[dict]) -> Table:
     for r in rows:
         desc = r.get("description", "")
         bold = bool(r.get("bold"))
+        if bold and "carried forward" in str(desc).lower():
+            # The closing balance moved to the summary block, where it prints
+            # even at R 0.00. The ledger now ends on its last transaction.
+            continue
         debit, credit = _statement_row_amounts(r)
 
         desc_style = _STMT_TABLE_BOLD if bold else _STMT_TABLE_DESC
@@ -724,17 +728,22 @@ def _stmt_transactions(rows: list[dict]) -> Table:
 
 def _stmt_total_rows(
     amount_due: Decimal,
+    balance_carried: Decimal,
     amount_paid: Decimal,
     amount_year_due: Decimal | None = None,
 ) -> list[tuple[str, Decimal]]:
     """Labels/values for the statement summary block.
 
-    ``Amount Due for Month`` always prints, including ``R 0.00``: the line is
-    the statement's answer to "what do I owe this month?", and omitting the
-    question entirely reads as a missing figure rather than as a nil one.
+    ``Amount Due for Month``, ``Balance carried forward`` and ``Amount Paid
+    to date`` always print, including ``R 0.00``: each answers a question the
+    parent is looking for, and omitting one reads as a missing figure rather
+    than as a nil one. The closing balance lives here rather than as a
+    ``Balance carried forward`` row at the foot of the ledger, where it used
+    to be an empty structural line carrying no figure at all.
     """
     rows: list[tuple[str, Decimal]] = [
         ("Amount Due for Month", amount_due),
+        ("Balance carried forward", balance_carried),
         ("Amount Paid to date", amount_paid),
     ]
     if amount_year_due is not None:
@@ -744,13 +753,16 @@ def _stmt_total_rows(
 
 def _stmt_totals(
     amount_due: Decimal,
+    balance_carried: Decimal,
     amount_paid: Decimal,
     amount_year_due: Decimal | None = None,
 ) -> Table:
-    """Right-aligned amount due / paid-to-date rows."""
+    """Right-aligned amount due / carried-forward / paid-to-date rows."""
     rows = [
         [Paragraph(label, _STMT_TOTAL_LABEL), Paragraph(money(value), _STMT_TOTAL_VALUE)]
-        for label, value in _stmt_total_rows(amount_due, amount_paid, amount_year_due)
+        for label, value in _stmt_total_rows(
+            amount_due, balance_carried, amount_paid, amount_year_due
+        )
     ]
     t = Table(rows, colWidths=[110 * mm, 70 * mm])
     t.setStyle(
@@ -882,6 +894,7 @@ def _append_statement_section(
             Spacer(1, 8 * mm),
             _stmt_totals(
                 amount_due if amount_due is not None else _statement_monthly_due(statement),
+                Decimal(str(statement.closing_balance or 0)),
                 amount_paid if amount_paid is not None else statement.total_payments,
                 amount_year_due,
             ),
