@@ -29,6 +29,10 @@ class StatementResponse(BaseModel):
     total_payments: Decimal
     closing_balance: Decimal
     current_amount_due: Decimal
+    #: Prior-year carry-in (same value on every month of the year). Clients
+    #: subtract it, together with the instalments not yet due, to show what is
+    #: actually overdue this year rather than the whole running balance.
+    brought_forward: Decimal = Decimal("0")
     due_date: datetime
     generated_at: datetime
     #: Grade's monthly tuition instalment. ``total_installments`` is 0 for

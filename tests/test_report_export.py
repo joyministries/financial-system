@@ -268,3 +268,146 @@ async def test_outstanding_matrix_defaults_to_full_year():
     assert balances["1"] == "0"
     assert balances["11"] == "750"
     assert result["totals"]["11"] == "750"
+
+
+# ---------------------------------------------------------------------------
+# "Amount due for month" / "This month only" — the whole-school statement
+# summary's arrears column.
+#
+# This used to be read as ``invoices(month == m) + charges(month == m) less
+# the receipts recorded in calendar month m``. Students are billed in January
+# (one annual invoice, or a split January pair), so months 2-12 carry no
+# invoice at all and the expression collapsed to ``0 less that month's
+# payments``: in October 194 of 198 students reported R 0.00 and the school
+# total was R 0, while February-September printed negatives such as -1,940.
+#
+# It now reads each student's generated Statement and applies the same
+# formula as the statement PDF's Amount Due for Month line, so the report and
+# the document the parent receives agree to the cent.
+# ---------------------------------------------------------------------------
+
+
+
+def _statement_row(student_id, month, closing, paid, brought_forward=0):
+    """A Statement row as _monthly_statement_rows selects it."""
+    return SimpleNamespace(
+        student_id=student_id,
+        month=month,
+        current_amount_due=Decimal(str(closing)),
+        total_payments=Decimal(str(paid)),
+        brought_forward=Decimal(str(brought_forward)),
+    )
+
+
+def _student(student_id, number="1982", first="Hlelolwenkosi", last="Mazibuko"):
+    return SimpleNamespace(
+        id=student_id,
+        student_number=number,
+        first_name=first,
+        last_name=last,
+        grade_id="g1",
+    )
+
+
+class _FakeDB:
+    """Returns one canned result set per execute() call, in order."""
+
+    def __init__(self, results):
+        self._results = list(results)
+        self.calls = 0
+
+    async def execute(self, query, *args, **kwargs):
+        result = self._results[self.calls]
+        self.calls += 1
+        return SimpleNamespace(all=lambda: result)
+
+
+async def _arrears(monkeypatch, statements, month=10, students=None, fees=None):
+    """Run _monthly_statement_rows with one student and canned statements.
+
+    ``_FakeDB`` cannot evaluate SQLAlchemy predicates, so the helper applies
+    the query's own ``Statement.month <= month`` filter itself.
+    """
+    from app.services import report as report_mod
+
+    students = students or [_student("s1982")]
+    db = _FakeDB([
+        [(s, "GRADE 2") for s in students],
+        [s for s in statements if s.month <= month],
+    ])
+
+    async def fake_fees(_db, _students, _year):
+        return fees if fees is not None else {"s1982": Decimal("1940.00")}
+
+    monkeypatch.setattr(report_mod, "load_monthly_fee_lookup", fake_fees)
+    return await ReportService(db=db)._monthly_statement_rows(2026, month)
+
+
+@pytest.mark.asyncio
+async def test_month_only_reports_the_statement_arrears_not_zero(monkeypatch):
+    """1982 at October 2026 reports 2,580 — the statement's Amount Due figure.
+
+    Billed 25,320, paid 16,920, grade fee 1,940, ten months in, carried
+    forward 1,940::
+
+        8,400 - (1,940 x 2) - 1,940 = 2,580
+
+    The old calendar-month read produced 0 (or -2,000) here because January's
+    annual invoice is not dated October.
+    """
+    rows = await _arrears(monkeypatch, [_statement_row("s1982", 10, 8400, 16920, 1940)])
+
+    assert len(rows) == 1
+    assert rows[0]["outstanding"] == Decimal("2580.00")
+    # Row shape shared with LedgerService.students_outstanding.
+    assert rows[0]["required"] - rows[0]["paid"] == Decimal("2580.00")
+    assert rows[0]["name"] == "Hlelolwenkosi Mazibuko"
+
+
+@pytest.mark.asyncio
+async def test_month_only_uses_the_statement_at_or_before_the_report_month(monkeypatch):
+    """February's report must not be skewed by an October statement, and an
+    October report must use the October row when one exists."""
+    statements = [
+        _statement_row("s1982", 2, 21820, 3500, 1940),
+        _statement_row("s1982", 10, 8400, 16920, 1940),
+    ]
+
+    feb = await _arrears(monkeypatch, statements, month=2)
+    oct_ = await _arrears(monkeypatch, statements, month=10)
+
+    # 21,820 - (1,940 x 10) - 1,940 = 480
+    assert feb[0]["outstanding"] == Decimal("480.00")
+    assert oct_[0]["outstanding"] == Decimal("2580.00")
+
+
+@pytest.mark.asyncio
+async def test_month_only_clamps_a_credit_balance_to_zero(monkeypatch):
+    """Over-payment reports 0, never a negative like the old -1,940."""
+    rows = await _arrears(
+        monkeypatch,
+        [_statement_row("s1982", 6, 0, 26000, 1940)],
+        month=6,
+    )
+
+    assert rows[0]["outstanding"] == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_month_only_reports_zero_for_a_student_with_no_statement(monkeypatch):
+    """An enrolled student without generated statements still gets a row."""
+    students = [
+        _student("s1982"),
+        _student("s2000", number="2000", first="No", last="Statement"),
+    ]
+    rows = await _arrears(
+        monkeypatch,
+        [_statement_row("s1982", 10, 8400, 16920, 1940)],
+        students=students,
+        fees={"s1982": Decimal("1940.00"), "s2000": Decimal("1940.00")},
+    )
+
+    by_id = {r["student_id"]: r for r in rows}
+    assert by_id["s1982"]["outstanding"] == Decimal("2580.00")
+    assert by_id["s2000"]["outstanding"] == Decimal("0")
+    assert len(rows) == 2

@@ -295,6 +295,7 @@ export default function StatementsPage() {
           total_payments: 0,
           closing_balance: 0,
           current_amount_due: 0,
+          brought_forward: 0,
           due_date: '',
           generated_at: '',
           grade_monthly_fee: 0,
@@ -381,13 +382,26 @@ export default function StatementsPage() {
     return rows;
   };
 
-  // Amount owed at the statement date — the same stored balance as
-  // Outstanding Year and as the PDF's Balance carried forward. It used to be
-  // `month's fee + charges - payments`, which substituted the grade fee for
-  // months billed by January's annual invoice and then subtracted a payment
-  // the balance already reflected: (1982)'s September statement showed R -60
-  // next to two lines reading R 8,400.
-  const monthlyAmountDue = (s: Statement) => s.current_amount_due;
+  // Amount actually overdue, which is NOT the whole running balance. Two
+  // different questions get two different lines:
+  //
+  //   Outstanding Year  = current_amount_due  — everything still unpaid
+  //   Amount Due        = balance once instalments that have not fallen due
+  //                       yet are set aside, and the prior year's carry-in
+  //                       is removed (it was not charged this year)
+  //
+  //   current_amount_due - grade_monthly_fee * (12 - month) - brought_forward
+  //
+  // For (1982) Mazibuko at October 2026: 8,400 - (1,940 x 2) - 1,940 = 2,580.
+  //
+  // It used to be `month's fee + charges - payments`, which substituted the
+  // grade fee for months billed by January's annual invoice and then
+  // subtracted a payment the balance already reflected: the same statement
+  // showed R -60 next to two lines reading R 8,400.
+  const monthlyAmountDue = (s: Statement) => {
+    const notYetDue = (s.grade_monthly_fee ?? 0) * Math.max(0, 12 - (s.month ?? 0));
+    return Math.max(0, (s.current_amount_due ?? 0) - notYetDue - (s.brought_forward ?? 0));
+  };
 
   // Amount Due This Month always shows, including R 0 — omitting the line
   // would read as a missing figure rather than as "nothing owed this month".
@@ -646,7 +660,7 @@ export default function StatementsPage() {
               <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({schoolReportMonthLabel} {year})</h2>
               <p className="text-sm text-slate-500">
                 {schoolBalanceMode === 'month'
-                  ? "Every approved student's outstanding for this month only."
+                  ? "What has fallen due this year and is still unpaid, excluding last year's carry-in — the same figure as each student's Amount Due for Month line."
                   : "Every approved student's outstanding balance up to the selected month."}
                 {schoolReport && schoolReport.total_students > 0 && (
                   <span> Total outstanding: <span className="font-medium text-red-600">R {Number(schoolReport.total_outstanding).toLocaleString()}</span></span>
@@ -661,7 +675,7 @@ export default function StatementsPage() {
               </select>
               <select value={schoolBalanceMode} onChange={(e) => setSchoolBalanceMode(e.target.value as 'carry' | 'month')} className="input w-48">
                 <option value="carry">With carry-over</option>
-                <option value="month">This month only</option>
+                <option value="month">Amount due for month</option>
               </select>
               <button onClick={exportCsv} className="btn btn-secondary" disabled={!schoolReport || schoolReport.students.length === 0}>
                 <Download className="h-4 w-4" /> Export CSV

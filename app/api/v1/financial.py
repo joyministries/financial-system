@@ -27,7 +27,7 @@ from app.schemas.financial import (
     StatementResponse,
     StudentSummaryResponse,
 )
-from app.services.monthly_fee import monthly_fee_for_student
+from app.services.monthly_fee import load_monthly_fee_lookup, monthly_fee_for_student
 from app.services.pdf import (
     build_grade_statements_pdf,
     build_grade_summary_pdf,
@@ -39,6 +39,7 @@ from app.services.receipt import ReceiptService
 from app.services.report import ReportService
 from app.services.statement import (
     StatementService,
+    amount_due_for_month,
     bulk_generate_statements,
     fee_installment_for_statement,
     total_paid_from_ledger,
@@ -143,27 +144,21 @@ def _due_date_for_statement(academic_year: int, month: int) -> datetime:
     return datetime(academic_year, month + 1, 1, tzinfo=UTC)
 
 
-def _monthly_amount_due(statement: Statement) -> Decimal:
-    """Amount owed as at the statement period — the ``Amount Due for Month`` line.
+def _monthly_amount_due(statement: Statement, monthly_fee: Decimal) -> Decimal:
+    """Amount actually overdue — the ``Amount Due for Month`` line.
 
-    This drives the *summary line only*. It never reaches the ledger: the
-    annual invoice already sits in the statement balance, so printing an
-    instalment as a debit too would double-bill the rest of the year.
-
-    It used to be computed as *this month's instalment minus this month's
-    payments*. Months billed through January's annual invoice carry no
-    instalment of their own, so the grade tuition fee was substituted and the
-    month's receipt subtracted from it — a September statement for (1982)
-    Hlelolwenkosi Mazibuko reported ``1,940 - 2,000 = -60``, while the two
-    lines beside it read 8,400. The receipt had already reduced the running
-    balance; subtracting it a second time invented the negative.
-
-    ``current_amount_due`` is set to ``closing_balance`` when the statement is
-    generated, so it is the balance owed at the statement date — the same
-    figure the school quotes as *Amount Due for 2026* — and it now agrees with
-    ``Balance carried forward`` and ``Outstanding for Year`` by construction.
+    Thin adapter over :func:`app.services.statement.amount_due_for_month`,
+    which is the single source of truth for the formula (also used by the
+    whole-school statement summary). It pulls the four inputs off the row —
+    closing balance, month, grade fee, brought-forward — so the caller only
+    has to resolve ``monthly_fee``.
     """
-    return Decimal(str(statement.current_amount_due or 0))
+    return amount_due_for_month(
+        statement.current_amount_due,
+        statement.month,
+        monthly_fee,
+        getattr(statement, "brought_forward", D0),
+    )
 
 
 def _approved_students_query(grade_id: str | None = None, include_inactive: bool = False):
@@ -386,6 +381,11 @@ async def _build_student_statement_sections(
     for payment in payment_rows:
         payments_by_student_month[(payment.student_id, payment.payment_date.month)].append(payment)
 
+    # Grade tuition instalments, resolved in two round-trips for the whole
+    # cohort: "Amount Due for Month" needs them to set aside the instalments
+    # that have not fallen due yet.
+    fee_by_student = await load_monthly_fee_lookup(db, students, academic_year)
+
     student_sections = []
     for s in students:
         statements = statements_by_student.get(s.id, [])
@@ -440,7 +440,9 @@ async def _build_student_statement_sections(
                 "statement": last,
                 "ledger": ledger,
                 "period_label": period_label,
-                "amount_due": _monthly_amount_due(last),
+                "amount_due": _monthly_amount_due(
+                    last, fee_by_student.get(s.id, D0)
+                ),
                 "amount_year_due": last.current_amount_due,
                 "amount_paid": total_paid,
             }
@@ -853,9 +855,11 @@ async def download_statement(
                 bit for bit in (guardian.physical_address, guardian.po_box) if bit
             )
 
-    # No grade fee is needed for the summary lines: both quote the statement's
-    # own stored balance. combined_ledger() still gets D0 so the debit column
-    # shows nothing but what the school actually invoiced.
+    # The ledger still gets D0 so the debit column shows nothing but what the
+    # school actually invoiced. The grade fee IS needed for the summary: it
+    # sets aside the instalments that have not fallen due yet so "Amount Due
+    # for Month" reports what is overdue rather than the whole balance.
+    grade_monthly_fee = await monthly_fee_for_student(db, student_id, academic_year)
     ledger = await service.combined_ledger(statements, D0)
     first = statements[0]
     last = statements[-1]
@@ -884,7 +888,7 @@ async def download_statement(
         account_name=account_name,
         account_address=account_address,
         period_label=period_label,
-        amount_due=_monthly_amount_due(last),
+        amount_due=_monthly_amount_due(last, grade_monthly_fee),
         amount_year_due=last.current_amount_due,
         amount_paid=total_paid,
     )
@@ -969,10 +973,11 @@ async def outstanding_matrix_report(
     for the year.
 
     ``month_only=False`` returns the running balance at each month's end
-    ("with carry-over"); ``month_only=True`` returns only that month's own
-    invoices and charges minus that month's verified payments ("this month
-    only"). Each column uses the same query the on-screen report uses, so the
-    export always matches what the user sees.
+    ("with carry-over"); ``month_only=True`` returns the ARREARS as at each
+    month — what has fallen due that year and is still unpaid, excluding the
+    prior-year carry-in, i.e. the same figure as that student's ``Amount Due
+    for Month`` statement line. Each column uses the same query the on-screen
+    report uses, so the export always matches what the user sees.
     """
     service = ReportService(db)
     return await service.outstanding_matrix(

@@ -120,7 +120,7 @@ export default function ReportsPage() {
   ];
   const outstandingLabel =
     balanceMode === 'month'
-      ? `Outstanding this month only — ${MONTH_FULL[month - 1]} ${year}`
+      ? `Amount due for month — ${MONTH_FULL[month - 1]} ${year}`
       : `Outstanding with carry-over — ${MONTH_FULL[month - 1]} ${year}`;
 
   const exportStudentExcel = async (gradeId?: string) => {
@@ -247,7 +247,7 @@ export default function ReportsPage() {
       </select>
       <select value={balanceMode} onChange={(e) => setBalanceMode(e.target.value as 'carry' | 'month')} className="input w-52">
         <option value="carry">Outstanding with carry-over</option>
-        <option value="month">Outstanding this month only</option>
+        <option value="month">Amount due for month</option>
       </select>
     </div>
   );

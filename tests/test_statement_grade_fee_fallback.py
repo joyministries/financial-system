@@ -10,15 +10,16 @@ row for such months, **display-only**: the annual invoice already sits in the
 statement balance, so adding the instalment again would double-bill the rest of
 the year (Grade 8 would jump from R8,940 outstanding to R41,720).
 
-**The grade fee no longer feeds ``Amount Due for Month``.** That line used to
-be ``instalment - month's payments``, which substituted the grade fee for empty
-months and produced a negative figure (``1,940 - 2,000 = -60``) on (1982)
-Hlelolwenkosi Mazibuko's September statement while its neighbours read 8,400.
-It now quotes ``Statement.current_amount_due`` — the balance owed at the
-statement date — so all three summary lines agree by construction. See
-``test_statement_amount_due.py``. ``app/services/monthly_fee.py`` and the
-``grade_monthly_fee`` response field remain for reporting and the ledger row.
-These tests pin both halves of the helper so neither behaviour drifts.
+**The grade fee never enters the balance — but it does reach ``Amount Due for
+Month``, as a subtrahend.** That line quotes the *arrears*: the closing balance
+less the instalments that have not fallen due yet, less the prior year's
+carry-in (see ``test_statement_amount_due.py``). Adding the fee to the balance
+would double-bill the rest of the year (Grade 8 would jump from R8,940
+outstanding to R41,720).
+
+``app/services/monthly_fee.py`` and the ``grade_monthly_fee`` response field
+serve both the ledger row and that calculation. These tests pin each half so
+neither behaviour drifts.
 """
 
 from decimal import Decimal
@@ -47,6 +48,7 @@ def _statement(**overrides):
     s.total_payments = D("0.00")
     s.closing_balance = D("8940.00")
     s.current_amount_due = D("8940.00")
+    s.brought_forward = D("0.00")
     for key, value in overrides.items():
         setattr(s, key, value)
     return s
@@ -118,14 +120,28 @@ class TestLedgerFeeRow:
 
 
 class TestMonthlyAmountDue:
-    """``Amount Due for Month`` is the statement's own stored balance.
+    """``Amount Due for Month`` is the *arrears*, not the whole balance.
 
-    The grade fee no longer reaches this line — see ``test_statement_amount_due.py``
-    for why it produced a negative figure on (1982)'s September statement.
+    Closing balance less the instalments that have not fallen due yet, less
+    the prior year's carry-in. The grade fee is that subtrahend's unit — it
+    never moves the balance (see ``TestLedgerFeeRow`` above).
     """
 
-    def test_reports_the_stored_balance(self):
-        assert _monthly_amount_due(_statement()) == D("8940.00")
+    #: Grade 8 monthly tuition — three of the twelve instalments are still
+    #: ahead of the September statement, so 8,940 - 3 x 2,980 = 0.
+    GRADE_8_FEE = D("2980.00")
+
+    def test_months_not_yet_due_are_set_aside(self):
+        # Three instalments (8,940) have not fallen due; the matching balance
+        # is therefore fully paid up and nothing is overdue.
+        assert _monthly_amount_due(_statement(), self.GRADE_8_FEE) == D("0")
+
+    def test_reports_only_the_balance_in_excess_of_the_future_instalments(self):
+        stmt = _statement(
+            closing_balance=D("12000.00"), current_amount_due=D("12000.00"),
+        )
+        # 12,000 - 8,940 still ahead = 3,060 genuinely overdue.
+        assert _monthly_amount_due(stmt, self.GRADE_8_FEE) == D("3060.00")
 
     def test_settled_month_reports_zero(self):
         stmt = _statement(
@@ -133,9 +149,12 @@ class TestMonthlyAmountDue:
             closing_balance=D("0"),
             current_amount_due=D("0"),
         )
-        assert _monthly_amount_due(stmt) == D("0")
+        assert _monthly_amount_due(stmt, self.GRADE_8_FEE) == D("0")
 
-    def test_invoice_derived_month_reports_the_balance(self):
+    def test_invoice_derived_month_reports_what_has_fallen_due(self):
+        # January bills the whole year up front (37,360) and 1,000 is paid.
+        # 36,360 is still unpaid, but only January's instalment is in arrears;
+        # the other 11 (11 x 2,980 = 32,780) have not fallen due.
         stmt = _statement(
             month=1,
             total_installments=D("37360.00"),
@@ -143,17 +162,28 @@ class TestMonthlyAmountDue:
             closing_balance=D("36360.00"),
             current_amount_due=D("36360.00"),
         )
-        assert _monthly_amount_due(stmt) == D("36360.00")
+        assert _monthly_amount_due(stmt, self.GRADE_8_FEE) == D("3580.00")
 
-    def test_takes_no_grade_fee_argument(self):
-        # The grade fee was this line's fallback; passing one is now a TypeError.
+    def test_takes_a_grade_fee_argument(self):
+        # The fee is required: it is the unit of "not yet due".
+        assert _monthly_amount_due(_statement(), self.GRADE_8_FEE) == D("0")
         with pytest.raises(TypeError):
-            _monthly_amount_due(_statement(), D("2980.00"))
+            _monthly_amount_due(_statement())
 
-    def test_additional_charges_are_already_inside_the_stored_balance(self):
+    def test_additional_charges_are_overdue_from_the_month_they_landed(self):
         stmt = _statement(
             total_additional_charges=D("500.00"),
             closing_balance=D("9440.00"),
             current_amount_due=D("9440.00"),
         )
-        assert _monthly_amount_due(stmt) == D("9440.00")
+        # The future instalments still come to 8,940, so the entire excess —
+        # the R500 once-off — is what is overdue.
+        assert _monthly_amount_due(stmt, self.GRADE_8_FEE) == D("500.00")
+
+    def test_the_carried_forward_balance_is_not_this_year_arrears(self):
+        stmt = _statement(
+            closing_balance=D("10940.00"), current_amount_due=D("10940.00"),
+            brought_forward=D("2000.00"),
+        )
+        # 10,940 - 8,940 ahead - 2,000 carried in = 0 overdue.
+        assert _monthly_amount_due(stmt, self.GRADE_8_FEE) == D("0")

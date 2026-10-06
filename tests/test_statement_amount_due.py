@@ -1,25 +1,32 @@
-"""``Amount Due for Month`` must quote the amount actually owed.
+"""``Amount Due for Month`` must quote what is actually overdue.
 
-The line used to be computed as *this month's instalment minus this month's
-payments*. For a month billed by January's annual invoice the instalment is
-``0`` and the grade tuition fee was substituted, so a September statement for
-(1982) Hlelolwenkosi Mazibuko reported::
+Two summary lines answer two different questions, and printing the same
+figure twice was the bug::
 
-    grade fee 1,940 - payments 2,000 = -60
-
-A negative "amount due" is nonsense to a parent, and it disagreed with the
-two lines next to it. The school's own statement quotes a single figure —
-``Amount Due for 2026`` — which is the running balance at the statement date.
-All three summary lines now quote that same stored balance:
-
-    Amount Due for Month      8,400
-    Balance carried forward   8,400
+    Amount Due for Month      8,400     <- asked "what is overdue?"
+    Balance carried forward   8,400     <- asked "what is still unpaid?"
     Outstanding for Year      8,400
 
-``Statement.current_amount_due`` is set to ``closing_balance`` at generation
-time, so it is the balance owed as at the statement period — exactly what the
-school reports. The helper therefore takes no grade fee any more: what falls
-due is whatever the statement says is owed.
+``Amount Due for Month`` sets aside the instalments that have not fallen due
+yet, and removes the prior year's carry-in — that balance was not charged this
+year, so it is not this year's arrears::
+
+    amount_due = closing - (fee x months not yet due) - brought_forward
+
+For (1982) Hlelolwenkosi Mazibuko, October 2026 — billed 25,320, paid 16,920,
+grade fee 1,940, ten months in, carried forward 1,940::
+
+    8,400 - (1,940 x 2) - 1,940 = 2,580
+
+``Outstanding for Year`` still reports the whole balance (8,400) — that figure
+is untouched.
+
+History: the line used to be *the month's instalment minus the month's
+payments*. Months billed through January's annual invoice carry no instalment
+of their own, so the grade fee was substituted and the month's receipt
+subtracted from it, giving ``1,940 - 2,000 = -60`` on this very student while
+its neighbours read 8,400. The receipt is never touched here; it has already
+reduced the running balance.
 """
 
 from decimal import Decimal
@@ -28,9 +35,13 @@ from app.api.v1.financial import _monthly_amount_due
 
 D = Decimal
 
+#: Grade 2 monthly tuition, and the carry-in billed into 2026 for (1982).
+GRADE_2_FEE = D("1940.00")
+BROUGHT_FORWARD = D("1940.00")
+
 
 def _statement(**overrides):
-    """A September 2026 statement in the shape generate_from_breakdown writes."""
+    """October 2026 statement in the shape generate_from_breakdown writes."""
 
     class S:
         pass
@@ -39,65 +50,97 @@ def _statement(**overrides):
     s.id = "11111111-1111-4111-8111-111111111111"
     s.student_id = "22222222-2222-4222-8222-222222222222"
     s.academic_year = 2026
-    s.month = 9
-    s.opening_balance = D("10400.00")
+    s.month = 10
+    s.opening_balance = D("8400.00")
     s.total_fees = D("25320.00")
     s.total_installments = D("0")
     s.total_additional_charges = D("0")
-    s.total_payments = D("2000.00")
+    s.total_payments = D("16920.00")
     s.closing_balance = D("8400.00")
     s.current_amount_due = D("8400.00")
+    s.brought_forward = BROUGHT_FORWARD
     for key, value in overrides.items():
         setattr(s, key, value)
     return s
 
 
 class TestAmountDueForMonth:
-    def test_reports_the_amount_owed_instead_of_a_negative_split(self):
-        # (1982) Mazibuko: no September invoice, R2,000 paid against a
-        # R10,400 opening. The old arithmetic gave 1,940 - 2,000 = -60.
+    def test_reports_2580_for_1982_in_october(self):
+        # The school's own figures: billed 25,320, paid 16,920, fee 1,940,
+        # ten months due, brought forward 1,940.
         stmt = _statement()
-        assert _monthly_amount_due(stmt) == D("8400.00")
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) == D("2580.00")
 
-    def test_agrees_with_balance_carried_forward_and_outstanding(self):
+    def test_is_not_the_whole_running_balance(self):
+        # "Amount Due for Month" and "Outstanding for Year" must differ:
+        # 8,400 still unpaid, but only 2,580 of it is actually overdue.
         stmt = _statement()
-        assert (
-            _monthly_amount_due(stmt)
-            == stmt.current_amount_due
-            == stmt.closing_balance
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) != stmt.current_amount_due
+        assert stmt.current_amount_due == D("8400.00")
+
+    def test_sets_aside_the_instalments_not_yet_due(self):
+        # November and December (2 x 1,940 = 3,880) have not fallen due yet.
+        # Without them the figure would be 8,400 - 1,940 = 6,460.
+        stmt = _statement()
+        with_only_bf_removed = stmt.current_amount_due - BROUGHT_FORWARD
+        assert with_only_bf_removed == D("6460.00")
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) == D("2580.00")
+
+    def test_excludes_the_prior_year_carry_in(self):
+        # The R1,940 carried in from 2025 sits in the balance but was not
+        # charged this year, so it is not this year's arrears.
+        with_bf = _monthly_amount_due(_statement(), GRADE_2_FEE)
+        without_bf = _monthly_amount_due(
+            _statement(brought_forward=D("0")), GRADE_2_FEE
         )
+        assert without_bf == D("4520.00")
+        assert without_bf - with_bf == BROUGHT_FORWARD
 
-    def test_ignores_the_month_payment_that_already_reduced_the_balance(self):
-        # The R2,000 September payment is already inside current_amount_due;
-        # subtracting it a second time is what produced the -60.
-        stmt = _statement(total_payments=D("2000.00"))
-        assert _monthly_amount_due(stmt) != D("-60.00")
-
-    def test_is_not_the_stored_installments_minus_payments(self):
-        # Guards the old formula: instalments 0 + grade fee 1,940 - 2,000.
-        stmt = _statement()
-        assert _monthly_amount_due(stmt) != D("-60.00")
-
-    def test_uses_the_stored_balance_whatever_the_month_shape(self):
-        # Invoiced month (total_installments 0, fees on the annual invoice).
-        invoiced = _statement(current_amount_due=D("5960.00"))
-        assert _monthly_amount_due(invoiced) == D("5960.00")
-
-        # A month that does carry its own instalment reports the same way.
-        instalment = _statement(
-            total_installments=D("2980.00"), current_amount_due=D("3200.00"),
-            closing_balance=D("3200.00"),
+    def test_never_reports_a_negative(self):
+        # A family that has paid ahead must not be shown a negative amount.
+        stmt = _statement(
+            current_amount_due=D("1000.00"),
+            closing_balance=D("1000.00"),
+            total_payments=D("24320.00"),
         )
-        assert _monthly_amount_due(instalment) == D("3200.00")
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) == D("0")
 
     def test_settled_month_reports_zero(self):
         stmt = _statement(
-            opening_balance=D("0"), total_payments=D("0"),
+            opening_balance=D("0"), total_payments=D("25320.00"),
             closing_balance=D("0"), current_amount_due=D("0"),
+            brought_forward=D("0"),
         )
-        assert _monthly_amount_due(stmt) == D("0")
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) == D("0")
 
-    def test_never_returns_less_than_the_zero_balance(self):
-        # A statement whose stored balance is null must not report a negative.
-        stmt = _statement(current_amount_due=None)
-        assert _monthly_amount_due(stmt) == D("0")
+    def test_is_not_the_month_installment_minus_the_month_payments(self):
+        # Guards the old formula that produced -60 on this student's
+        # September statement: 1,940 - 2,000.
+        stmt = _statement(month=9, total_payments=D("2000.00"))
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) != D("-60.00")
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) >= D("0")
+
+    def test_a_statement_without_a_carry_in_reports_the_fee_overdue_only(self):
+        # No prior-year balance: overdue = fees billed this year that are due,
+        # minus what has been paid.
+        stmt = _statement(
+            brought_forward=D("0"), current_amount_due=D("19400.00"),
+            closing_balance=D("19400.00"), total_payments=D("5920.00"),
+            total_fees=D("25320.00"),
+        )
+        # 19,400 - 3,880 (Nov, Dec) = 15,520 overdue this year.
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) == D("15520.00")
+
+    def test_a_statement_missing_the_column_falls_back_to_zero(self):
+        # Stubs (and rows written before the column existed) without the
+        # attribute must not raise.
+        stmt = _statement()
+        del stmt.brought_forward
+        assert _monthly_amount_due(stmt, GRADE_2_FEE) == D("4520.00")
+
+    def test_a_late_in_the_year_month_reports_more_than_an_early_one(self):
+        # October's instalment has fallen due where September's had not, so
+        # the arrears grow by one fee (1,940) even though nothing moved.
+        sept = _monthly_amount_due(_statement(month=9), GRADE_2_FEE)
+        oct_ = _monthly_amount_due(_statement(month=10), GRADE_2_FEE)
+        assert oct_ - sept == GRADE_2_FEE

@@ -75,12 +75,18 @@ class StatementService:
         month: int,
         breakdown: list[dict],
         charges: list | None = None,
+        brought_forward: Decimal | None = None,
     ) -> Statement:
         """Create a statement row from an already-computed yearly breakdown.
 
         Shared by the single-student path and the bulk generator so bulk runs
         compute the expensive ledger breakdown once per student instead of
         once per month. Does NOT check for an existing statement.
+
+        ``brought_forward`` is the prior-year carry-in for the whole academic
+        year (same value on every month). Callers that already prefetch it —
+        the bulk generator — pass it in; otherwise it is read from the year's
+        invoices.
         """
         month_row = next((r for r in breakdown if r["month"] == month), None)
         prev_row = next((r for r in breakdown if r["month"] == month - 1), None)
@@ -98,6 +104,9 @@ class StatementService:
 
         total_fees = sum((r["required"] for r in breakdown), D0)
 
+        if brought_forward is None:
+            brought_forward = await self.brought_forward_for(student_id, academic_year)
+
         statement = Statement(
             student_id=student_id,
             academic_year=academic_year,
@@ -109,11 +118,43 @@ class StatementService:
             total_payments=total_payments,
             closing_balance=closing,
             current_amount_due=closing,
+            brought_forward=to_decimal(brought_forward),
             due_date=self._due_date_for(academic_year, month),
         )
         self.db.add(statement)
         await self.db.flush()
         return statement
+
+    async def brought_forward_for(self, student_id: str, academic_year: int) -> Decimal:
+        """Prior-year carry-in billed into this academic year's invoices.
+
+        Void invoices contribute nothing: a cancelled invoice carries no
+        balance into the year.
+        """
+        stmt = select(func.coalesce(func.sum(Invoice.brought_forward), D0)).where(
+            Invoice.student_id == student_id,
+            Invoice.academic_year == academic_year,
+            Invoice.status != "void",
+        )
+        return to_decimal((await self.db.execute(stmt)).scalar())
+
+    async def bulk_brought_forward(
+        self, academic_year: int, student_ids: list[str]
+    ) -> dict[str, Decimal]:
+        """``student_id`` -> carry-in for the whole cohort in one query."""
+        if not student_ids:
+            return {}
+        stmt = (
+            select(Invoice.student_id, func.coalesce(func.sum(Invoice.brought_forward), D0))
+            .where(
+                Invoice.academic_year == academic_year,
+                Invoice.status != "void",
+                Invoice.student_id.in_(student_ids),
+            )
+            .group_by(Invoice.student_id)
+        )
+        rows = (await self.db.execute(stmt)).all()
+        return {sid: to_decimal(total) for sid, total in rows}
 
     async def list_existing(
         self, academic_year: int, up_to_month: int, student_ids: list[str]
@@ -460,6 +501,58 @@ class StatementService:
         return rows
 
 
+def amount_due_for_month(
+    current_amount_due: Decimal | None,
+    month: int,
+    monthly_fee: Decimal | None,
+    brought_forward: Decimal | None = D0,
+) -> Decimal:
+    """Amount actually overdue at ``month`` — the ``Amount Due for Month`` line.
+
+    This is the single source of truth for the arrears figure. It is called
+    from three places that must never disagree:
+
+    * the statement PDF / API payload (``app/api/v1/financial.py``),
+    * the whole-school statement summary's "This month only" report
+      (``app/services/report.py``),
+    * the frontend's rendered arithmetic (``StatementsPage.tsx``).
+
+    ``Amount Due for Month`` and ``Outstanding for Year`` answer two different
+    questions and must not print the same figure:
+
+    * **Outstanding for Year** (``current_amount_due``) is the whole running
+      balance — everything still unpaid this year.
+    * **Amount Due for Month** is what is *overdue*: the balance once the
+      instalments that have not fallen due yet are set aside, and the prior
+      year's carry-in is removed because it was not charged this year::
+
+            amount_due = closing - (fee x months not yet due) - brought_forward
+
+    For (1982) Hlelolwenkosi Mazibuko at October 2026 — billed 25,320, paid
+    16,920, grade fee 1,940, ten months in, carried forward 1,940::
+
+        8,400 - (1,940 x 2) - 1,940 = 2,580
+
+    History: this line used to be *the month's instalment minus the month's
+    payments*. Months billed through January's annual invoice carry no
+    instalment of their own, so the grade fee was substituted and the month's
+    receipt subtracted from it — giving ``1,940 - 2,000 = -60``. That figure
+    double-counted a receipt the running balance had already absorbed. The
+    receipt is never touched here; only unbilled future instalments and the
+    carried-in balance are removed.
+
+    Pure function of its inputs — the caller resolves ``monthly_fee`` through
+    ``monthly_fee_for_student`` / ``load_monthly_fee_lookup`` and passes
+    ``brought_forward`` from ``Invoice.brought_forward``. Never negative: a
+    credit balance reports 0, not -X.
+    """
+    closing = Decimal(str(current_amount_due or 0))
+    fee = Decimal(str(monthly_fee or 0))
+    carried = Decimal(str(brought_forward or 0))
+    not_yet_due = fee * max(0, 12 - (month or 0))
+    return max(D0, closing - not_yet_due - carried)
+
+
 def fee_installment_for_statement(
     total_installments: Decimal, grade_monthly_fee: Decimal
 ) -> tuple[Decimal, bool]:
@@ -563,6 +656,7 @@ async def generate_student_statements(
     existing: set[tuple[str, int]],
     breakdown: list[dict],
     charges: list,
+    brought_forward: Decimal = D0,
 ) -> tuple[int, int, int, list[str]]:
     """Insert every missing statement for one student from pre-fetched data.
 
@@ -581,7 +675,8 @@ async def generate_student_statements(
                 continue
             try:
                 await service.generate_from_breakdown(
-                    student_id, academic_year, m, breakdown, charges=charges
+                    student_id, academic_year, m, breakdown,
+                    charges=charges, brought_forward=brought_forward,
                 )
                 generated += 1
             except IntegrityError:
@@ -623,6 +718,7 @@ async def bulk_generate_statements(
     existing = await service.list_existing(academic_year, month, student_ids)
     breakdowns = await service.bulk_breakdowns(academic_year, student_ids)
     charges = await service.bulk_charges(academic_year, student_ids)
+    brought_forwards = await service.bulk_brought_forward(academic_year, student_ids)
 
     sem = asyncio.Semaphore(GENERATE_ALL_CONCURRENCY)
 
@@ -635,6 +731,7 @@ async def bulk_generate_statements(
                 existing,
                 breakdowns.get(sid, []),
                 charges.get(sid, []),
+                brought_forward=brought_forwards.get(sid, D0),
             )
 
     results = await asyncio.gather(*(_run(sid) for sid in student_ids))

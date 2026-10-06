@@ -241,6 +241,12 @@ export interface Statement {
   total_payments: number;
   closing_balance: number;
   current_amount_due: number;
+  /**
+   * Prior-year carry-in — same value on every month of the year. It sits in
+   * the balance but was not charged this year, so "Amount Due" subtracts it
+   * along with the instalments that have not fallen due yet.
+   */
+  brought_forward: number;
   due_date: string;
   generated_at: string;
   /**

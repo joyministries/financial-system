@@ -2,14 +2,17 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from io import BytesIO
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.financial import Statement
 from app.models.grade import Grade, Student
-from app.models.invoice import Invoice
 from app.models.payment import Payment
-from app.models.schedule import AdditionalCharge
 from app.services.ledger import LedgerService
+from app.services.monthly_fee import load_monthly_fee_lookup
+from app.services.statement import amount_due_for_month
+
+D0 = Decimal("0")
 
 
 class ReportService:
@@ -206,9 +209,10 @@ class ReportService:
         - ``month_only`` False reuses :meth:`LedgerService.students_outstanding`
           capped at each month, i.e. the running balance at that month's end
           (the "Outstanding with carry-over" view).
-        - ``month_only`` True reuses :meth:`_monthly_statement_rows`, i.e. that
-          month's own invoices and charges minus that month's verified
-          payments (the "Outstanding this month only" view).
+        - ``month_only`` True reuses :meth:`_monthly_statement_rows`, i.e. the
+          ARREARS as at that month — what has fallen due this year and is still
+          unpaid, less the prior-year carry-in (the "This month only" view,
+          matching each student's ``Amount Due for Month`` line).
 
         Students are unioned across all months in first-seen order, so someone
         owing only in January still gets a row for the whole year; months in
@@ -367,8 +371,18 @@ class ReportService:
         month_only: bool = False,
     ) -> dict:
         """School-wide statement summary — every approved student with their
-        outstanding balance from the Excel-aligned ledger, scoped to a selected
-        month when supplied."""
+        outstanding balance for a selected month, in one of two modes:
+
+        * **With carry-over** (default) — the Excel-aligned running balance:
+          everything invoiced up to ``month`` less everything paid up to
+          ``month`` (``LedgerService.students_outstanding``).
+        * **This month only** (``month_only``) — the ARREARS as at ``month``:
+          what has fallen due this year and is still unpaid, excluding the
+          prior year's carry-in. Computed from each student's generated
+          ``Statement`` with the same formula as their ``Amount Due for
+          Month`` line, so the report agrees with the document the parent
+          receives to the cent.
+        """
         if month_only and month is not None:
             rows = await self._monthly_statement_rows(academic_year, month, grade_id)
         else:
@@ -408,89 +422,92 @@ class ReportService:
     async def _monthly_statement_rows(
         self, academic_year: int, month: int, grade_id: str | None = None
     ) -> list[dict]:
-        """Approved students with only this month's billed/paid balance."""
-        start, end = self._month_range(academic_year, month)
+        """Approved students with their ARREARS as at ``month``.
 
-        inv_stmt = (
-            select(
-                Student.id,
-                Student.student_number,
-                Student.first_name,
-                Student.last_name,
-                Grade.name.label("grade_name"),
-                func.coalesce(func.sum(Invoice.subtotal), 0).label("required"),
-            )
+        Backs the "This month only" mode of the school statement summary and
+        the matching Excel column.
+
+        It used to read ``invoices(month == m) + charges(month == m) less the
+        receipts recorded in calendar month m``. Students are billed in
+        January — one annual invoice, or a split January pair — so months 2-12
+        carry no invoice at all and the expression collapsed to ``0 less that
+        month's payments``: in October 194 of 198 students reported R 0.00 and
+        the whole-school total was R 0, while February-September printed
+        negatives such as -1,940.
+
+        It now reports what the statement itself reports — what has actually
+        fallen due this year and is still unpaid, excluding the prior year's
+        carry-in::
+
+            arrears = closing_balance - monthly_fee x (12 - month) - brought_forward
+
+        Sourced from the generated ``Statement`` rows so the whole-school
+        figure agrees with the document the parent receives, to the cent. The
+        latest statement at or before ``month`` is used and *its* month decides
+        which instalments are still ahead, so report and PDF cannot drift. A
+        student with no statement yet reports 0.
+        """
+        stu_q = (
+            select(Student, Grade.name.label("grade_name"))
             .join(Grade, Grade.id == Student.grade_id)
-            .outerjoin(
-                Invoice,
-                and_(
-                    Invoice.student_id == Student.id,
-                    Invoice.status != "void",
-                    Invoice.academic_year == academic_year,
-                    Invoice.month == month,
-                ),
-            )
             .where(Student.registration_status == "approved")
+            .order_by(Student.last_name, Student.first_name)
         )
         if grade_id:
-            inv_stmt = inv_stmt.where(Student.grade_id == grade_id)
-        inv_stmt = inv_stmt.group_by(
-            Student.id, Student.student_number, Student.first_name,
-            Student.last_name, Grade.name,
-        )
-        inv_rows = (await self.db.execute(inv_stmt)).all()
+            stu_q = stu_q.where(Student.grade_id == grade_id)
+        student_rows = list((await self.db.execute(stu_q)).all())
+        students = [r[0] for r in student_rows]
 
-        pay_stmt = (
-            select(Student.id, func.coalesce(func.sum(Payment.amount), 0))
-            .join(
-                Payment,
-                and_(
-                    Payment.student_id == Student.id,
-                    Payment.status == "verified",
-                    Payment.payment_date >= start,
-                    Payment.payment_date < end,
-                ),
+        # Latest statement at or before the requested month. Rows arrive
+        # month-ascending, so the last one seen per student wins.
+        stmt_q = (
+            select(
+                Statement.student_id,
+                Statement.month,
+                Statement.current_amount_due,
+                Statement.total_payments,
+                Statement.brought_forward,
             )
-            .where(Student.registration_status == "approved")
-            .group_by(Student.id)
-        )
-        if grade_id:
-            pay_stmt = pay_stmt.where(Student.grade_id == grade_id)
-        paid_by_student = dict((await self.db.execute(pay_stmt)).all())
-
-        charge_stmt = (
-            select(Student.id, func.coalesce(func.sum(AdditionalCharge.amount), 0))
-            .join(
-                AdditionalCharge,
-                and_(
-                    AdditionalCharge.student_id == Student.id,
-                    AdditionalCharge.academic_year == academic_year,
-                    AdditionalCharge.month == month,
-                ),
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month <= month,
             )
-            .where(Student.registration_status == "approved")
-            .group_by(Student.id)
+            .order_by(Statement.month)
         )
-        if grade_id:
-            charge_stmt = charge_stmt.where(Student.grade_id == grade_id)
-        charges_by_student = dict((await self.db.execute(charge_stmt)).all())
+        latest: dict[str, object] = {}
+        for row in (await self.db.execute(stmt_q)).all():
+            latest[row.student_id] = row
 
-        return [
-            {
-                "student_id": r.id,
-                "student_number": r.student_number,
-                "name": f"{r.first_name} {r.last_name}",
-                "grade": r.grade_name,
-                "required": Decimal(str(r.required)) + charges_by_student.get(r.id, Decimal("0")),
-                "paid": paid_by_student.get(r.id, Decimal("0")),
-                "outstanding": (
-                    Decimal(str(r.required))
-                    + charges_by_student.get(r.id, Decimal("0"))
-                    - paid_by_student.get(r.id, Decimal("0"))
-                ),
-            }
-            for r in inv_rows
-        ]
+        fee_by_student = await load_monthly_fee_lookup(self.db, students, academic_year)
+
+        rows: list[dict] = []
+        for student, grade_name in student_rows:
+            entry = latest.get(student.id)
+            if entry is None:
+                paid = D0
+                outstanding = D0
+            else:
+                paid = entry.total_payments or D0
+                # Same formula the statement PDF prints, so the whole-school
+                # figure and the document the parent receives cannot drift.
+                outstanding = amount_due_for_month(
+                    entry.current_amount_due,
+                    entry.month,
+                    fee_by_student.get(student.id, D0),
+                    entry.brought_forward,
+                )
+            rows.append({
+                "student_id": student.id,
+                "student_number": student.student_number,
+                "name": f"{student.first_name} {student.last_name}",
+                "grade": grade_name or "",
+                # required/paid keep the row shape shared with
+                # LedgerService.students_outstanding: outstanding = required - paid.
+                "required": outstanding + paid,
+                "paid": paid,
+                "outstanding": outstanding,
+            })
+        return rows
 
     async def students_xlsx(
         self,
