@@ -174,6 +174,11 @@ async def hard_delete_payment(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Payment not found")
 
+    # Held before the delete: the object's attributes are unavailable once
+    # it has been flushed out of the session.
+    prior_student_id = payment.student_id
+    prior_payment_date = payment.payment_date
+
     allowed_methods = {"Cash", "Card"}
     if payment.payment_method not in allowed_methods and payment.status != "reversed":
         from fastapi import HTTPException
@@ -212,6 +217,9 @@ async def hard_delete_payment(
         new_values={"method": payment.payment_method, "amount": str(payment.amount)},
     )
     await db.delete(payment)
+    # Flush first so the rebuild no longer sees the receipt being removed.
+    await db.flush()
+    await service.refresh_statements(prior_student_id, prior_payment_date)
     await db.commit()
     return {"detail": "Payment permanently deleted"}
 

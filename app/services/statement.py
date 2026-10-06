@@ -340,6 +340,49 @@ class StatementService:
         await self.db.flush()
         return count
 
+    async def refresh_for_student(self, student_id: str, academic_year: int) -> int:
+        """Rebuild an existing statement set from the live ledger.
+
+        A statement is a snapshot of ``LedgerService`` at the moment it was
+        generated. A receipt recorded afterwards never reaches that snapshot,
+        so ``Amount Due for Month`` and the PDF would keep quoting the
+        pre-payment balance — a parent who pays R1,000 still appears to owe
+        the old figure until somebody hits regenerate. Payment writes call
+        this so the figures move the moment money is recorded.
+
+        Only months that already exist are rebuilt. Creating missing ones
+        would fabricate statements for future months the school never issued,
+        which would change whole-school report totals.
+
+        The expensive yearly breakdown is computed once and reused for every
+        month (``StatementService.generate`` would re-query it per month).
+
+        Returns the number of statements rebuilt, or 0 when there are none.
+        """
+        existing = await self.list_for_student(student_id, academic_year)
+        if not existing:
+            return 0
+
+        months = [s.month for s in existing]
+        for s in existing:
+            await self.db.delete(s)
+        await self.db.flush()
+
+        breakdown = await self.ledger.monthly_breakdown(student_id, academic_year)
+        charges = await self.charge_service.list_for_student(student_id, academic_year)
+        brought_forward = await self.brought_forward_for(student_id, academic_year)
+
+        for month in months:
+            await self.generate_from_breakdown(
+                student_id,
+                academic_year,
+                month,
+                breakdown,
+                charges=charges,
+                brought_forward=brought_forward,
+            )
+        return len(months)
+
     async def _verified_payments_for_month(
         self, student_id: str, academic_year: int, month: int
     ) -> list[Payment]:
@@ -528,10 +571,22 @@ def amount_due_for_month(
 
             amount_due = closing - (fee x months not yet due) - brought_forward
 
-    For (1982) Hlelolwenkosi Mazibuko at October 2026 — billed 25,320, paid
-    16,920, grade fee 1,940, ten months in, carried forward 1,940::
+    For (1982) Hlelolwenkosi Mazibuko at October 2026 — billed 25,320,
+    grade fee 1,940, ten months in, carried forward 1,940. With the school's
+    original receipts (16,920 paid, closing 8,400)::
 
         8,400 - (1,940 x 2) - 1,940 = 2,580
+
+    and after the 6 October receipt of 1,000 (closing 7,400)::
+
+        7,400 - (1,940 x 2) - 1,940 = 1,580
+
+    Both are ``closing - fee x 3``: the two instalments that have not fallen
+    due, plus the carried-in balance.
+
+    The figure tracks ``current_amount_due``, so a receipt only moves it once
+    that snapshot is rebuilt — see :meth:`StatementService.refresh_for_student`,
+    which payment writes call for exactly this reason.
 
     History: this line used to be *the month's instalment minus the month's
     payments*. Months billed through January's annual invoice carry no

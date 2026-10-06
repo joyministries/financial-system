@@ -21,6 +21,29 @@ class PaymentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def refresh_statements(
+        self, student_id: str | None, payment_date
+    ) -> None:
+        """Rebuild a student's statements after their payment set changed.
+
+        Statements are snapshots taken when they were generated; nothing
+        updates them when a receipt lands, so ``Amount Due for Month`` and the
+        statement PDF would keep showing the balance as it was before the
+        payment. Every mutation here funnels through this so a payment
+        reduces the due figure immediately rather than at the next manual
+        regenerate.
+
+        ``payment_date.year`` is the academic year the payment belongs to —
+        the same window ``LedgerService.monthly_breakdown`` books it in.
+        """
+        if not student_id or payment_date is None:
+            return
+        from app.services.statement import StatementService
+
+        await StatementService(self.db).refresh_for_student(
+            student_id, payment_date.year
+        )
+
     async def record_payment(
         self, data: PaymentCreate, user_id: str, status: str = "pending"
     ) -> Payment:
@@ -31,6 +54,7 @@ class PaymentService:
         )
         self.db.add(payment)
         await self.db.flush()
+        await self.refresh_statements(payment.student_id, payment.payment_date)
         return payment
 
     async def get(self, payment_id: str) -> Payment | None:
@@ -275,6 +299,7 @@ class PaymentService:
             payment.status = "rejected"
 
         await self.db.flush()
+        await self.refresh_statements(payment.student_id, payment.payment_date)
         return payment
 
     async def reverse(self, data: PaymentReversalCreate, user_id: str) -> PaymentReversal:
@@ -301,6 +326,7 @@ class PaymentService:
             await self.db.delete(alloc)
 
         await self.db.flush()
+        await self.refresh_statements(payment.student_id, payment.payment_date)
         return reversal
 
     async def _reverse_allocation(self, alloc: PaymentAllocation) -> None:
@@ -337,6 +363,11 @@ class PaymentService:
         if not payment:
             raise NotFoundError("Payment", payment_id)
 
+        # Captured before the field assignments below: moving the receipt to
+        # another student or date leaves the OLD statement stale too.
+        prior_student_id = payment.student_id
+        prior_payment_date = payment.payment_date
+
         # Check if payment has allocations
         stmt = select(func.count()).select_from(PaymentAllocation).where(
             PaymentAllocation.payment_id == payment_id
@@ -371,6 +402,8 @@ class PaymentService:
             payment.notes = data.notes
 
         await self.db.flush()
+        await self.refresh_statements(prior_student_id, prior_payment_date)
+        await self.refresh_statements(payment.student_id, payment.payment_date)
         return payment
 
     async def deallocate(self, allocation_id: str) -> PaymentAllocation:
@@ -479,4 +512,5 @@ class PaymentService:
             await self.db.delete(alloc)
 
         await self.db.flush()
+        await self.refresh_statements(payment.student_id, payment.payment_date)
         return reversal

@@ -163,6 +163,11 @@ async def payfast_itn(
             payment.status = "verified"
             payment.reference_number = payload.get("pf_payment_id", payment.reference_number)
             await db.flush()
+            # The statement was generated before this receipt existed; rebuild
+            # it or Amount Due for Month keeps quoting the pre-payment balance.
+            await PaymentService(db).refresh_statements(
+                payment.student_id, payment.payment_date
+            )
             receipt = await ReceiptService(db).generate(payment)
             await audit.log("payfast", payment.id, "itn_complete", payment.allocated_by,
                             new_values={"pf_payment_id": payload.get("pf_payment_id"),
