@@ -10,6 +10,7 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import DashboardPage from '@/pages/DashboardPage';
 import GradesPage from '@/pages/grades/GradesPage';
 import FeesPage from '@/pages/fees/FeesPage';
+import GradeFeesPage from '@/pages/fees/GradeFeesPage';
 import StudentsPage from '@/pages/students/StudentsPage';
 import PaymentsPage from '@/pages/payments/PaymentsPage';
 import ReceiptsPage from '@/pages/receipts/ReceiptsPage';
@@ -79,6 +80,7 @@ function AppRoutes() {
         {/* Admin/Finance-only routes */}
         <Route path="/grades" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><GradesPage /></ProtectedRoute>} />
         <Route path="/fees" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><FeesPage /></ProtectedRoute>} />
+        <Route path="/grade-fees" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><GradeFeesPage /></ProtectedRoute>} />
         <Route path="/students" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><StudentsPage /></ProtectedRoute>} />
         <Route path="/payments" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><PaymentsPage /></ProtectedRoute>} />
         <Route path="/charges" element={<ProtectedRoute roles={['admin', 'super_admin', 'finance']}><ChargesPage /></ProtectedRoute>} />
