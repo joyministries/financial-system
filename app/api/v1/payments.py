@@ -154,15 +154,14 @@ async def void_payment(
     return {"detail": "Payment voided", "reversal_id": reversal.id}
 
 
-# ── Hard-delete a payment (Cash/Card only) ─────────────────
+# ── Hard-delete a payment ──────────────────────────────────
 @router.delete("/{payment_id}/hard-delete")
 async def hard_delete_payment(
     payment_id: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin")),
 ):
-    """Permanently delete a Cash or Card payment record.
-    Only allowed on non-verified payments OR Cash/Card methods.
+    """Permanently delete a payment record.
     Does not create a reversal — the record is gone entirely."""
     from app.services.audit import AuditService
     from sqlalchemy import select
@@ -178,15 +177,6 @@ async def hard_delete_payment(
     # it has been flushed out of the session.
     prior_student_id = payment.student_id
     prior_payment_date = payment.payment_date
-
-    allowed_methods = {"Cash", "Card"}
-    if payment.payment_method not in allowed_methods and payment.status != "reversed":
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=422,
-            detail=f"Hard delete is only allowed for Cash/Card payments or already-reversed payments. "
-                   f"This payment method is '{payment.payment_method}'. Use Reverse instead."
-        )
 
     # Remove all FK-referencing rows before deleting the payment:
     # 1. Allocations (reverse their effect on outstanding balances first)
