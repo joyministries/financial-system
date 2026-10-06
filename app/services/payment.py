@@ -54,6 +54,16 @@ class PaymentService:
         )
         self.db.add(payment)
         await self.db.flush()
+
+        # A verified payment carries a receipt. Post-03677f9 the admin path
+        # creates payments as `verified` directly, so it never reaches
+        # POST /payments/verify — the only place that used to issue one.
+        # PayFast/reminder payments stay `pending` and get theirs from the ITN.
+        if status == "verified":
+            from app.services.receipt import ReceiptService
+
+            await ReceiptService(self.db).generate(payment)
+
         await self.refresh_statements(payment.student_id, payment.payment_date)
         return payment
 
