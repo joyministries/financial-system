@@ -76,6 +76,7 @@ class StatementService:
         breakdown: list[dict],
         charges: list | None = None,
         brought_forward: Decimal | None = None,
+        flush: bool = True,
     ) -> Statement:
         """Create a statement row from an already-computed yearly breakdown.
 
@@ -122,7 +123,12 @@ class StatementService:
             due_date=self._due_date_for(academic_year, month),
         )
         self.db.add(statement)
-        await self.db.flush()
+        if flush:
+            # Deferred by callers that insert a whole year in one transaction
+            # (refresh_for_student): flushing per row costs a network round
+            # trip each against the remote DB. Default stays True so callers
+            # that rely on IntegrityError surfacing here keep getting it.
+            await self.db.flush()
         return statement
 
     async def brought_forward_for(self, student_id: str, academic_year: int) -> Decimal:
@@ -289,12 +295,37 @@ class StatementService:
         """
         if not statements:
             return []
+        student_id = statements[0].student_id
+        academic_year = statements[0].academic_year
         if grade_monthly_fee is None:
-            first = statements[0]
             grade_monthly_fee = await monthly_fee_for_student(
-                self.db, first.student_id, first.academic_year
+                self.db, student_id, academic_year
             )
-        ledgers = [await self.ledger_for_statement(s, grade_monthly_fee) for s in statements]
+
+        # Two queries for the whole year instead of two per statement. The old
+        # path re-fetched the identical year-wide charge/payment result sets
+        # once per month and filtered them in Python, so a 9-month
+        # year-to-date statement cost 18 sequential round trips (~12s against
+        # the remote DB) where 2 now suffice.
+        charges_by_month: dict[int, list[AdditionalCharge]] = {}
+        for c in await self.charge_service.list_for_student(student_id, academic_year):
+            charges_by_month.setdefault(c.month, []).append(c)
+
+        payments_by_month: dict[int, list[Payment]] = {}
+        for p in await self._verified_payments_for_year(student_id, academic_year):
+            if p.payment_date is None:
+                continue
+            payments_by_month.setdefault(p.payment_date.month, []).append(p)
+
+        ledgers = [
+            await self.ledger_for_statement(
+                s,
+                grade_monthly_fee,
+                charges=charges_by_month.get(s.month, []),
+                month_payments=payments_by_month.get(s.month, []),
+            )
+            for s in statements
+        ]
         if len(ledgers) == 1:
             return ledgers[0]
 
@@ -380,8 +411,31 @@ class StatementService:
                 breakdown,
                 charges=charges,
                 brought_forward=brought_forward,
+                flush=False,
             )
+        # One round trip for the whole year instead of one per month. Nothing
+        # here reads a statement id, so the inserts can stay pending until now.
+        await self.db.flush()
         return len(months)
+
+    async def _verified_payments_for_year(
+        self, student_id: str, academic_year: int
+    ) -> list[Payment]:
+        """Every verified payment in one query, grouped by the caller.
+
+        Mirrors the month window of :meth:`_verified_payments_for_month` over
+        the whole academic year. No ORDER BY — MySQL returns the same row
+        order for the narrower month predicate, so grouping in Python keeps
+        the ledger row order byte-identical to the per-month path.
+        """
+        stmt = select(Payment).where(
+            Payment.student_id == student_id,
+            Payment.status == "verified",
+            Payment.payment_date >= datetime(academic_year, 1, 1, tzinfo=UTC),
+            Payment.payment_date < datetime(academic_year + 1, 1, 1, tzinfo=UTC),
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
     async def _verified_payments_for_month(
         self, student_id: str, academic_year: int, month: int
@@ -410,6 +464,9 @@ class StatementService:
         self,
         statement: Statement,
         grade_monthly_fee: Decimal | None = None,
+        *,
+        charges: list[AdditionalCharge] | None = None,
+        month_payments: list[Payment] | None = None,
     ) -> list[dict]:
         """Build the bank-style ledger rows for a generated statement.
 
@@ -422,13 +479,19 @@ class StatementService:
         moving the balance — see :func:`fee_installment_for_statement`. Pass
         ``None`` to resolve it; pass ``Decimal("0")`` to assert there is none.
         """
-        charges = await self.charge_service.list_for_student(
-            statement.student_id, statement.academic_year
-        )
-        charges = [c for c in charges if c.month == statement.month]
-        payments = await self._verified_payments_for_month(
-            statement.student_id, statement.academic_year, statement.month
-        )
+        # Prefetched by the caller (combined_ledger) so a multi-month statement
+        # costs two queries for the whole year instead of two per month. Both
+        # optional params arrive already scoped to this statement's month.
+        if charges is None:
+            charges = await self.charge_service.list_for_student(
+                statement.student_id, statement.academic_year
+            )
+            charges = [c for c in charges if c.month == statement.month]
+        if month_payments is None:
+            month_payments = await self._verified_payments_for_month(
+                statement.student_id, statement.academic_year, statement.month
+            )
+        payments = month_payments
 
         due_date = self._due_date_for(statement.academic_year, statement.month)
         due_str = due_date.strftime("%d %b %Y")

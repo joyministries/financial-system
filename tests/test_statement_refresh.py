@@ -45,7 +45,7 @@ def _service(existing_months):
     """A StatementService whose I/O is stubbed, counting each call."""
     db = _FakeDB()
     service = StatementService(db)
-    calls = {"breakdown": 0, "charges": 0, "brought_forward": 0, "generated": []}
+    calls = {"breakdown": 0, "charges": 0, "brought_forward": 0, "generated": [], "flushes": []}
 
     async def list_for_student(student_id, academic_year):
         return [_FakeStatement(m) for m in existing_months]
@@ -63,9 +63,11 @@ def _service(existing_months):
         return "BF"
 
     async def generate_from_breakdown(
-        student_id, academic_year, month, breakdown, charges=None, brought_forward=None
+        student_id, academic_year, month, breakdown, charges=None,
+        brought_forward=None, flush=True,
     ):
         calls["generated"].append((month, charges, brought_forward))
+        calls["flushes"].append(flush)
 
     service.list_for_student = list_for_student
     service.ledger.monthly_breakdown = monthly_breakdown
@@ -87,6 +89,9 @@ class TestRefreshForStudent:
         assert rebuilt == 10
         assert [month for month, _, _ in calls["generated"]] == list(range(1, 11))
         assert len(db.deleted) == 10
+        # Inserts must be batched: a per-row flush is a network round trip
+        # each against the remote DB, so refresh flushes once at the end.
+        assert calls["flushes"] == [False] * 10
         assert db.flushed >= 1
 
     def test_returns_zero_when_the_student_has_no_statements(self):
