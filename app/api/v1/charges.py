@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -11,6 +11,7 @@ from app.schemas.charge import (
 )
 from app.services.audit import AuditService
 from app.services.charge import ChargeService
+from app.services.statement import StatementService, refresh_statements_for
 
 router = APIRouter(prefix="/charges", tags=["Additional Charges"])
 
@@ -28,12 +29,18 @@ async def create_charge(
         "additional_charge", charge.id, "create", user.id,
         new_values={"type": charge.charge_type, "amount": str(charge.amount)},
     )
+    # A new charge moves the student's ledger — rebuild their statement in the
+    # same transaction so the office never sees a stale figure.
+    await StatementService(db).refresh_for_student(
+        charge.student_id, charge.academic_year
+    )
     return charge
 
 
 @router.post("/grade", response_model=list[AdditionalChargeResponse])
 async def create_grade_charge(
     data: GradeChargeCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role("admin", "finance")),
 ):
@@ -57,6 +64,13 @@ async def create_grade_charge(
             "excluded": list(data.exclude_student_ids),
         },
     )
+    # A grade charge can touch dozens of students; refresh them off the
+    # request path so the office is not blocked for minutes.
+    touched = sorted({c.student_id for c in charges})
+    if touched:
+        background_tasks.add_task(
+            refresh_statements_for, touched, data.academic_year
+        )
     return charges
 
 
@@ -93,8 +107,14 @@ async def delete_charge(
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = ChargeService(db)
-    if not await service.delete(charge_id):
+    charge = await service.get(charge_id)
+    if not charge:
         raise HTTPException(status_code=404, detail="Charge not found")
+    # Capture before the delete — the row is gone afterwards.
+    student_id, academic_year = charge.student_id, charge.academic_year
+    await service.delete(charge_id)
     audit = AuditService(db)
     await audit.log("additional_charge", charge_id, "delete", user.id)
+    # Removing a charge shrinks the ledger; rebuild the statement with it.
+    await StatementService(db).refresh_for_student(student_id, academic_year)
     return {"detail": "Charge deleted"}

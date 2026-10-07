@@ -207,6 +207,7 @@ class InvoiceService:
         skipped = 0
         failed = 0
         errors: list[str] = []
+        touched: list[str] = []
         sms_service = SmsService(self.db)
         failed_ids: set[str] = set()
         start = time.monotonic()
@@ -223,6 +224,7 @@ class InvoiceService:
                     continue
                 invoice = await self.generate(student.id, academic_year, month, created_by)
                 generated += 1
+                touched.append(student.id)
                 index += 1
                 if notify_parents:
                     try:
@@ -267,6 +269,9 @@ class InvoiceService:
             "failed": failed,
             "errors": errors[:20],
             "complete": index >= len(students),
+            # Students whose ledger moved this run — callers use this to
+            # rebuild their statements.
+            "student_ids": touched,
         }
 
 

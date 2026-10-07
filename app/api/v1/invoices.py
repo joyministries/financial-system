@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -18,6 +18,7 @@ from app.schemas.invoice import (
 )
 from app.services.invoice import InvoiceService
 from app.services.pdf import build_invoice_pdf, pdf_response
+from app.services.statement import StatementService, refresh_statements_for
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -29,11 +30,20 @@ async def generate_invoice(
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = InvoiceService(db)
-    return await service.generate(data.student_id, data.academic_year, data.month, user.id)
+    invoice = await service.generate(
+        data.student_id, data.academic_year, data.month, user.id
+    )
+    # The new invoice moves the student's ledger — rebuild their statement in
+    # the same transaction so the office never sees a stale figure.
+    await StatementService(db).refresh_for_student(
+        invoice.student_id, invoice.academic_year
+    )
+    return invoice
 
 
 @router.post("/generate-all")
 async def generate_all_invoices(
+    background_tasks: BackgroundTasks,
     academic_year: int = Query(..., ge=2000, le=2100),
     month: int = Query(..., ge=1, le=12),
     grade_id: str | None = Query(default=None),
@@ -76,6 +86,12 @@ async def generate_all_invoices(
             category="system",
         )
         await db.commit()
+
+    # New invoices move every affected student's ledger; rebuild their
+    # statements off the request path (this run can cover the whole school).
+    touched = result.get("student_ids") or []
+    if touched:
+        background_tasks.add_task(refresh_statements_for, touched, academic_year)
     return result
 
 
@@ -173,4 +189,10 @@ async def update_invoice_status(
     user: User = Depends(require_role("admin", "finance")),
 ):
     service = InvoiceService(db)
-    return await service.update_status(invoice_id, data.status, user.id)
+    invoice = await service.update_status(invoice_id, data.status, user.id)
+    # Voiding/reinstating an invoice changes what was billed — rebuild the
+    # statement in the same transaction.
+    await StatementService(db).refresh_for_student(
+        invoice.student_id, invoice.academic_year
+    )
+    return invoice
