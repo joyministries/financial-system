@@ -91,14 +91,28 @@ class InvoiceService:
     async def get_for_period(
         self, student_id: str, academic_year: int, month: int
     ) -> Invoice | None:
-        stmt = select(Invoice).where(
-            Invoice.student_id == student_id,
-            Invoice.academic_year == academic_year,
-            Invoice.month == month,
-            Invoice.status != "void",
+        """Return an existing non-void invoice for this period, if any.
+
+        A period may legitimately hold several invoices: the historical
+        import split a month's charges into separate rows (school fees,
+        diary fee, brought forward) and numbered the extras ``-2``/``-3``.
+        ``scalar_one_or_none()`` raised ``MultipleResultsFound`` on those
+        rows, so ``POST /invoices/generate`` returned a 500 for 182
+        students and ``generate_all`` reported them as failed rather than
+        skipped. Both callers only test existence, so the earliest row wins.
+        """
+        stmt = (
+            select(Invoice)
+            .where(
+                Invoice.student_id == student_id,
+                Invoice.academic_year == academic_year,
+                Invoice.month == month,
+                Invoice.status != "void",
+            )
+            .order_by(Invoice.created_at, Invoice.id)
         )
         result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def list_invoices(
         self,
