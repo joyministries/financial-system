@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -31,6 +31,16 @@ class Receipt(Base):
 
 class Statement(Base):
     __tablename__ = "statements"
+    #: One row per student/year/month. Without this, concurrent generate()
+    #: calls all pass the app-level "already exists" check and each insert
+    #: their own row, and the statement PDF then repeats that month's fee
+    #: line and every receipt once per duplicate.
+    __table_args__ = (
+        UniqueConstraint(
+            "student_id", "academic_year", "month",
+            name="uq_statements_student_year_month",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     student_id: Mapped[str] = mapped_column(String(36), ForeignKey("students.id"), nullable=False)

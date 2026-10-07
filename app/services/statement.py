@@ -302,6 +302,10 @@ class StatementService:
                 self.db, student_id, academic_year
             )
 
+        # Each month must contribute exactly one ledger — see
+        # dedupe_statements_by_month() for why rows can arrive duplicated.
+        statements = dedupe_statements_by_month(statements)
+
         # Two queries for the whole year instead of two per statement. The old
         # path re-fetched the identical year-wide charge/payment result sets
         # once per month and filtered them in Python, so a 9-month
@@ -394,7 +398,11 @@ class StatementService:
         if not existing:
             return 0
 
-        months = [s.month for s in existing]
+        # Distinct months: rebuilding must never re-create duplicates that a
+        # racing generate() may have already written. We delete every row
+        # above, so deriving the month list from the ROW LIST (rather than the
+        # unique months) would faithfully re-insert one row per duplicate.
+        months = sorted({s.month for s in existing})
         for s in existing:
             await self.db.delete(s)
         await self.db.flush()
@@ -869,3 +877,52 @@ async def bulk_generate_statements(
         "failed": failed,
         "errors": errors[:20],
     }
+
+
+def dedupe_statements_by_month(statements: list[Statement]) -> list[Statement]:
+    """Collapse duplicated statement rows down to one per month.
+
+    The ``statements`` table has no unique constraint on
+    ``(student_id, academic_year, month)``, so concurrent ``generate()`` calls
+    can each pass the app-level "already exists" check and insert their own
+    row. Rendering one ledger per ROW then repeats that month's fee line and
+    every receipt — a student with 4 copies printed each receipt 4x and
+    reported a 4x "Amount Paid to date".
+
+    Returns one statement per distinct month, keeping the most recently
+    generated snapshot, ordered by month.
+    """
+    unique: dict[int, Statement] = {}
+    for s in statements:
+        prior = unique.get(s.month)
+        if prior is None or (
+            s.generated_at is not None
+            and (prior.generated_at is None or s.generated_at > prior.generated_at)
+        ):
+            unique[s.month] = s
+    return [unique[m] for m in sorted(unique)]
+
+
+async def refresh_statements_for(student_ids: list[str], academic_year: int) -> None:
+    """Rebuild stored statements for a set of students after ledger data changed.
+
+    Meant to be handed to FastAPI's ``BackgroundTasks``: it opens its own
+    session because the request session is already closed by the time the task
+    runs. Each student is committed independently so one failure leaves the
+    rest refreshed instead of rolling everything back.
+    """
+    if not student_ids:
+        return
+    async with async_session_factory() as db:
+        service = StatementService(db)
+        for student_id in student_ids:
+            try:
+                await service.refresh_for_student(student_id, academic_year)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.exception(
+                    "statement refresh failed for student=%s year=%s",
+                    student_id,
+                    academic_year,
+                )

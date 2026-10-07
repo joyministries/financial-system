@@ -41,6 +41,7 @@ from app.services.statement import (
     StatementService,
     amount_due_for_month,
     bulk_generate_statements,
+    dedupe_statements_by_month,
     fee_installment_for_statement,
     total_paid_from_ledger,
 )
@@ -310,6 +311,10 @@ async def _build_student_statement_sections(
     statements_by_student: dict[str, list[Statement]] = defaultdict(list)
     for st in statement_rows:
         statements_by_student[st.student_id].append(st)
+    # One row per month per student — duplicated rows would repeat each fee
+    # line and receipt in the bundled PDF. See dedupe_statements_by_month().
+    for sid, rows in statements_by_student.items():
+        statements_by_student[sid] = dedupe_statements_by_month(rows)
 
     guardian_rows = (
         (
