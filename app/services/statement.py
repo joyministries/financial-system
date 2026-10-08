@@ -564,17 +564,20 @@ class StatementService:
             ref = (p.reference_number or "").strip()
             if ref.upper().startswith("CRN"):
                 # Credit note rows on the Xero report are credit transactions
-                # with their CRN reference — not payments.
+                # with their CRN reference rather than a receipt, but they
+                # still credit the balance.
                 description = f"Credit note — {ref}"
-                is_payment = False
             elif not ref:
                 # Refless January Brought-Forward credit (parent overpaid in a
                 # prior year) carried into this year as an opening credit.
                 description = "Balance brought forward"
-                is_payment = False
             else:
                 description = f"Payment — {p.payment_method}"
-                is_payment = True
+            # Every row here credits the balance, so every row counts as paid —
+            # one payment basis shared with the closing balance. Marking CRN or
+            # refless credits off would make billed - paid disagree with
+            # Outstanding for Year on the same printed statement.
+            is_payment = True
             rows.append(
                 {
                     "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
@@ -634,8 +637,13 @@ def amount_due_for_month(
     ``Amount Due for Month`` and ``Outstanding for Year`` answer two different
     questions and must not print the same figure:
 
-    * **Outstanding for Year** (``current_amount_due``) is the whole running
-      balance — everything still unpaid this year.
+    * **Outstanding for Year** is this year's debt: the whole running balance
+      less the prior year's carry-in. The carry-in still sits inside
+      ``current_amount_due`` (it was billed as its own January invoice), so
+      stripping it is a separate step — see
+      :func:`app.api.v1.financial._outstanding_for_year`, which the PDF and API
+      both use. Without that step the line printed the same number as
+      ``Balance carried forward``.
     * **Amount Due for Month** is what is *overdue*: the balance once the
       instalments that have not fallen due yet are set aside, and the prior
       year's carry-in is removed because it was not charged this year::
@@ -710,9 +718,12 @@ def fee_installment_for_statement(
 def total_paid_from_ledger(rows: list[dict]) -> Decimal:
     """Sum receipt credits for the statement footer "Amount Paid to date".
 
-    Counts rows the ledger builders flagged ``is_payment``. Brought-forward
-    credits and credit notes share the credit column but must not inflate the
-    paid total. Crucially this keys off row type, not the reference prefix:
+    Counts rows the ledger builders flagged ``is_payment`` — every row that
+    credits the balance: receipts, credit notes (CRN) and the refless
+    carried-forward credit. Credit notes must count because the closing balance
+    is built from all verified payments, so leaving them out makes
+    ``billed - paid`` disagree with ``Outstanding for Year`` on the same
+    statement. Crucially this keys off row type, not the reference prefix:
     receipts are legitimately referenced "FNB", "REC 42", "ABSA" and others, so
     a prefix match on "RCP" silently under-reported paid amounts.
     """

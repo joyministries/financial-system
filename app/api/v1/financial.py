@@ -162,6 +162,25 @@ def _monthly_amount_due(statement: Statement, monthly_fee: Decimal) -> Decimal:
     )
 
 
+def _outstanding_for_year(statement: Statement) -> Decimal:
+    """``Outstanding for Year`` — this year's debt, without last year's.
+
+    ``current_amount_due`` is the closing balance, and the prior-year carried-in
+    balance sits *inside* it: every imported student was billed that carry-in as
+    its own January invoice, so it inflates the closing figure. The whole-school
+    outstanding column already promises "excluding last year's carry-in"
+    (:func:`app.services.statement.amount_due_for_month`); this puts the
+    statement's own headline on the same basis, so that
+
+        billed excluding carry-in - Amount Paid to date == Outstanding for Year
+
+    holds rather than coming out short by exactly the carry-in.
+    """
+    closing = statement.current_amount_due or D0
+    carried = getattr(statement, "brought_forward", None) or D0
+    return max(D0, closing - carried)
+
+
 def _approved_students_query(grade_id: str | None = None, include_inactive: bool = False):
     """Approved students to render in bulk statement PDFs.
 
@@ -244,13 +263,15 @@ def _ledger_for_statement_rows(
         ref = (p.reference_number or "").strip()
         if ref.upper().startswith("CRN"):
             description = f"Credit note — {ref}"
-            is_payment = False
         elif not ref:
             description = "Balance brought forward"
-            is_payment = False
         else:
             description = f"Payment — {p.payment_method}"
-            is_payment = True
+        # Every row below credits the balance, so every row counts as paid.
+        # The closing balance is built from *all* verified payments, so
+        # excluding any of them here would leave the statement quoting two
+        # payment bases: billed - paid would not match Outstanding for Year.
+        is_payment = True
         rows.append(
             {
                 "date": p.payment_date.strftime("%d %b %Y") if p.payment_date else due_str,
@@ -448,7 +469,7 @@ async def _build_student_statement_sections(
                 "amount_due": _monthly_amount_due(
                     last, fee_by_student.get(s.id, D0)
                 ),
-                "amount_year_due": last.current_amount_due,
+                "amount_year_due": _outstanding_for_year(last),
                 "amount_paid": total_paid,
             }
         )
@@ -880,9 +901,10 @@ async def download_statement(
     else:
         period_label = f"{_MONTHS[first.month - 1]} — {_MONTHS[last.month - 1]} {academic_year}"
 
-    # "Amount Paid to date" sums genuine receipt rows only. Brought-forward
-    # credits and credit notes (CRN) share the credit column but must not
-    # inflate the paid total — see total_paid_from_ledger().
+    # "Amount Paid to date" sums every row that credits the balance — receipts,
+    # credit notes (CRN) and the refless carried-forward credit alike — so that
+    # billed - paid reconciles with Outstanding for Year. See
+    # total_paid_from_ledger().
     total_paid = total_paid_from_ledger(ledger)
     pdf = build_statement_pdf(
         last,
@@ -894,7 +916,7 @@ async def download_statement(
         account_address=account_address,
         period_label=period_label,
         amount_due=_monthly_amount_due(last, grade_monthly_fee),
-        amount_year_due=last.current_amount_due,
+        amount_year_due=_outstanding_for_year(last),
         amount_paid=total_paid,
     )
 

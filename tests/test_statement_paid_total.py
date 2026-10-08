@@ -11,9 +11,17 @@ carry references such as ``FNB``, ``FNB - Split``, ``REC 185`` or NULL. Those
 rows rendered in the ledger but were silently dropped from the paid total, so
 the footer under-reported what the family had actually paid.
 
-The ledger builders now flag genuine receipts with ``is_payment`` and the
-footer sums those rows. Brought-forward credits and credit notes still share
-the credit column, so they must remain excluded.
+The ledger builders now flag every money-in row with ``is_payment`` and the
+footer sums those rows.
+
+Credit notes (``CRN``) and the refless prior-year brought-forward credit used
+to be flagged off, so ``Amount Paid to date`` excluded them. The closing
+balance does *not* exclude them — :func:`app.services.ledger.monthly_breakdown`
+counts every verified payment — so the statement showed two different payment
+bases at once: ``billed − paid`` came out R500 higher than the printed
+``Outstanding for Year`` for every one of the 117 credit-note students.
+
+One basis now: everything credited against the balance counts as paid.
 """
 
 from datetime import UTC, datetime
@@ -94,27 +102,30 @@ class TestNonRcpReceiptsCountAsPaid:
         assert total_paid_from_ledger(rows) == Decimal("1600.00")
 
 
-class TestNonReceiptCreditsExcluded:
-    def test_credit_notes_are_not_paid(self):
+class TestAllCreditsCountAsPaid:
+    """Credit notes and carried-forward credits reduce the balance, so they
+    must reduce the paid total too — one payment basis for the statement."""
+
+    def test_credit_notes_count_as_paid(self):
         rows = _ledger_for_statement_rows(_statement(), [], [_payment("CRN0001421", "1164.00")])
-        assert total_paid_from_ledger(rows) == Decimal("0.00")
+        assert total_paid_from_ledger(rows) == Decimal("1164.00")
 
-    def test_refless_brought_forward_is_not_paid(self):
+    def test_refless_brought_forward_counts_as_paid(self):
         rows = _ledger_for_statement_rows(_statement(), [], [_payment(None, "500.00")])
-        assert total_paid_from_ledger(rows) == Decimal("0.00")
+        assert total_paid_from_ledger(rows) == Decimal("500.00")
 
-    def test_blank_reference_is_not_paid(self):
+    def test_blank_reference_counts_as_paid(self):
         rows = _ledger_for_statement_rows(_statement(), [], [_payment("", "500.00")])
-        assert total_paid_from_ledger(rows) == Decimal("0.00")
+        assert total_paid_from_ledger(rows) == Decimal("500.00")
 
-    def test_payments_and_credit_notes_are_separated(self):
+    def test_payments_and_credit_notes_sum_together(self):
         payments = [
             _payment("FNB", "1600.00"),
             _payment("CRN0001421", "1164.00"),
             _payment(None, "500.00"),
         ]
         rows = _ledger_for_statement_rows(_statement(), [], payments)
-        assert total_paid_from_ledger(rows) == Decimal("1600.00")
+        assert total_paid_from_ledger(rows) == Decimal("3264.00")
 
 
 class TestRowTagging:
@@ -125,9 +136,13 @@ class TestRowTagging:
         assert flagged[0]["credit"] == Decimal("1600.00")
         assert flagged[0]["description"] == "Payment — bank_transfer"
 
-    def test_credit_note_row_is_not_flagged(self):
+    def test_credit_note_row_is_flagged(self):
+        """Credit notes credit the balance, so they carry the money-in flag."""
         rows = _ledger_for_statement_rows(_statement(), [], [_payment("CRN0001421", "1164.00")])
-        assert not any(r.get("is_payment") for r in rows)
+        flagged = [r for r in rows if r.get("is_payment")]
+        assert len(flagged) == 1
+        assert flagged[0]["credit"] == Decimal("1164.00")
+        assert flagged[0]["description"] == "Credit note — CRN0001421"
 
     def test_fee_and_balance_rows_are_not_flagged(self):
         rows = _ledger_for_statement_rows(_statement(), [], [])

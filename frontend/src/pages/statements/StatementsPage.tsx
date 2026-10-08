@@ -385,14 +385,19 @@ export default function StatementsPage() {
   // Amount actually overdue, which is NOT the whole running balance. Two
   // different questions get two different lines:
   //
-  //   Outstanding Year  = current_amount_due  — everything still unpaid
+  //   Outstanding Year  = current_amount_due - brought_forward — this year's
+  //                       debt only. The closing balance still contains last
+  //                       year's carry-in (billed as its own January invoice),
+  //                       and the whole-school column promises "excluding last
+  //                       year's carry-in", so strip it here too.
   //   Amount Due        = balance once instalments that have not fallen due
   //                       yet are set aside, and the prior year's carry-in
   //                       is removed (it was not charged this year)
   //
   //   current_amount_due - grade_monthly_fee * (12 - month) - brought_forward
   //
-  // For (1982) Mazibuko at October 2026: 8,400 - (1,940 x 2) - 1,940 = 2,580.
+  // For (1982) Mazibuko at October 2026: 8,400 - (1,940 x 2) - 1,940 = 2,580,
+  // and Outstanding Year 8,400 - 1,940 = 6,460.
   //
   // It used to be `month's fee + charges - payments`, which substituted the
   // grade fee for months billed by January's annual invoice and then
@@ -403,9 +408,13 @@ export default function StatementsPage() {
     return Math.max(0, (s.current_amount_due ?? 0) - notYetDue - (s.brought_forward ?? 0));
   };
 
+  const outstandingForYear = (s: Statement) =>
+    Math.max(0, (s.current_amount_due ?? 0) - (s.brought_forward ?? 0));
+
   // Amount Due This Month always shows, including R 0 — omitting the line
   // would read as a missing figure rather than as "nothing owed this month".
   const dueThisMonth = selectedStatement ? monthlyAmountDue(selectedStatement) : 0;
+  const outstandingYear = selectedStatement ? outstandingForYear(selectedStatement) : 0;
 
   return (
     <div className="space-y-6">
@@ -537,9 +546,9 @@ export default function StatementsPage() {
               <p className={`text-[11px] uppercase tracking-wider ${dueThisMonth > 0 ? 'text-slate-300' : 'text-white'}`}>Amount Due This Month</p>
               <p className="mt-1 font-mono text-lg font-bold text-white">R {dueThisMonth.toLocaleString()}</p>
             </div>
-            <div className={`px-6 py-4 ${selectedStatement.current_amount_due > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
-              <p className={`text-[11px] uppercase tracking-wider ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
-              <p className={`mt-1 font-mono text-lg font-bold ${selectedStatement.current_amount_due > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {selectedStatement.current_amount_due.toLocaleString()}</p>
+            <div className={`px-6 py-4 ${outstandingYear > 0 ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+              <p className={`text-[11px] uppercase tracking-wider ${outstandingYear > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>Outstanding Year</p>
+              <p className={`mt-1 font-mono text-lg font-bold ${outstandingYear > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>R {outstandingYear.toLocaleString()}</p>
             </div>
           </div>
 
