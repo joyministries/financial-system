@@ -382,34 +382,16 @@ export default function StatementsPage() {
     return rows;
   };
 
-  // Amount actually overdue, which is NOT the whole running balance. Two
-  // different questions get two different lines:
-  //
-  //   Outstanding Year  = current_amount_due - brought_forward — this year's
-  //                       debt only. The closing balance still contains last
-  //                       year's carry-in (billed as its own January invoice),
-  //                       and the whole-school column promises "excluding last
-  //                       year's carry-in", so strip it here too.
-  //   Amount Due        = balance once instalments that have not fallen due
-  //                       yet are set aside, and the prior year's carry-in
-  //                       is removed (it was not charged this year)
-  //
-  //   current_amount_due - grade_monthly_fee * (12 - month) - brought_forward
-  //
-  // For (1982) Mazibuko at October 2026: 8,400 - (1,940 x 2) - 1,940 = 2,580,
-  // and Outstanding Year 8,400 - 1,940 = 6,460.
-  //
-  // It used to be `month's fee + charges - payments`, which substituted the
-  // grade fee for months billed by January's annual invoice and then
-  // subtracted a payment the balance already reflected: the same statement
-  // showed R -60 next to two lines reading R 8,400.
+  // Outstanding Year = fee x months still to fall due. The account balance
+  // is the separate Balance carried forward line. Amount Due sets those same
+  // months aside from the balance, then removes the prior year's carry-in.
   const monthlyAmountDue = (s: Statement) => {
     const notYetDue = (s.grade_monthly_fee ?? 0) * Math.max(0, 12 - (s.month ?? 0));
     return Math.max(0, (s.current_amount_due ?? 0) - notYetDue - (s.brought_forward ?? 0));
   };
 
   const outstandingForYear = (s: Statement) =>
-    Math.max(0, (s.current_amount_due ?? 0) - (s.brought_forward ?? 0));
+    (s.grade_monthly_fee ?? 0) * Math.max(0, 12 - (s.month ?? 0));
 
   // Amount Due This Month always shows, including R 0 — omitting the line
   // would read as a missing figure rather than as "nothing owed this month".

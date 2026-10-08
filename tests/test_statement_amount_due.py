@@ -1,32 +1,10 @@
 """``Amount Due for Month`` must quote what is actually overdue.
 
-Two summary lines answer two different questions, and printing the same
-figure twice was the bug::
-
-    Amount Due for Month      8,400     <- asked "what is overdue?"
-    Balance carried forward   8,400     <- asked "what is still unpaid?"
-    Outstanding for Year      8,400
-
-``Amount Due for Month`` sets aside the instalments that have not fallen due
-yet, and removes the prior year's carry-in — that balance was not charged this
-year, so it is not this year's arrears::
+It sets aside the instalments that have not fallen due yet and the prior
+year's carry-in, so the arrears figure stays distinct from both
+``Balance carried forward`` and ``Outstanding for Year``::
 
     amount_due = closing - (fee x months not yet due) - brought_forward
-
-For (1982) Hlelolwenkosi Mazibuko, October 2026 — billed 25,320, paid 16,920,
-grade fee 1,940, ten months in, carried forward 1,940::
-
-    8,400 - (1,940 x 2) - 1,940 = 2,580
-
-``Outstanding for Year`` still reports the whole balance (8,400) — that figure
-is untouched.
-
-History: the line used to be *the month's instalment minus the month's
-payments*. Months billed through January's annual invoice carry no instalment
-of their own, so the grade fee was substituted and the month's receipt
-subtracted from it, giving ``1,940 - 2,000 = -60`` on this very student while
-its neighbours read 8,400. The receipt is never touched here; it has already
-reduced the running balance.
 """
 
 from decimal import Decimal
@@ -35,7 +13,7 @@ from app.api.v1.financial import _monthly_amount_due
 
 D = Decimal
 
-#: Grade 2 monthly tuition, and the carry-in billed into 2026 for (1982).
+#: Monthly fee used by the fixtures, and the prior-year carry-in.
 GRADE_2_FEE = D("1940.00")
 BROUGHT_FORWARD = D("1940.00")
 

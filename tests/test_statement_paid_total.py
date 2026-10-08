@@ -1,27 +1,11 @@
-"""Regression tests for the statement "Amount Paid to date" total.
+"""``Amount Paid to date`` must total every credit row, not an "RCP" prefix.
 
-Both PDF paths (single-student download and the school/grade bundles) used to
-compute the paid total with a prefix match::
+Receipts legitimately carry references like ``FNB`` or ``REC 185``, so a
+prefix match silently dropped them. Credit notes and the refless
+brought-forward credit also credit the balance and must count, otherwise the
+printed payment basis disagrees with the closing balance.
 
-    sum(row["credit"] for row in ledger
-        if (row["reference"] or "").upper().startswith("RCP"))
-
-Receipts are not reliably RCP-prefixed in the database — verified payments
-carry references such as ``FNB``, ``FNB - Split``, ``REC 185`` or NULL. Those
-rows rendered in the ledger but were silently dropped from the paid total, so
-the footer under-reported what the family had actually paid.
-
-The ledger builders now flag every money-in row with ``is_payment`` and the
-footer sums those rows.
-
-Credit notes (``CRN``) and the refless prior-year brought-forward credit used
-to be flagged off, so ``Amount Paid to date`` excluded them. The closing
-balance does *not* exclude them — :func:`app.services.ledger.monthly_breakdown`
-counts every verified payment — so the statement showed two different payment
-bases at once: ``billed − paid`` came out R500 higher than the printed
-``Outstanding for Year`` for every one of the 117 credit-note students.
-
-One basis now: everything credited against the balance counts as paid.
+The ledger builders flag rows with ``is_payment``; the footer sums those.
 """
 
 from datetime import UTC, datetime

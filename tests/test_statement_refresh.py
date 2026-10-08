@@ -1,22 +1,12 @@
-"""A receipt must reach the statement, not just the ledger.
+"""A receipt must reach the stored statement, not just the ledger.
 
-Statements are snapshots taken when they were generated. Until this was
-wired up, a payment recorded afterwards never reached the stored row, so
-``Amount Due for Month`` kept quoting the pre-payment balance — (1982) paid
-R1,000 on 6 October and the line still read 2,580 because the statement had
-been generated the evening before.
+Statements are snapshots. ``StatementService.refresh_for_student`` rebuilds
+them from the live ledger and is called by every payment write. These tests
+pin the invariants:
 
-``StatementService.refresh_for_student`` rebuilds those rows from the live
-ledger and is called by every payment write (``PaymentService.record_payment``
-/ ``verify_payment`` / ``edit`` / ``reverse`` / ``void``, the hard-delete
-route, and the PayFast ITN). These tests pin the invariants that keep the
-whole-school report honest:
-
-* only months that already exist are rebuilt — generating missing ones would
-  fabricate future statements and silently change report totals;
-* nothing is rebuilt when there is nothing to rebuild, so a refresh can never
-  invent a student's statement set;
-* the expensive yearly breakdown is computed once, not once per month.
+* only months that already exist are rebuilt;
+* nothing is rebuilt when there is nothing to rebuild;
+* the yearly breakdown is computed once, not once per month.
 """
 
 import asyncio
@@ -79,7 +69,7 @@ def _service(existing_months):
 
 class TestRefreshForStudent:
     def test_rebuilds_exactly_the_months_that_existed(self):
-        # 1982 has statements for months 1..10 only. Refreshing must not
+        # Statements exist for months 1..10 only. Refreshing must not
         # manufacture November/December rows: they would add columns to the
         # whole-school export for a schedule the school never issued.
         service, db, calls = _service(range(1, 11))

@@ -345,15 +345,10 @@ async def _arrears(monkeypatch, statements, month=10, students=None, fees=None):
 
 @pytest.mark.asyncio
 async def test_month_only_reports_the_statement_arrears_not_zero(monkeypatch):
-    """1982 at October 2026 reports 2,580 — the statement's Amount Due figure.
+    """The month-only report shows the statement's Amount Due figure.
 
-    Billed 25,320, paid 16,920, grade fee 1,940, ten months in, carried
-    forward 1,940::
-
-        8,400 - (1,940 x 2) - 1,940 = 2,580
-
-    The old calendar-month read produced 0 (or -2,000) here because January's
-    annual invoice is not dated October.
+    A calendar-month read returned 0 because January's annual invoice is not
+    dated October.
     """
     rows = await _arrears(monkeypatch, [_statement_row("s1982", 10, 8400, 16920, 1940)])
 

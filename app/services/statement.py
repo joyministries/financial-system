@@ -563,20 +563,12 @@ class StatementService:
             balance -= p.amount
             ref = (p.reference_number or "").strip()
             if ref.upper().startswith("CRN"):
-                # Credit note rows on the Xero report are credit transactions
-                # with their CRN reference rather than a receipt, but they
-                # still credit the balance.
                 description = f"Credit note — {ref}"
             elif not ref:
-                # Refless January Brought-Forward credit (parent overpaid in a
-                # prior year) carried into this year as an opening credit.
                 description = "Balance brought forward"
             else:
                 description = f"Payment — {p.payment_method}"
-            # Every row here credits the balance, so every row counts as paid —
-            # one payment basis shared with the closing balance. Marking CRN or
-            # refless credits off would make billed - paid disagree with
-            # Outstanding for Year on the same printed statement.
+            # Every credit row settles the balance, so all count toward paid.
             is_payment = True
             rows.append(
                 {
@@ -637,49 +629,19 @@ def amount_due_for_month(
     ``Amount Due for Month`` and ``Outstanding for Year`` answer two different
     questions and must not print the same figure:
 
-    * **Outstanding for Year** is this year's debt: the whole running balance
-      less the prior year's carry-in. The carry-in still sits inside
-      ``current_amount_due`` (it was billed as its own January invoice), so
-      stripping it is a separate step — see
-      :func:`app.api.v1.financial._outstanding_for_year`, which the PDF and API
-      both use. Without that step the line printed the same number as
-      ``Balance carried forward``.
+    * **Outstanding for Year** is the fee still to fall due — see
+      :func:`app.api.v1.financial._outstanding_for_year`.
     * **Amount Due for Month** is what is *overdue*: the balance once the
       instalments that have not fallen due yet are set aside, and the prior
       year's carry-in is removed because it was not charged this year::
 
             amount_due = closing - (fee x months not yet due) - brought_forward
 
-    For (1982) Hlelolwenkosi Mazibuko at October 2026 — billed 25,320,
-    grade fee 1,940, ten months in, carried forward 1,940. With the school's
-    original receipts (16,920 paid, closing 8,400)::
-
-        8,400 - (1,940 x 2) - 1,940 = 2,580
-
-    and after the 6 October receipt of 1,000 (closing 7,400)::
-
-        7,400 - (1,940 x 2) - 1,940 = 1,580
-
-    Both are ``closing - fee x 3``: the two instalments that have not fallen
-    due, plus the carried-in balance.
-
     The figure tracks ``current_amount_due``, so a receipt only moves it once
-    that snapshot is rebuilt — see :meth:`StatementService.refresh_for_student`,
-    which payment writes call for exactly this reason.
+    that snapshot is rebuilt — see
+    :meth:`StatementService.refresh_for_student`.
 
-    History: this line used to be *the month's instalment minus the month's
-    payments*. Months billed through January's annual invoice carry no
-    instalment of their own, so the grade fee was substituted and the month's
-    receipt subtracted from it — giving ``1,940 - 2,000 = -60``. That figure
-    double-counted a receipt the running balance had already absorbed. The
-    receipt is never touched here; only unbilled future instalments and the
-    carried-in balance are removed.
-
-    Pure function of its inputs — the caller resolves ``monthly_fee`` through
-    ``monthly_fee_for_student`` / ``load_monthly_fee_lookup`` and passes
-    ``brought_forward`` from ``Invoice.brought_forward``. Never negative: a
-    credit balance reports 0, not -X.
-    """
+"""
     closing = Decimal(str(current_amount_due or 0))
     fee = Decimal(str(monthly_fee or 0))
     carried = Decimal(str(brought_forward or 0))
@@ -718,14 +680,9 @@ def fee_installment_for_statement(
 def total_paid_from_ledger(rows: list[dict]) -> Decimal:
     """Sum receipt credits for the statement footer "Amount Paid to date".
 
-    Counts rows the ledger builders flagged ``is_payment`` — every row that
-    credits the balance: receipts, credit notes (CRN) and the refless
-    carried-forward credit. Credit notes must count because the closing balance
-    is built from all verified payments, so leaving them out makes
-    ``billed - paid`` disagree with ``Outstanding for Year`` on the same
-    statement. Crucially this keys off row type, not the reference prefix:
-    receipts are legitimately referenced "FNB", "REC 42", "ABSA" and others, so
-    a prefix match on "RCP" silently under-reported paid amounts.
+    Counts rows the ledger builders flagged ``is_payment``, keyed off row type
+    rather than reference prefix: receipts legitimately carry references like
+    "FNB" or "REC 42", so matching on "RCP" under-reports paid amounts.
     """
     return sum(
         (
