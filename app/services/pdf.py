@@ -779,14 +779,6 @@ def _stmt_totals(
     return t
 
 
-def _statement_monthly_due(statement: Statement) -> Decimal:
-    return (
-        Decimal(str(statement.total_installments or 0))
-        + Decimal(str(statement.total_additional_charges or 0))
-        - Decimal(str(statement.total_payments or 0))
-    )
-
-
 def _stmt_notes() -> Table:
     """Terms + bank payment instructions + sign-off (HTML statement footer)."""
     notes = [
@@ -834,7 +826,7 @@ def _append_statement_section(
     account_name: str = "",
     account_address: str = "",
     period_label: str = "",
-    amount_due: Decimal | None = None,
+    amount_due: Decimal = Decimal("0"),
     amount_year_due: Decimal | None = None,
     amount_paid: Decimal | None = None,
 ) -> None:
@@ -893,7 +885,7 @@ def _append_statement_section(
             _stmt_transactions(ledger or []),
             Spacer(1, 8 * mm),
             _stmt_totals(
-                amount_due if amount_due is not None else _statement_monthly_due(statement),
+                amount_due,
                 Decimal(str(statement.closing_balance or 0)),
                 amount_paid if amount_paid is not None else statement.total_payments,
                 amount_year_due,
@@ -914,7 +906,7 @@ def build_statement_pdf(
     account_name: str = "",
     account_address: str = "",
     period_label: str = "",
-    amount_due: Decimal | None = None,
+    amount_due: Decimal = Decimal("0"),
     amount_year_due: Decimal | None = None,
     amount_paid: Decimal | None = None,
 ) -> bytes:
@@ -930,8 +922,8 @@ def build_statement_pdf(
     *period_label* — optional string like "July — September 2026" shown below
     the FROM/TO parties when present (multi-month statements).
 
-    *amount_due* / *amount_paid* — override the totals section (default:
-    monthly amount due / statement.total_payments).
+    *amount_due* / *amount_paid* — the totals section (paid defaults to
+    ``statement.total_payments``).
     """
     issued = statement.generated_at or datetime.utcnow()
     doc = _StatementDocument(date_label=issued.strftime("%d/%m/%Y"))

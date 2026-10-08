@@ -1,10 +1,10 @@
 """``Outstanding for Year`` must show the fee instalments not yet due.
 
-``amount_due_for_month`` sets the same quantity aside as ``not_yet_due``, so
-the three printed lines stay distinct::
+Independent of ``Amount Due for Month``, which is the fee plus the balance
+carried forward (see ``test_statement_amount_due.py``)::
 
     Outstanding for Year       = fee x months not yet due
-    Amount Due for Month       = balance - that - prior-year carry-in
+    Amount Due for Month       = fee + balance carried forward
     Balance carried forward    = the account's closing balance
 """
 

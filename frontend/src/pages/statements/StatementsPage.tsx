@@ -382,14 +382,12 @@ export default function StatementsPage() {
     return rows;
   };
 
-  // Outstanding Year = fee x months still to fall due. The account balance
-  // is the separate Balance carried forward line. Amount Due sets those same
-  // months aside from the balance, then removes the prior year's carry-in.
-  const monthlyAmountDue = (s: Statement) => {
-    const notYetDue = (s.grade_monthly_fee ?? 0) * Math.max(0, 12 - (s.month ?? 0));
-    return Math.max(0, (s.current_amount_due ?? 0) - notYetDue - (s.brought_forward ?? 0));
-  };
+  // Amount Due for Month = fee + balance carried forward (mirrors
+  // amount_due_for_month in app/services/statement.py).
+  const monthlyAmountDue = (s: Statement) =>
+    (s.grade_monthly_fee ?? 0) + (s.current_amount_due ?? 0);
 
+  // Outstanding Year = fee x months still to fall due.
   const outstandingForYear = (s: Statement) =>
     (s.grade_monthly_fee ?? 0) * Math.max(0, 12 - (s.month ?? 0));
 

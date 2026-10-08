@@ -146,20 +146,9 @@ def _due_date_for_statement(academic_year: int, month: int) -> datetime:
 
 
 def _monthly_amount_due(statement: Statement, monthly_fee: Decimal) -> Decimal:
-    """Amount actually overdue — the ``Amount Due for Month`` line.
-
-    Thin adapter over :func:`app.services.statement.amount_due_for_month`,
-    which is the single source of truth for the formula (also used by the
-    whole-school statement summary). It pulls the four inputs off the row —
-    closing balance, month, grade fee, brought-forward — so the caller only
-    has to resolve ``monthly_fee``.
-    """
-    return amount_due_for_month(
-        statement.current_amount_due,
-        statement.month,
-        monthly_fee,
-        getattr(statement, "brought_forward", D0),
-    )
+    """``Amount Due for Month`` — see
+    :func:`app.services.statement.amount_due_for_month`."""
+    return amount_due_for_month(statement.current_amount_due, monthly_fee)
 
 
 def _outstanding_for_year(statement: Statement, monthly_fee: Decimal) -> Decimal:

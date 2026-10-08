@@ -466,7 +466,6 @@ class ReportService:
                 Statement.month,
                 Statement.current_amount_due,
                 Statement.total_payments,
-                Statement.brought_forward,
             )
             .where(
                 Statement.academic_year == academic_year,
@@ -492,9 +491,7 @@ class ReportService:
                 # figure and the document the parent receives cannot drift.
                 outstanding = amount_due_for_month(
                     entry.current_amount_due,
-                    entry.month,
                     fee_by_student.get(student.id, D0),
-                    entry.brought_forward,
                 )
             rows.append({
                 "student_id": student.id,

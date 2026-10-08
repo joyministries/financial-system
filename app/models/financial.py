@@ -56,7 +56,7 @@ class Statement(Base):
     #: Year-level carry-in from the previous academic year, denormalised from
     #: ``Invoice.brought_forward`` at generation time so the statement summary
     #: can be built synchronously. Same value on every month of the year.
-    #: "Amount Due for Month" = closing - (fee x months not yet due) - this.
+    #: Not part of "Amount Due for Month", which is fee + closing.
     brought_forward: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(

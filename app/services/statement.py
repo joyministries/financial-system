@@ -612,41 +612,20 @@ class StatementService:
 
 def amount_due_for_month(
     current_amount_due: Decimal | None,
-    month: int,
     monthly_fee: Decimal | None,
-    brought_forward: Decimal | None = D0,
 ) -> Decimal:
-    """Amount actually overdue at ``month`` — the ``Amount Due for Month`` line.
+    """``Amount Due for Month`` — the month's fee plus the balance carried forward.
 
-    This is the single source of truth for the arrears figure. It is called
-    from three places that must never disagree:
+    Shared by the statement PDF/API (``app/api/v1/financial.py``), the
+    whole-school report (``app/services/report.py``) and the frontend so the
+    three cannot drift.
 
-    * the statement PDF / API payload (``app/api/v1/financial.py``),
-    * the whole-school statement summary's "This month only" report
-      (``app/services/report.py``),
-    * the frontend's rendered arithmetic (``StatementsPage.tsx``).
-
-    ``Amount Due for Month`` and ``Outstanding for Year`` answer two different
-    questions and must not print the same figure:
-
-    * **Outstanding for Year** is the fee still to fall due — see
-      :func:`app.api.v1.financial._outstanding_for_year`.
-    * **Amount Due for Month** is what is *overdue*: the balance once the
-      instalments that have not fallen due yet are set aside, and the prior
-      year's carry-in is removed because it was not charged this year::
-
-            amount_due = closing - (fee x months not yet due) - brought_forward
-
-    The figure tracks ``current_amount_due``, so a receipt only moves it once
-    that snapshot is rebuilt — see
-    :meth:`StatementService.refresh_for_student`.
-
-"""
+    Not the arrears: the annual invoice bills the year up front, so a parent
+    who has paid ahead would otherwise be shown zero while money is still owed.
+    """
     closing = Decimal(str(current_amount_due or 0))
     fee = Decimal(str(monthly_fee or 0))
-    carried = Decimal(str(brought_forward or 0))
-    not_yet_due = fee * max(0, 12 - (month or 0))
-    return max(D0, closing - not_yet_due - carried)
+    return closing + fee
 
 
 def fee_installment_for_statement(

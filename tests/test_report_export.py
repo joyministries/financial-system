@@ -344,18 +344,14 @@ async def _arrears(monkeypatch, statements, month=10, students=None, fees=None):
 
 
 @pytest.mark.asyncio
-async def test_month_only_reports_the_statement_arrears_not_zero(monkeypatch):
-    """The month-only report shows the statement's Amount Due figure.
-
-    A calendar-month read returned 0 because January's annual invoice is not
-    dated October.
-    """
+async def test_month_only_matches_the_statement_amount_due(monkeypatch):
+    """The whole-school figure is the fee plus the balance carried forward."""
     rows = await _arrears(monkeypatch, [_statement_row("s1982", 10, 8400, 16920, 1940)])
 
     assert len(rows) == 1
-    assert rows[0]["outstanding"] == Decimal("2580.00")
+    assert rows[0]["outstanding"] == Decimal("10340.00")
     # Row shape shared with LedgerService.students_outstanding.
-    assert rows[0]["required"] - rows[0]["paid"] == Decimal("2580.00")
+    assert rows[0]["required"] - rows[0]["paid"] == Decimal("10340.00")
     assert rows[0]["name"] == "Hlelolwenkosi Mazibuko"
 
 
@@ -371,21 +367,20 @@ async def test_month_only_uses_the_statement_at_or_before_the_report_month(monke
     feb = await _arrears(monkeypatch, statements, month=2)
     oct_ = await _arrears(monkeypatch, statements, month=10)
 
-    # 21,820 - (1,940 x 10) - 1,940 = 480
-    assert feb[0]["outstanding"] == Decimal("480.00")
-    assert oct_[0]["outstanding"] == Decimal("2580.00")
+    # fee + balance carried forward
+    assert feb[0]["outstanding"] == Decimal("23760.00")
+    assert oct_[0]["outstanding"] == Decimal("10340.00")
 
 
 @pytest.mark.asyncio
-async def test_month_only_clamps_a_credit_balance_to_zero(monkeypatch):
-    """Over-payment reports 0, never a negative like the old -1,940."""
+async def test_month_only_reports_the_fee_when_the_balance_is_zero(monkeypatch):
     rows = await _arrears(
         monkeypatch,
         [_statement_row("s1982", 6, 0, 26000, 1940)],
         month=6,
     )
 
-    assert rows[0]["outstanding"] == Decimal("0")
+    assert rows[0]["outstanding"] == Decimal("1940.00")
 
 
 @pytest.mark.asyncio
@@ -403,6 +398,6 @@ async def test_month_only_reports_zero_for_a_student_with_no_statement(monkeypat
     )
 
     by_id = {r["student_id"]: r for r in rows}
-    assert by_id["s1982"]["outstanding"] == Decimal("2580.00")
+    assert by_id["s1982"]["outstanding"] == Decimal("10340.00")
     assert by_id["s2000"]["outstanding"] == Decimal("0")
     assert len(rows) == 2
