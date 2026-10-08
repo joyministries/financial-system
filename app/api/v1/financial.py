@@ -381,8 +381,8 @@ async def _build_student_statement_sections(
         payments_by_student_month[(payment.student_id, payment.payment_date.month)].append(payment)
 
     # Grade tuition instalments, resolved in two round-trips for the whole
-    # cohort: "Amount Due for Month" needs them to set aside the instalments
-    # that have not fallen due yet.
+    # cohort: "Amount Due for Month" is the fee plus the balance carried
+    # forward, so it needs each student's grade fee.
     fee_by_student = await load_monthly_fee_lookup(db, students, academic_year)
 
     student_sections = []
@@ -857,9 +857,8 @@ async def download_statement(
             )
 
     # The ledger still gets D0 so the debit column shows nothing but what the
-    # school actually invoiced. The grade fee IS needed for the summary: it
-    # sets aside the instalments that have not fallen due yet so "Amount Due
-    # for Month" reports what is overdue rather than the whole balance.
+    # school actually invoiced. The grade fee drives the summary: it is added
+    # to the balance carried forward to make "Amount Due for Month".
     grade_monthly_fee = await monthly_fee_for_student(db, student_id, academic_year)
     ledger = await service.combined_ledger(statements, D0)
     first = statements[0]
@@ -972,11 +971,10 @@ async def outstanding_matrix_report(
     for the year.
 
     ``month_only=False`` returns the running balance at each month's end
-    ("with carry-over"); ``month_only=True`` returns the ARREARS as at each
-    month — what has fallen due that year and is still unpaid, excluding the
-    prior-year carry-in, i.e. the same figure as that student's ``Amount Due
-    for Month`` statement line. Each column uses the same query the on-screen
-    report uses, so the export always matches what the user sees.
+    ("with carry-over"); ``month_only=True`` returns each student's ``Amount
+    Due for Month`` figure — the month's fee plus the balance carried forward.
+    Each column uses the same query the on-screen report uses, so the export
+    always matches what the user sees.
     """
     service = ReportService(db)
     return await service.outstanding_matrix(

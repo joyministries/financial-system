@@ -209,10 +209,9 @@ class ReportService:
         - ``month_only`` False reuses :meth:`LedgerService.students_outstanding`
           capped at each month, i.e. the running balance at that month's end
           (the "Outstanding with carry-over" view).
-        - ``month_only`` True reuses :meth:`_monthly_statement_rows`, i.e. the
-          ARREARS as at that month — what has fallen due this year and is still
-          unpaid, less the prior-year carry-in (the "This month only" view,
-          matching each student's ``Amount Due for Month`` line).
+        - ``month_only`` True reuses :meth:`_monthly_statement_rows`, i.e. each
+          student's ``Amount Due for Month`` figure — the month's fee plus the
+          balance carried forward (the "This month only" view).
 
         Students are unioned across all months in first-seen order, so someone
         owing only in January still gets a row for the whole year; months in
@@ -376,12 +375,10 @@ class ReportService:
         * **With carry-over** (default) — the Excel-aligned running balance:
           everything invoiced up to ``month`` less everything paid up to
           ``month`` (``LedgerService.students_outstanding``).
-        * **This month only** (``month_only``) — the ARREARS as at ``month``:
-          what has fallen due this year and is still unpaid, excluding the
-          prior year's carry-in. Computed from each student's generated
-          ``Statement`` with the same formula as their ``Amount Due for
-          Month`` line, so the report agrees with the document the parent
-          receives to the cent.
+        * **This month only** (``month_only``) — each student's ``Amount Due
+          for Month``: the month's fee plus the balance carried forward, taken
+          from their generated ``Statement`` so the report agrees with the
+          document the parent receives to the cent.
         """
         if month_only and month is not None:
             rows = await self._monthly_statement_rows(academic_year, month, grade_id)
@@ -422,30 +419,14 @@ class ReportService:
     async def _monthly_statement_rows(
         self, academic_year: int, month: int, grade_id: str | None = None
     ) -> list[dict]:
-        """Approved students with their ARREARS as at ``month``.
+        """Approved students with their ``Amount Due for Month`` as at ``month``.
 
         Backs the "This month only" mode of the school statement summary and
-        the matching Excel column.
-
-        It used to read ``invoices(month == m) + charges(month == m) less the
-        receipts recorded in calendar month m``. Students are billed in
-        January — one annual invoice, or a split January pair — so months 2-12
-        carry no invoice at all and the expression collapsed to ``0 less that
-        month's payments``: in October 194 of 198 students reported R 0.00 and
-        the whole-school total was R 0, while February-September printed
-        negatives such as -1,940.
-
-        It now reports what the statement itself reports — what has actually
-        fallen due this year and is still unpaid, excluding the prior year's
-        carry-in::
-
-            arrears = closing_balance - monthly_fee x (12 - month) - brought_forward
-
-        Sourced from the generated ``Statement`` rows so the whole-school
-        figure agrees with the document the parent receives, to the cent. The
-        latest statement at or before ``month`` is used and *its* month decides
-        which instalments are still ahead, so report and PDF cannot drift. A
-        student with no statement yet reports 0.
+        the matching Excel column. The latest statement at or before ``month``
+        is priced with :func:`app.services.statement.amount_due_for_month` (the
+        month's fee plus the balance carried forward), so the whole-school
+        figure agrees with the document the parent receives. A student with no
+        statement yet reports 0.
         """
         stu_q = (
             select(Student, Grade.name.label("grade_name"))
