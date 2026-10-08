@@ -649,7 +649,7 @@ export default function StatementsPage() {
               <h2 className="text-lg font-semibold text-slate-900">Whole School — Statement Summary ({schoolReportMonthLabel} {year})</h2>
               <p className="text-sm text-slate-500">
                 {schoolBalanceMode === 'month'
-                  ? "What has fallen due this year and is still unpaid, excluding last year's carry-in — the same figure as each student's Amount Due for Month line."
+                  ? "Each student's month fee plus the balance they still owe — the same figure as their Amount Due for Month line."
                   : "Every approved student's outstanding balance up to the selected month."}
                 {schoolReport && schoolReport.total_students > 0 && (
                   <span> Total outstanding: <span className="font-medium text-red-600">R {Number(schoolReport.total_outstanding).toLocaleString()}</span></span>
