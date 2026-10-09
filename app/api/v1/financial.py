@@ -43,6 +43,7 @@ from app.services.statement import (
     bulk_generate_statements,
     dedupe_statements_by_month,
     fee_installment_for_statement,
+    paid_to_date_by_month,
     total_paid_from_ledger,
 )
 from app.services.student_summary import StudentSummaryService
@@ -782,9 +783,21 @@ async def list_statements(
     if not statements:
         return []
     grade_monthly_fee = await monthly_fee_for_student(db, student_id, academic_year)
+    payments = (
+        await db.execute(
+            select(Payment.payment_date, Payment.amount).where(
+                Payment.student_id == student_id,
+                Payment.status == "verified",
+            )
+        )
+    ).all()
+    paid_by_month = paid_to_date_by_month(payments, academic_year)
     return [
         StatementResponse.model_validate(s).model_copy(
-            update={"grade_monthly_fee": grade_monthly_fee}
+            update={
+                "grade_monthly_fee": grade_monthly_fee,
+                "paid_to_date": paid_by_month.get(s.month, D0),
+            }
         )
         for s in statements
     ]

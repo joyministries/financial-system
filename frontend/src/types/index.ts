@@ -255,6 +255,11 @@ export interface Statement {
    * balance, because the annual invoice already carries the year's fees.
    */
   grade_monthly_fee: number;
+  /**
+   * Verified receipts up to this statement's month — the "Amount Paid to
+   * date" figure. Computed per request, not stored on the statement.
+   */
+  paid_to_date: number;
 }
 
 export interface OutstandingBalance {

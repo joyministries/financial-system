@@ -728,40 +728,33 @@ def _stmt_transactions(rows: list[dict]) -> Table:
 
 def _stmt_total_rows(
     amount_due: Decimal,
-    balance_carried: Decimal,
     amount_paid: Decimal,
     amount_year_due: Decimal | None = None,
+    academic_year: int = 0,
 ) -> list[tuple[str, Decimal]]:
-    """Labels/values for the statement summary block.
+    """The statement's three summary lines, in the order the school states them.
 
-    ``Amount Due for Month``, ``Balance carried forward`` and ``Amount Paid
-    to date`` always print, including ``R 0.00``: each answers a question the
-    parent is looking for, and omitting one reads as a missing figure rather
-    than as a nil one. The closing balance lives here rather than as a
-    ``Balance carried forward`` row at the foot of the ledger, where it used
-    to be an empty structural line carrying no figure at all.
+    All three print, including ``R 0.00``: omitting one reads as a missing
+    figure rather than as a nil one.
     """
-    rows: list[tuple[str, Decimal]] = [
-        ("Amount Due for Month", amount_due),
-        ("Balance carried forward", balance_carried),
-        ("Amount Paid to date", amount_paid),
-    ]
+    rows: list[tuple[str, Decimal]] = [("Amount Due for Month", amount_due)]
     if amount_year_due is not None:
-        rows.append(("Outstanding for Year", amount_year_due))
+        rows.append((f"Amount Due for {academic_year}", amount_year_due))
+    rows.append(("Amount Paid to date", amount_paid))
     return rows
 
 
 def _stmt_totals(
     amount_due: Decimal,
-    balance_carried: Decimal,
     amount_paid: Decimal,
     amount_year_due: Decimal | None = None,
+    academic_year: int = 0,
 ) -> Table:
-    """Right-aligned amount due / carried-forward / paid-to-date rows."""
+    """Right-aligned amount due / year due / paid-to-date rows."""
     rows = [
         [Paragraph(label, _STMT_TOTAL_LABEL), Paragraph(money(value), _STMT_TOTAL_VALUE)]
         for label, value in _stmt_total_rows(
-            amount_due, balance_carried, amount_paid, amount_year_due
+            amount_due, amount_paid, amount_year_due, academic_year
         )
     ]
     t = Table(rows, colWidths=[110 * mm, 70 * mm])
@@ -886,9 +879,9 @@ def _append_statement_section(
             Spacer(1, 8 * mm),
             _stmt_totals(
                 amount_due,
-                Decimal(str(statement.closing_balance or 0)),
                 amount_paid if amount_paid is not None else statement.total_payments,
                 amount_year_due,
+                statement.academic_year,
             ),
             Spacer(1, 10 * mm),
             _stmt_notes(),

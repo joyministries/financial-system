@@ -13,7 +13,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.api.v1.financial import _ledger_for_statement_rows
-from app.services.statement import total_paid_from_ledger
+from app.services.statement import paid_to_date_by_month, total_paid_from_ledger
 
 
 def _statement(**overrides):
@@ -148,3 +148,59 @@ class TestHelperRobustness:
 
     def test_float_credit_is_coerced(self):
         assert total_paid_from_ledger([{"is_payment": True, "credit": 12.34}]) == Decimal("12.34")
+
+
+class TestPaidToDateByMonth:
+    """The portal's paid-to-date uses the PDF's cut-off: every receipt up to
+    the end of the month the statement covers."""
+
+    def test_accumulates_month_by_month(self):
+        paid = paid_to_date_by_month(
+            [
+                (datetime(2026, 1, 19, tzinfo=UTC), Decimal("1600.00")),
+                (datetime(2026, 3, 5, tzinfo=UTC), Decimal("500.00")),
+            ],
+            2026,
+        )
+        assert paid[1] == Decimal("1600.00")
+        assert paid[2] == Decimal("1600.00")
+        assert paid[3] == Decimal("2100.00")
+        assert paid[9] == Decimal("2100.00")
+
+    def test_receipt_after_the_statement_month_is_not_yet_paid(self):
+        paid = paid_to_date_by_month(
+            [
+                (datetime(2026, 9, 30, tzinfo=UTC), Decimal("1600.00")),
+                (datetime(2026, 10, 7, tzinfo=UTC), Decimal("400.00")),
+            ],
+            2026,
+        )
+        assert paid[9] == Decimal("1600.00")
+        assert paid[10] == Decimal("2000.00")
+
+    def test_receipts_from_before_the_academic_year_count(self):
+        paid = paid_to_date_by_month(
+            [(datetime(2025, 12, 20, tzinfo=UTC), Decimal("200.00"))], 2026
+        )
+        assert paid[1] == Decimal("200.00")
+
+    def test_december_cuts_at_new_year(self):
+        paid = paid_to_date_by_month([(datetime(2027, 1, 2, tzinfo=UTC), Decimal("999.00"))], 2026)
+        assert paid[11] == Decimal("0")
+        assert paid[12] == Decimal("0")
+
+    def test_naive_and_aware_rows_compare_the_same_way(self):
+        paid = paid_to_date_by_month(
+            [
+                (datetime(2026, 2, 10), Decimal("300.00")),
+                (datetime(2026, 2, 11, tzinfo=UTC), Decimal("700.00")),
+            ],
+            2026,
+        )
+        assert paid[2] == Decimal("1000.00")
+
+    def test_every_month_is_answered(self):
+        assert set(paid_to_date_by_month([], 2026)) == set(range(1, 13))
+
+    def test_no_receipts_is_zero_not_missing(self):
+        assert paid_to_date_by_month([], 2026)[6] == Decimal("0")

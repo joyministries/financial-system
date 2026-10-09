@@ -11,10 +11,10 @@ statement, including ``R 0.00``, because it answers "what do I owe this
 month?" and omitting the question would read as a missing figure rather than
 as a nil one.
 
-``Balance carried forward`` moved from the foot of the ledger, where it was a
-label-only structural row carrying no figure, into the summary block between
-``Amount Due for Month`` and ``Amount Paid to date``. It is printed for every
-statement, including ``R 0.00``, for the same reason as the due line.
+The summary block carries exactly three figures: ``Amount Due for Month``,
+``Amount Due for <year>`` (when the year figure is supplied) and ``Amount
+Paid to date``. The closing balance is not one of them — it lives in the
+ledger's foot row.
 """
 
 from decimal import Decimal
@@ -23,7 +23,6 @@ from app.services.pdf import _statement_row_amounts, _stmt_total_rows, _stmt_tra
 
 D = Decimal
 PAID = D("24080.00")
-CARRIED = D("8940.00")
 
 
 def _structural(description, balance, bold=True):
@@ -107,41 +106,40 @@ class TestLedgerRows:
 
 class TestSummaryRows:
     def test_monthly_due_line_is_printed_even_when_zero(self):
-        rows = dict(_stmt_total_rows(D("0"), CARRIED, PAID, D("13280.00")))
+        rows = dict(_stmt_total_rows(D("0"), PAID, D("13280.00"), 2026))
         assert rows["Amount Due for Month"] == D("0")
 
     def test_monthly_due_line_is_printed_when_in_credit(self):
         # A month paid ahead still gets the line; the value carries the sign.
-        assert dict(_stmt_total_rows(D("-2980.00"), CARRIED, PAID))["Amount Due for Month"] == D(
-            "-2980.00"
-        )
+        assert dict(_stmt_total_rows(D("-2980.00"), PAID, None, 2026))[
+            "Amount Due for Month"
+        ] == D("-2980.00")
 
     def test_money_owed_keeps_the_line(self):
-        assert dict(_stmt_total_rows(D("2980.00"), CARRIED, PAID))["Amount Due for Month"] == D(
-            "2980.00"
-        )
+        assert dict(_stmt_total_rows(D("2980.00"), PAID, None, 2026))[
+            "Amount Due for Month"
+        ] == D("2980.00")
 
-    def test_carried_forward_line_is_printed_even_when_zero(self):
-        rows = dict(_stmt_total_rows(D("0"), D("0"), PAID))
-        assert rows["Balance carried forward"] == D("0")
-
-    def test_carried_forward_carries_a_real_balance(self):
-        rows = dict(_stmt_total_rows(D("2980.00"), CARRIED, PAID))
-        assert rows["Balance carried forward"] == CARRIED
-
-    def test_order_is_due_then_carried_then_paid_then_year(self):
+    def test_exactly_three_lines_in_school_order(self):
         labels = [
-            label for label, _ in _stmt_total_rows(D("0"), CARRIED, PAID, D("13280.00"))
+            label for label, _ in _stmt_total_rows(D("0"), PAID, D("13280.00"), 2026)
         ]
         assert labels == [
             "Amount Due for Month",
-            "Balance carried forward",
+            "Amount Due for 2026",
             "Amount Paid to date",
-            "Outstanding for Year",
         ]
 
-    def test_paid_and_year_rows_are_always_present(self):
-        assert dict(_stmt_total_rows(D("0"), CARRIED, PAID))["Amount Paid to date"] == PAID
+    def test_carrying_balance_is_not_a_summary_line(self):
+        rows = dict(_stmt_total_rows(D("2980.00"), PAID, None, 2026))
+        assert "Balance carried forward" not in rows
+
+    def test_paid_row_is_always_present(self):
+        assert dict(_stmt_total_rows(D("0"), PAID, None, 2026))["Amount Paid to date"] == PAID
 
     def test_year_row_is_optional(self):
-        assert "Outstanding for Year" not in dict(_stmt_total_rows(D("0"), CARRIED, PAID))
+        assert "Amount Due for 2026" not in dict(_stmt_total_rows(D("0"), PAID, None, 2026))
+
+    def test_year_row_label_follows_the_statement_year(self):
+        rows = dict(_stmt_total_rows(D("0"), PAID, D("5820.00"), 2025))
+        assert rows["Amount Due for 2025"] == D("5820.00")

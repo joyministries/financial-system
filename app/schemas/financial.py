@@ -39,6 +39,9 @@ class StatementResponse(BaseModel):
     #: months billed by January's annual invoice; clients use this to show the
     #: fee that actually falls due (it never moves the balance).
     grade_monthly_fee: Decimal = Decimal("0")
+    #: Verified receipts up to this statement's month — the "Amount Paid to
+    #: date" line. Computed per request; not a stored column.
+    paid_to_date: Decimal = Decimal("0")
 
     model_config = {"from_attributes": True}
 

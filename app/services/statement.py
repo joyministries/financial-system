@@ -673,6 +673,31 @@ def total_paid_from_ledger(rows: list[dict]) -> Decimal:
     )
 
 
+def paid_to_date_by_month(
+    payments: list[tuple[datetime, Decimal | float]], academic_year: int
+) -> dict[int, Decimal]:
+    """Verified receipts up to the end of each month of ``academic_year``.
+
+    Same cut-off as the statement PDF's paid-to-date figure, so the portal and
+    the document report one number.
+    """
+    # Payment dates are UTC; MariaDB returns them without an offset. Drop any
+    # offset so aware and naive rows compare the same way as the cut-offs.
+    rows = [
+        ((received.replace(tzinfo=None) if received.tzinfo else received), to_decimal(amount))
+        for received, amount in payments
+    ]
+    out: dict[int, Decimal] = {}
+    for month in range(1, 13):
+        next_month = (
+            datetime(academic_year + 1, 1, 1)
+            if month == 12
+            else datetime(academic_year, month + 1, 1)
+        )
+        out[month] = sum((amount for received, amount in rows if received < next_month), D0)
+    return out
+
+
 def statement_footer(
     *,
     total_billed: Decimal,
