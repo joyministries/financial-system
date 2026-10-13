@@ -88,6 +88,11 @@ class StatementService:
         year (same value on every month). Callers that already prefetch it —
         the bulk generator — pass it in; otherwise it is read from the year's
         invoices.
+
+        NEW FORMULA:
+        - current_amount_due (amount due for the month) = fee_for_year - total_paid_to_date
+        - fee_for_year = Month 1 installment (total annual fee)
+        - total_paid_to_date = sum of all verified payments for student/year
         """
         month_row = next((r for r in breakdown if r["month"] == month), None)
         prev_row = next((r for r in breakdown if r["month"] == month - 1), None)
@@ -105,6 +110,23 @@ class StatementService:
 
         total_fees = sum((r["required"] for r in breakdown), D0)
 
+        # --- NEW FORMULA: Calculate current_amount_due ---
+        # fee_for_year = Month 1 installment (the total annual fee billed)
+        month1_row = next((r for r in breakdown if r["month"] == 1), None)
+        fee_for_year = month1_row["required"] if month1_row else total_fees
+
+        # total_paid_to_date = sum of all verified payments for this student/year
+        from app.models.payment import Payment, PaymentAllocation
+        from sqlalchemy import select, func
+        paid_stmt = select(func.coalesce(func.sum(Payment.amount), D0)).where(
+            Payment.student_id == student_id,
+            Payment.status == "verified",
+        )
+        total_paid_to_date = to_decimal((await self.db.execute(paid_stmt)).scalar())
+
+        # Amount due for the month = fee_for_year - total_paid_to_date
+        amount_due_for_month = to_decimal(fee_for_year - total_paid_to_date)
+
         if brought_forward is None:
             brought_forward = await self.brought_forward_for(student_id, academic_year)
 
@@ -118,7 +140,7 @@ class StatementService:
             total_additional_charges=total_additional,
             total_payments=total_payments,
             closing_balance=closing,
-            current_amount_due=closing,
+            current_amount_due=amount_due_for_month,  # NEW FORMULA
             brought_forward=to_decimal(brought_forward),
             due_date=self._due_date_for(academic_year, month),
         )

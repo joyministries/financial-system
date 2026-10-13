@@ -10,7 +10,6 @@ from app.models.grade import Grade, Student
 from app.models.payment import Payment
 from app.services.ledger import LedgerService
 from app.services.monthly_fee import load_monthly_fee_lookup
-from app.services.statement import amount_due_for_month
 
 D0 = Decimal("0")
 
@@ -468,12 +467,8 @@ class ReportService:
                 outstanding = D0
             else:
                 paid = entry.total_payments or D0
-                # Same formula the statement PDF prints, so the whole-school
-                # figure and the document the parent receives cannot drift.
-                outstanding = amount_due_for_month(
-                    entry.current_amount_due,
-                    fee_by_student.get(student.id, D0),
-                )
+                # current_amount_due now stores the new formula directly
+                outstanding = Decimal(str(entry.current_amount_due or 0))
             rows.append({
                 "student_id": student.id,
                 "student_number": student.student_number,

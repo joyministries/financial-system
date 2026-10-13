@@ -147,15 +147,21 @@ def _due_date_for_statement(academic_year: int, month: int) -> datetime:
 
 
 def _monthly_amount_due(statement: Statement, monthly_fee: Decimal) -> Decimal:
-    """``Amount Due for Month`` — see
-    :func:`app.services.statement.amount_due_for_month`."""
-    return amount_due_for_month(statement.current_amount_due, monthly_fee)
+    """``Amount Due for Month`` — now stored directly in statement.current_amount_due.
+
+    New formula: fee_for_year - total_paid_to_date (computed in generate_from_breakdown).
+    """
+    return Decimal(str(statement.current_amount_due or 0))
 
 
 def _outstanding_for_year(statement: Statement, monthly_fee: Decimal) -> Decimal:
-    """Fee instalments that have not fallen due yet in this school year."""
+    """Amount Due for the Year — (months remaining + 1) * monthly_fee.
+
+    Months remaining = months not yet due (Nov, Dec for month 10).
+    The +1 adds the current month's fee as the school expects.
+    """
     months_left = max(0, 12 - (statement.month or 0))
-    return (monthly_fee or D0) * months_left
+    return (monthly_fee or D0) * (months_left + 1)
 
 
 def _approved_students_query(grade_id: str | None = None, include_inactive: bool = False):
