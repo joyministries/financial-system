@@ -737,9 +737,9 @@ def _stmt_total_rows(
     All three print, including ``R 0.00``: omitting one reads as a missing
     figure rather than as a nil one.
     """
-    rows: list[tuple[str, Decimal]] = [("Amount Due for Month", amount_due)]
+    rows: list[tuple[str, Decimal]] = [("Amount Due for Year", amount_due)]
     if amount_year_due is not None:
-        rows.append((f"Amount Due for {academic_year}", amount_year_due))
+        rows.append((f"Amount Due for the Month", amount_year_due))
     rows.append(("Amount Paid to date", amount_paid))
     return rows
 
@@ -750,7 +750,7 @@ def _stmt_totals(
     amount_year_due: Decimal | None = None,
     academic_year: int = 0,
 ) -> Table:
-    """Right-aligned amount due / year due / paid-to-date rows."""
+    """Right-aligned amount due for year / amount due for month / paid-to-date rows."""
     rows = [
         [Paragraph(label, _STMT_TOTAL_LABEL), Paragraph(money(value), _STMT_TOTAL_VALUE)]
         for label, value in _stmt_total_rows(
