@@ -14,6 +14,8 @@ from app.schemas.setting import (
     ReminderSettingsOut,
     SmsSettingsIn,
     SmsSettingsOut,
+    StatementGenerationSettingsIn,
+    StatementGenerationSettingsOut,
 )
 from app.services.email import EmailNotConfiguredError, EmailService
 from app.services.setting import SettingService
@@ -126,6 +128,41 @@ async def update_auto_generation_settings(
     """Save the invoice + statement auto-generation schedule. Admin only."""
     config = await SettingService(db).update_auto_generation_config(payload, user.id)
     return _auto_generation_out(config)
+
+
+# ── student statement auto-generation ────────────────────────
+def _statement_generation_out(config: dict) -> StatementGenerationSettingsOut:
+    from app.services.setting import next_statement_generation_date
+
+    next_run = next_statement_generation_date(config)
+    return StatementGenerationSettingsOut(
+        enabled=bool(config.get("enabled", False)),
+        day_of_month=int(config.get("day_of_month", 1)),
+        notify_parents=bool(config.get("notify_parents", True)),
+        last_run_date=config.get("last_run_date") or None,
+        next_run_date=next_run.isoformat() if next_run else None,
+    )
+
+
+@router.get("/statement-generation", response_model=StatementGenerationSettingsOut)
+async def get_statement_generation_settings(
+    _user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> StatementGenerationSettingsOut:
+    """Current student statement auto-generation schedule (admin only)."""
+    config = await SettingService(db).get_statement_generation_config()
+    return _statement_generation_out(config)
+
+
+@router.put("/statement-generation", response_model=StatementGenerationSettingsOut)
+async def update_statement_generation_settings(
+    payload: StatementGenerationSettingsIn,
+    user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> StatementGenerationSettingsOut:
+    """Save the student statement auto-generation schedule. Admin only."""
+    config = await SettingService(db).update_statement_generation_config(payload, user.id)
+    return _statement_generation_out(config)
 
 
 # ── registration fee ─────────────────────────────────────────

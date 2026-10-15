@@ -144,7 +144,7 @@ export default function StatementsScreen() {
               style={[styles.tab, selectedStudent?.id === s.id && styles.tabActive]}
               onPress={() => { setSelectedStudent(s); setStatusFilter('all'); }}
             >
-              <Text style={[styles.tabText, selectedStudent?.id === s.id && styles.tabTextActive]}>{s.first_name}</Text>
+              <Text style={[styles.tabText, selectedStudent?.id === s.id && styles.tabTextActive]}>{s.first_name || s.student_number || 'Student'}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>

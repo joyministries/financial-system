@@ -26,6 +26,7 @@ settings = get_settings()
 KEEP_SECRET = "********"
 
 AUTO_GENERATION_KEY = "auto_generation"
+STATEMENT_GENERATION_KEY = "statement_generation"
 
 
 def next_auto_generation_date(config: dict, today: date | None = None) -> date | None:
@@ -37,6 +38,21 @@ def next_auto_generation_date(config: dict, today: date | None = None) -> date |
     skipped. Anything in the past for this month reports "today" — the next
     beat will pick it up.
     """
+    if not config.get("enabled"):
+        return None
+    today = today or date.today()
+    day = max(1, min(28, int(config.get("day_of_month") or 1)))
+    ran_this_month = (config.get("last_run_date") or "")[:7] == today.strftime("%Y-%m")
+    if not ran_this_month and today.day >= day:
+        return today
+    if today.day < day:
+        return date(today.year, today.month, day)
+    year, month = (today.year, today.month + 1) if today.month < 12 else (today.year + 1, 1)
+    return date(year, month, day)
+
+
+def next_statement_generation_date(config: dict, today: date | None = None) -> date | None:
+    """Next date the scheduled statement generation run fires (server time)."""
     if not config.get("enabled"):
         return None
     today = today or date.today()
@@ -89,6 +105,12 @@ class SettingService:
             "last_reminder_index": 0,
         },
         "auto_generation": {
+            "enabled": False,
+            "day_of_month": 1,
+            "notify_parents": True,
+            "last_run_date": "",
+        },
+        "statement_generation": {
             "enabled": False,
             "day_of_month": 1,
             "notify_parents": True,
@@ -369,6 +391,60 @@ class SettingService:
             self.db.add(
                 SystemSetting(
                     key=AUTO_GENERATION_KEY,
+                    value_json=json.dumps(raw),
+                    updated_by=None,
+                )
+            )
+        else:
+            row.value_json = json.dumps(raw)
+            row.updated_by = None
+        await self.db.flush()
+
+    # ── student statement auto-generation ────────────────────
+    async def get_statement_generation_config(self) -> dict:
+        """Raw statement generation schedule config merged over defaults."""
+        raw = await self._get_raw(STATEMENT_GENERATION_KEY)
+        return {**self.DEFAULTS[STATEMENT_GENERATION_KEY], **raw}
+
+    async def update_statement_generation_config(
+        self, data: StatementGenerationSettingsIn, user_id: str
+    ) -> dict:
+        """Save the statement generation schedule (admin only)."""
+        raw = await self._get_raw(STATEMENT_GENERATION_KEY)
+        new = {
+            "enabled": data.enabled,
+            "day_of_month": data.day_of_month,
+            "notify_parents": data.notify_parents,
+            "last_run_date": raw.get("last_run_date", ""),
+        }
+        # Enabling (or moving the day) restarts the schedule so the new slot
+        # is not treated as already fired by a run under the previous setting.
+        if new["enabled"] and new["day_of_month"] != raw.get("day_of_month"):
+            new["last_run_date"] = ""
+
+        old = self._masked(STATEMENT_GENERATION_KEY, raw)
+        await self._store(STATEMENT_GENERATION_KEY, new, user_id)
+        await AuditService(self.db).log(
+            "system_setting",
+            STATEMENT_GENERATION_KEY,
+            "update",
+            user_id,
+            old_values=old,
+            new_values=dict(new),
+        )
+        return new
+
+    async def record_statement_generation_run(self) -> None:
+        """Persist that the scheduled statement generation run fired today (beat task)."""
+        raw = await self._get_raw(STATEMENT_GENERATION_KEY)
+        raw["last_run_date"] = date.today().isoformat()
+        # _store needs a user_id for audit; the scheduler has no actor, so write
+        # the row directly without audit logging.
+        row = await self.db.get(SystemSetting, STATEMENT_GENERATION_KEY)
+        if row is None:
+            self.db.add(
+                SystemSetting(
+                    key=STATEMENT_GENERATION_KEY,
                     value_json=json.dumps(raw),
                     updated_by=None,
                 )

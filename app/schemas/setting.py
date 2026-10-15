@@ -102,3 +102,25 @@ class AutoGenerationSettingsOut(AutoGenerationSettingsIn):
 
     last_run_date: str | None = None
     next_run_date: str | None = None
+
+
+class StatementGenerationSettingsIn(BaseModel):
+    """Monthly student statement auto-generation + parent notification (admin configured).
+
+    On ``day_of_month`` the scheduler generates that month's statements for every
+    approved student and optionally sends them to parents via SMS/email.
+    Existing statements are skipped, so a re-run never duplicates them or
+    re-sends notifications. The day is capped at 28 so the slot fires in every
+    month, including February.
+    """
+
+    enabled: bool = False
+    day_of_month: int = Field(default=1, ge=1, le=28)
+    notify_parents: bool = True
+
+
+class StatementGenerationSettingsOut(StatementGenerationSettingsIn):
+    """Schedule state returned to the UI (no secrets involved)."""
+
+    last_run_date: str | None = None
+    next_run_date: str | None = None
