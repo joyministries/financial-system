@@ -109,13 +109,32 @@ class Token(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    """Login with either email or phone number."""
+    email: str | None = None
+    phone: str | None = None
     password: str = Field(min_length=1)
 
     @field_validator("email")
     @classmethod
-    def _email_norm(cls, v: str) -> str:
+    def _email_norm(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         return _normalize_email(v)
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_norm(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return v.strip()
+
+    def get_identifier(self) -> str:
+        """Return the identifier (email or phone) for login lookup."""
+        if self.email:
+            return self.email
+        if self.phone:
+            return self.phone
+        raise ValueError("Either email or phone must be provided")
 
 
 class PasswordChange(BaseModel):

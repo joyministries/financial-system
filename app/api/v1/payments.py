@@ -8,6 +8,7 @@ from app.core.deps import (
     require_role,
     verify_student_access,
 )
+from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.models.user import User
 from app.schemas.common import CountResponse, PageResponse, build_page_response
 from app.schemas.payment import (
@@ -388,7 +389,15 @@ async def edit_payment(
     service = PaymentService(db)
     from app.services.audit import AuditService
 
-    payment = await service.edit(payment_id, data)
+    try:
+        payment = await service.edit(payment_id, data)
+    except BusinessRuleError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     await AuditService(db).log("payment", payment_id, "edit", user.id, new_values=data.model_dump(exclude_unset=True))
     await db.commit()
     return payment

@@ -73,6 +73,17 @@ class PaymentEdit(BaseModel):
     reference_number: str | None = None
     notes: str | None = None
 
+    @model_validator(mode="after")
+    def check_at_least_one_field(self):
+        """Ensure at least one field is provided for edit."""
+        fields = [
+            self.student_id, self.amount, self.payment_method,
+            self.payment_date, self.reference_number, self.notes
+        ]
+        if all(f is None for f in fields):
+            raise ValueError("At least one field must be provided for edit")
+        return self
+
 
 class PaymentDeallocate(BaseModel):
     """Remove a single allocation and reverse its effect on the balance/charge."""

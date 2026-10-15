@@ -187,8 +187,15 @@ async def login(
     data: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Login endpoint. Rate limited: 10/minute."""
-    stmt = select(User).where(User.email == data.email)
+    """Login endpoint. Rate limited: 10/minute.
+    
+    Accepts either email or phone number for login."""
+    identifier = data.get_identifier()
+    
+    # Try email first, then phone
+    stmt = select(User).where(
+        (User.email == identifier) | (User.phone == identifier)
+    )
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -201,7 +208,7 @@ async def login(
     token = create_access_token(subject=user.id, expires_delta=_token_expiry(user.role))
 
     audit = AuditService(db)
-    await audit.log("user", user.id, "login", user.id, new_values={"email": user.email})
+    await audit.log("user", user.id, "login", user.id, new_values={"identifier": identifier})
     return Token(access_token=token, must_change_password=user.must_change_password or False)
 
 
