@@ -742,7 +742,7 @@ def _stmt_total_rows(
     # Amount Due for Year
     year_due = amount_due
     # Amount Due for the Month = Amount Due for Year - Amount Due for the Month (old formula)
-    month_due = year_due - (amount_year_due or D0)
+    month_due = year_due - (amount_year_due or Decimal("0"))
     rows: list[tuple[str, Decimal]] = [("Amount Due for Year", year_due)]
     rows.append(("Amount Due for the Month", month_due))
     rows.append(("Amount Paid to date", amount_paid))

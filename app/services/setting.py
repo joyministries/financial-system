@@ -17,6 +17,7 @@ from app.schemas.setting import (
     ReminderSettingsIn,
     SmsSettingsIn,
     SmsSettingsOut,
+    StatementGenerationSettingsIn,
 )
 from app.services.audit import AuditService
 
