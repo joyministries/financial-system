@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api.pay import router as pay_router
 from app.api.v1.router import api_router
@@ -56,6 +57,10 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
     openapi_url="/openapi.json" if settings.DEBUG else None,
 )
+
+# Trust proxy headers from Vercel/Cloudflare (X-Forwarded-For, X-Forwarded-Proto)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -64,7 +69,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "x-vercel-cron"],
 )
 
 
