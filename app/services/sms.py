@@ -42,6 +42,10 @@ _DEFAULT_TEMPLATES: dict[str, str] = {
         "Lambton Christian School: Dear {parent}, {student}'s {month}/{year} "
         "invoice for R{amount} is ready. Please make payment by the due date."
     ),
+    "statement_ready": (
+        "Lambton Christian School: Dear {parent}, {student}'s {month}/{year} "
+        "statement is ready. View it here: {link}"
+    ),
     "test": "Lambton Christian School: This is a test SMS. If you received this, SMS is working.",
 }
 
@@ -49,6 +53,7 @@ MSG_PAYMENT_RECEIVED = _DEFAULT_TEMPLATES["payment_receipt"]
 MSG_BALANCE_REMINDER = _DEFAULT_TEMPLATES["balance_reminder"]
 MSG_PAYMENT_LINK = _DEFAULT_TEMPLATES["payment_link"]
 MSG_INVOICE_READY = _DEFAULT_TEMPLATES["invoice_ready"]
+MSG_STATEMENT_READY = _DEFAULT_TEMPLATES["statement_ready"]
 MSG_TEST = _DEFAULT_TEMPLATES["test"]
 
 
@@ -353,6 +358,40 @@ class SmsService:
             content,
             student_id=student.id,
             template="invoice_ready",
+            created_by=created_by,
+        )
+
+    async def send_statement_ready(
+        self,
+        student: Student,
+        month: int,
+        year: int,
+        link: str,
+        created_by: str | None = None,
+    ) -> SmsMessage | None:
+        """Notify the billing parent that the child's statement is ready."""
+        phone = await self.get_student_phone(student)
+        if not phone:
+            logger.info("No guardian phone for student %s — skipping statement SMS", student.id)
+            return None
+        parent_name = await self.parent_first_name(student)
+        template = await self.get_template("statement_ready")
+        content, _missing = self.render_template(
+            "statement_ready",
+            {
+                "parent": parent_name,
+                "student": student.first_name,
+                "month": f"{month:02d}",
+                "year": year,
+                "link": link,
+            },
+            fallback=template.body if template else None,
+        )
+        return await self.send(
+            phone,
+            content,
+            student_id=student.id,
+            template="statement_ready",
             created_by=created_by,
         )
 
