@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { authApi } from '@/api/client';
+import { clearStudentNamesCache } from '@/lib/studentNames';
 import type { User } from '@/types';
 
 interface AuthContextType {
@@ -37,6 +38,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const login = async (email: string, password: string) => {
+    // Drop any names cached under the previous session so tables/PDFs never
+    // resolve ids against another account's (e.g. a parent's) name map.
+    clearStudentNamesCache();
     const res = await authApi.login(email, password);
     localStorage.setItem('token', res.data.access_token);
     setToken(res.data.access_token);
@@ -46,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithToken = async (accessToken: string) => {
+    clearStudentNamesCache();
     localStorage.setItem('token', accessToken);
     setToken(accessToken);
     try {
@@ -63,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    clearStudentNamesCache();
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
