@@ -8,6 +8,21 @@ logger = logging.getLogger(__name__)
 
 _INSECURE_DEFAULTS = {"CHANGE-ME-IN-PRODUCTION", "changeme"}
 
+# Browser origins that are always trusted, regardless of the CORS_ORIGINS env
+# var. Production sets that env var, which replaces these defaults — so moving
+# the frontend to a new domain used to keep working for curl/scripts while
+# every browser call was rejected with "Disallowed CORS origin" (400). The SPA
+# surfaces that as a failed login, which reads like a wrong password.
+BUILTIN_CORS_ORIGINS = [
+    "https://financial.lambtonschool.co.za",
+    "https://www.financial.lambtonschool.co.za",
+]
+
+# Every subdomain of the school's own domain is trusted too, so a future custom
+# domain (or a staging host) does not repeat that outage. Set the env var
+# CORS_ORIGIN_REGEX to "" to disable the pattern.
+_CORS_ORIGIN_REGEX = r"https://([a-z0-9-]+\.)*lambtonschool\.co\.za"
+
 
 class Settings(BaseSettings):
     APP_NAME: str = "Lambton School"
@@ -42,6 +57,10 @@ class Settings(BaseSettings):
     SUPERADMIN_PASSWORD: str = "changeme"
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    # Regex alternative to CORS_ORIGINS (Starlette matches either). Empty string
+    # disables it. See _CORS_ORIGIN_REGEX above.
+    CORS_ORIGIN_REGEX: str = _CORS_ORIGIN_REGEX
 
     # Uploaded application documents (birth certificates, transcripts, ...).
     # Relative paths resolve against the project root.
@@ -88,6 +107,17 @@ class Settings(BaseSettings):
             if v.startswith(prefix):
                 return "mysql+aiomysql://" + v[len(prefix):]
         return v
+
+    @field_validator("CORS_ORIGINS", mode="after")
+    @classmethod
+    def _merge_builtin_cors_origins(cls, v: list[str]) -> list[str]:
+        """Keep the built-in production origins alongside the env value.
+
+        Without this, rotating the frontend domain needs a matching Vercel env
+        change before anyone can log in again — and the symptom is a login page
+        that blames the password.
+        """
+        return list(dict.fromkeys([*v, *BUILTIN_CORS_ORIGINS]))
 
     def validate_secrets(self) -> None:
         """Log warnings for insecure defaults. In non-debug mode, refuse to start."""

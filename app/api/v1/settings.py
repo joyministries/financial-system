@@ -290,9 +290,10 @@ async def set_frontend_base_url(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     svc = SettingService(db)
-    await svc.set_plain("frontend_base_url", payload.value, user.id)
+    value = payload.value.strip()
+    await svc.set_plain("frontend_base_url", value, user.id)
     await db.commit()
-    return {"frontend_base_url": payload.value.strip()}
+    return {"frontend_base_url": value}
 
 
 @router.put("/base-urls/payfast")

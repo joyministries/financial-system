@@ -116,8 +116,9 @@ class StatementService:
         fee_for_year = month1_row["required"] if month1_row else total_fees
 
         # total_paid_to_date = sum of all verified payments for this student/year
-        from app.models.payment import Payment, PaymentAllocation
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
+        from app.models.payment import Payment
         paid_stmt = select(func.coalesce(func.sum(Payment.amount), D0)).where(
             Payment.student_id == student_id,
             Payment.status == "verified",
@@ -875,7 +876,7 @@ async def bulk_generate_statements(
 
 # Portal URL used in the statement-ready SMS when the admin has not stored a
 # `frontend_base_url` (Settings → Base URLs). Mirrors the deployed frontend.
-PORTAL_BASE_URL_FALLBACK = "https://financial-system-flax.vercel.app"
+PORTAL_BASE_URL_FALLBACK = "https://financial.lambtonschool.co.za"
 
 
 async def generate_statements_and_notify(

@@ -5,6 +5,39 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import AuthLayout from '@/components/auth/AuthLayout';
 
+/**
+ * Turn a sign-in failure into something the user can act on.
+ *
+ * A blocked request (offline, or the API rejecting this site's origin) has no
+ * `response` at all — reporting that as "invalid credentials" sends people off
+ * hunting for the wrong password. The same is true for the 429 the login rate
+ * limiter returns, whose body is `{error}` rather than `{detail}`.
+ */
+export function loginErrorMessage(err: unknown): string {
+  const e = err as {
+    response?: { status?: number; data?: { detail?: unknown; error?: unknown } };
+  };
+  const res = e?.response;
+  const status = res?.status ?? 0;
+  if (!res) {
+    return "Can't reach the server. Check your connection and try again.";
+  }
+  const { detail, error } = res.data ?? {};
+  if (status === 429) {
+    const limit = typeof error === 'string' ? error.replace(/^Rate limit exceeded:\s*/, '') : '';
+    return `Too many sign-in attempts${limit ? ` (${limit})` : ''}. Please wait a minute and try again.`;
+  }
+  if (status === 401) {
+    return typeof detail === 'string' && detail !== 'Invalid credentials'
+      ? detail
+      : 'Incorrect email/phone or password.';
+  }
+  if (status >= 500) {
+    return 'The server had a problem. Please try again in a moment.';
+  }
+  return typeof detail === 'string' ? detail : 'Sign-in failed. Please try again.';
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,9 +53,8 @@ export default function LoginPage() {
       await login(email.trim(), password);
       toast.success('Logged in');
       navigate('/');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'Invalid credentials');
+    } catch (err) {
+      toast.error(loginErrorMessage(err));
     } finally {
       setLoading(false);
     }
