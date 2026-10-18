@@ -240,25 +240,37 @@ async def login(
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Email match first (indexed, unique).
-    user = (
+    user = None
+
+    # Email first (indexed, unique).
+    email_user = (
         await db.execute(select(User).where(User.email == identifier.strip().lower()))
     ).scalar_one_or_none()
+    if email_user is not None and verify_password(data.password, email_user.hashed_password):
+        user = email_user
 
     # Fall back to the phone number, tolerating local/international formats.
+    # One number can belong to several accounts (two parents, a duplicate
+    # registration), so verify the password against every candidate instead of
+    # trusting an arbitrary first match.
     if user is None:
         variants = _phone_variants(identifier)
         if variants:
-            user = (
+            candidates = (
                 await db.execute(
-                    select(User)
-                    .where(User.phone.in_(variants))
-                    .order_by(User.created_at)
-                    .limit(1)
+                    select(User).where(User.phone.in_(variants)).order_by(User.created_at)
                 )
-            ).scalars().first()
+            ).scalars().all()
+            user = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if verify_password(data.password, candidate.hashed_password)
+                ),
+                None,
+            )
 
-    if not user or not verify_password(data.password, user.hashed_password):
+    if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_active:
