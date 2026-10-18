@@ -49,6 +49,123 @@ function StatusPill({ ready }: { ready: boolean }) {
   );
 }
 
+/**
+ * Editable SMS template list — the Message Templates and Statement Templates
+ * cards are the same widget over different key sets, so they share this.
+ *
+ * The card owns which row is being edited and the textarea draft; the page owns
+ * the list, its loading state and the save call (which reports its own toasts
+ * and rejects on failure, keeping the draft open).
+ */
+function TemplatesCard({
+  title,
+  description,
+  icon,
+  templates,
+  loading,
+  onSave,
+  emptyText,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  templates: SmsTemplate[];
+  loading: boolean;
+  onSave: (template: SmsTemplate, body: string) => Promise<void>;
+  emptyText: string;
+}) {
+  const [editing, setEditing] = useState<SmsTemplate | null>(null);
+  const [body, setBody] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!editing) return;
+    if (!body.trim()) return toast.error('Template content cannot be empty');
+    setSaving(true);
+    try {
+      await onSave(editing, body);
+      setEditing(null);
+    } catch {
+      // The page already reported it — leave the editor open with the draft.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+      <div className="flex items-center gap-2">
+        {icon}
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      </div>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+
+      {loading ? (
+        <div className="mt-4 flex justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+        </div>
+      ) : (
+        <ul className="mt-4 divide-y divide-slate-100">
+          {templates.map((t) => (
+            <li key={t.key} className="flex items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{t.name}</p>
+                <p className="truncate text-xs text-slate-500">{t.body}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {t.is_default && (
+                  <span className="badge badge-neutral" title="Nothing saved yet — this is the built-in text">
+                    Built-in default
+                  </span>
+                )}
+                {!t.is_active && <span className="badge badge-warning">Disabled</span>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(t);
+                    setBody(t.body);
+                  }}
+                  className="rounded p-1.5 text-slate-400 hover:text-primary-600 hover:bg-slate-100"
+                  title={`Edit ${t.name}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+          {templates.length === 0 && (
+            <li className="py-6 text-center text-sm text-slate-400">{emptyText}</li>
+          )}
+        </ul>
+      )}
+
+      {editing && (
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-900">{editing.name}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Use placeholders in {'{braces}'}: {'{parent}'}, {'{student}'}, {'{amount}'},
+            {'{balance}'}, {'{link}'}, {'{month}'}, {'{year}'}, {'{receipt}'}
+          </p>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={4}
+            className="input mt-2"
+          />
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={save} disabled={saving} className="btn btn-primary">
+              {saving ? 'Saving…' : 'Save Template'}
+            </button>
+            <button type="button" onClick={() => setEditing(null)} className="btn btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SecretField({
   label,
   value,
@@ -121,9 +238,8 @@ export default function SettingsPage() {
 
   const [templates, setTemplates] = useState<SmsTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<SmsTemplate | null>(null);
-  const [templateBody, setTemplateBody] = useState('');
-  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [statementTemplates, setStatementTemplates] = useState<SmsTemplate[]>([]);
+  const [loadingStatementTemplates, setLoadingStatementTemplates] = useState(false);
 
   const smsReady =
     !!sms?.enabled && !!sms?.provider && (sms.api_key_set || sms.api_secret_set);
@@ -137,29 +253,39 @@ export default function SettingsPage() {
       .finally(() => setLoadingTemplates(false));
   };
 
-  const openTemplateEditor = (t: SmsTemplate) => {
-    setEditingTemplate(t);
-    setTemplateBody(t.body);
+  const loadStatementTemplates = () => {
+    setLoadingStatementTemplates(true);
+    smsApi
+      .statementTemplates()
+      .then((res) => setStatementTemplates(res.data))
+      .catch(() => toast.error('Failed to load statement templates'))
+      .finally(() => setLoadingStatementTemplates(false));
   };
 
-  const saveTemplate = async () => {
-    if (!editingTemplate) return;
-    if (!templateBody.trim()) return toast.error('Template content cannot be empty');
-    setSavingTemplate(true);
+  /** Persist a curated body. Rejects on failure so the editor stays open. */
+  const saveTemplate = async (t: SmsTemplate, body: string) => {
     try {
-      await smsApi.updateTemplate(editingTemplate.key, {
-        name: editingTemplate.name,
-        body: templateBody,
-        is_active: editingTemplate.is_active,
+      await smsApi.updateTemplate(t.key, {
+        name: t.name,
+        body,
+        is_active: t.is_active,
       });
-      toast.success('Message template saved — new sends use it');
-      setEditingTemplate(null);
-      loadTemplates();
-    } catch {
-      toast.error('Failed to save message template');
-    } finally {
-      setSavingTemplate(false);
+    } catch (err) {
+      toast.error('Failed to save template — please try again');
+      throw err;
     }
+  };
+
+  const saveMessageTemplate = async (t: SmsTemplate, body: string) => {
+    await saveTemplate(t, body);
+    toast.success('Message template saved — new sends use it');
+    loadTemplates();
+  };
+
+  const saveStatementTemplate = async (t: SmsTemplate, body: string) => {
+    await saveTemplate(t, body);
+    toast.success('Statement template saved — new statements use it');
+    loadStatementTemplates();
   };
 
   useEffect(() => {
@@ -191,6 +317,7 @@ export default function SettingsPage() {
       .then((res) => setRegistrationFee(res.data.amount || ''))
       .catch(() => toast.error('Failed to load registration fee'));
     loadTemplates();
+    loadStatementTemplates();
   }, [isAdmin]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -682,82 +809,15 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Message Templates ────────────────────────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-            <div className="flex items-center gap-2">
-              <Pencil className="h-5 w-5 text-primary-600" />
-              <h3 className="text-base font-semibold text-slate-900">Message Templates</h3>
-            </div>
-            <p className="mt-1 text-sm text-slate-500">
-              Curate the SMS messages sent to parents. Edits apply to every future send —
-              reminders, payment links and receipt notifications.
-            </p>
-
-            {loadingTemplates ? (
-              <div className="mt-4 flex justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              </div>
-            ) : (
-              <ul className="mt-4 divide-y divide-slate-100">
-                {templates.map((t) => (
-                  <li key={t.key} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900">{t.name}</p>
-                      <p className="truncate text-xs text-slate-500">{t.body}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {!t.is_active && <span className="badge badge-warning">Disabled</span>}
-                      <button
-                        type="button"
-                        onClick={() => openTemplateEditor(t)}
-                        className="rounded p-1.5 text-slate-400 hover:text-primary-600 hover:bg-slate-100"
-                        title={`Edit ${t.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-                {templates.length === 0 && (
-                  <li className="py-6 text-center text-sm text-slate-400">
-                    No message templates yet.
-                  </li>
-                )}
-              </ul>
-            )}
-
-            {editingTemplate && (
-              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">{editingTemplate.name}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Use placeholders in {'{braces}'}: {'{parent}'}, {'{student}'}, {'{amount}'},
-                  {'{balance}'}, {'{link}'}, {'{month}'}, {'{year}'}, {'{receipt}'}
-                </p>
-                <textarea
-                  value={templateBody}
-                  onChange={(e) => setTemplateBody(e.target.value)}
-                  rows={4}
-                  className="input mt-2"
-                />
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={saveTemplate}
-                    disabled={savingTemplate}
-                    className="btn btn-primary"
-                  >
-                    {savingTemplate ? 'Saving…' : 'Save Template'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingTemplate(null)}
-                    className="btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <TemplatesCard
+            title="Message Templates"
+            description="Curate the SMS messages sent to parents. Edits apply to every future send — reminders, payment links and receipt notifications."
+            icon={<Pencil className="h-5 w-5 text-primary-600" />}
+            templates={templates}
+            loading={loadingTemplates}
+            onSave={saveMessageTemplate}
+            emptyText="No message templates yet."
+          />
 
           {/* ── Registration Fee ─────────────────────────────── */}
           <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
@@ -1160,6 +1220,17 @@ export default function SettingsPage() {
               </form>
             )}
           </div>
+
+          {/* ── Statement Templates ──────────────────────────── */}
+          <TemplatesCard
+            title="Statement Templates"
+            description="The SMS parents receive when statements are generated. Until you save your own wording the built-in default is shown here, and it is what parents currently receive."
+            icon={<FileText className="h-5 w-5 text-primary-600" />}
+            templates={statementTemplates}
+            loading={loadingStatementTemplates}
+            onSave={saveStatementTemplate}
+            emptyText="No statement templates yet."
+          />
         </>
       )}
       </div>

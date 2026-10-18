@@ -61,7 +61,12 @@ class SmsTemplateOut(BaseModel):
     name: str
     body: str
     is_active: bool
-    updated_at: datetime
+    # None when the body shown is the built-in default and no row exists yet
+    # (see SmsService.list_statement_templates).
+    updated_at: datetime | None = None
+    # True when nothing has been saved for this key yet, so the text on screen
+    # is the code default rather than a curated body.
+    is_default: bool = False
 
     model_config = {"from_attributes": True}
 

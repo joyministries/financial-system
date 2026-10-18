@@ -1,9 +1,7 @@
 import logging
 from datetime import UTC, datetime
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -184,6 +182,20 @@ async def list_sms_templates(
 ) -> list[SmsTemplateOut]:
     """List editable message templates (admin-curated SMS content)."""
     return await SmsService(db).list_templates()
+
+
+@router.get("/statement-templates", response_model=list[SmsTemplateOut])
+async def list_statement_templates(
+    _user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> list[SmsTemplateOut]:
+    """SMS templates the statement workflow sends.
+
+    Built-in defaults are merged in, so the card shows the actual message text
+    before anything has been saved. Saving an edit uses the same
+    `PUT /sms/templates/{key}` as every other template.
+    """
+    return await SmsService(db).list_statement_templates()
 
 
 @router.put("/templates/{key}", response_model=SmsTemplateOut)

@@ -588,6 +588,7 @@ export const smsApi = {
   log: (params?: { limit?: number; offset?: number; status?: string }) =>
     api.get<PageResponse<SmsMessage>>(`/sms/messages`, { params }),
   templates: () => api.get<SmsTemplate[]>('/sms/templates'),
+  statementTemplates: () => api.get<SmsTemplate[]>('/sms/statement-templates'),
   updateTemplate: (key: string, data: { name?: string; body: string; is_active: boolean }) =>
     api.put<SmsTemplate>(`/sms/templates/${key}`, data),
   renderTemplate: (key: string, values: Record<string, string>) =>

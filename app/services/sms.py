@@ -56,6 +56,16 @@ MSG_INVOICE_READY = _DEFAULT_TEMPLATES["invoice_ready"]
 MSG_STATEMENT_READY = _DEFAULT_TEMPLATES["statement_ready"]
 MSG_TEST = _DEFAULT_TEMPLATES["test"]
 
+# SMS templates sent by the statement workflow. They are surfaced on their own
+# card in Settings (Statement Templates) rather than the generic Message
+# Templates card, because they belong to the statement pipeline. Add a key here
+# and the card picks it up — no frontend change needed.
+STATEMENT_TEMPLATE_KEYS: tuple[str, ...] = ("statement_ready",)
+
+# Human labels for statement templates that have never been saved (a row in
+# `sms_templates` supplies the name once an admin edits one).
+_STATEMENT_TEMPLATE_NAMES: dict[str, str] = {"statement_ready": "Statement ready"}
+
 
 class SmsNotConfiguredError(Exception):
     """SMS channel is disabled or missing provider credentials."""
@@ -411,6 +421,32 @@ class SmsService:
             select(SmsTemplate).order_by(SmsTemplate.key)
         )
         return list(result.scalars().all())
+
+    async def list_statement_templates(self) -> list[dict]:
+        """Statement-workflow templates, with built-in defaults merged in.
+
+        A template nobody has edited has no row in `sms_templates`, so listing
+        rows alone would show an empty card even though the system is sending
+        that message. Each key therefore falls back to its built-in body and is
+        flagged `is_default`, so the admin can see whether the text on screen is
+        curated or still the code default. Editing one goes through the same
+        `upsert_template` as every other template.
+        """
+        stored = {t.key: t for t in await self.list_templates()}
+        merged: list[dict] = []
+        for key in STATEMENT_TEMPLATE_KEYS:
+            row = stored.get(key)
+            merged.append(
+                {
+                    "key": key,
+                    "name": row.name if row else _STATEMENT_TEMPLATE_NAMES.get(key, key),
+                    "body": row.body if row else _DEFAULT_TEMPLATES.get(key, ""),
+                    "is_active": row.is_active if row else True,
+                    "is_default": row is None,
+                    "updated_at": row.updated_at if row else None,
+                }
+            )
+        return merged
 
     async def upsert_template(
         self,

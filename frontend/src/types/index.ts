@@ -487,7 +487,10 @@ export interface SmsTemplate {
   name: string;
   body: string;
   is_active: boolean;
-  updated_at: string;
+  /** Null while the card shows the built-in default (nothing saved yet). */
+  updated_at: string | null;
+  /** True when no row is stored yet, so the text shown is the code default. */
+  is_default?: boolean;
 }
 
 export interface SmsTemplateRenderResult {
