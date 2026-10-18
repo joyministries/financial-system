@@ -3,6 +3,7 @@ import type {
   AdminStudentRegisterResponse,
   AppNotification,
   AutoGenerationSettings,
+  StatementGenerationSettings,
   CreditNote,
   EmailSettings,
   FeeStructure,
@@ -559,6 +560,13 @@ export const settingsApi = {
     day_of_month: number;
     notify_parents: boolean;
   }) => api.put<AutoGenerationSettings>('/settings/auto-generation', data),
+  getStatementGeneration: () =>
+    api.get<StatementGenerationSettings>('/settings/statement-generation'),
+  updateStatementGeneration: (data: {
+    enabled: boolean;
+    day_of_month: number;
+    notify_parents: boolean;
+  }) => api.put<StatementGenerationSettings>('/settings/statement-generation', data),
   getRegistrationFee: () => api.get<{ amount: string }>('/settings/registration-fee'),
   updateRegistrationFee: (value: string) =>
     api.put<{ amount: string }>('/settings/registration-fee', { value }),

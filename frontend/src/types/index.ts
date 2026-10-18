@@ -440,6 +440,21 @@ export interface AutoGenerationSettings {
   next_run_date: string | null;
 }
 
+/**
+ * Monthly statement generation. On `day_of_month` the scheduler generates
+ * each approved student's statements (accumulatively from January) and, when
+ * `notify_parents` is on, SMSes each billing parent a link to the portal plus
+ * an in-app notification. Existing statements are skipped — nothing is
+ * duplicated.
+ */
+export interface StatementGenerationSettings {
+  enabled: boolean;
+  day_of_month: number;
+  notify_parents: boolean;
+  last_run_date: string | null;
+  next_run_date: string | null;
+}
+
 export interface ReminderRunResult {
   sent: number;
   skipped_no_phone: number;

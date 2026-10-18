@@ -35,6 +35,13 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.run_auto_generation_scheduler",
         "schedule": crontab(hour=6, minute=0),
     },
+    # Runs an hour after invoice auto-generation so the month's invoices exist
+    # before statements are rebuilt from them, and the parent SMS goes out in
+    # office hours.
+    "run-statement-generation-daily": {
+        "task": "tasks.run_statement_generation_scheduler",
+        "schedule": crontab(hour=7, minute=0),
+    },
 }
 
 celery_app.autodiscover_tasks(["app.tasks"])

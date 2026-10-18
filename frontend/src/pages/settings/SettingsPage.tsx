@@ -9,6 +9,7 @@ import type {
   ReminderSettings,
   SmsSettings,
   SmsTemplate,
+  StatementGenerationSettings,
 } from '@/types';
 import toast from 'react-hot-toast';
 import {
@@ -18,6 +19,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  FileText,
   Loader2,
   Mail,
   MessageSquare,
@@ -109,6 +111,8 @@ export default function SettingsPage() {
   const [sendingReminders, setSendingReminders] = useState(false);
   const [autoGen, setAutoGen] = useState<AutoGenerationSettings | null>(null);
   const [savingAutoGen, setSavingAutoGen] = useState(false);
+  const [statementGen, setStatementGen] = useState<StatementGenerationSettings | null>(null);
+  const [savingStatementGen, setSavingStatementGen] = useState(false);
 
   const [registrationFee, setRegistrationFee] = useState('');
   const [savingRegistrationFee, setSavingRegistrationFee] = useState(false);
@@ -176,6 +180,10 @@ export default function SettingsPage() {
       .getAutoGeneration()
       .then((res) => setAutoGen(res.data))
       .catch(() => toast.error('Failed to load auto-generation settings'));
+    settingsApi
+      .getStatementGeneration()
+      .then((res) => setStatementGen(res.data))
+      .catch(() => toast.error('Failed to load statement generation settings'));
     settingsApi
       .getRegistrationFee()
       .then((res) => setRegistrationFee(res.data.amount || ''))
@@ -300,6 +308,30 @@ export default function SettingsPage() {
       toast.error(detail || 'Failed to save auto-generation settings');
     } finally {
       setSavingAutoGen(false);
+    }
+  };
+
+  const saveStatementGeneration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statementGen) return;
+    setSavingStatementGen(true);
+    try {
+      const res = await settingsApi.updateStatementGeneration({
+        enabled: statementGen.enabled,
+        day_of_month: statementGen.day_of_month,
+        notify_parents: statementGen.notify_parents,
+      });
+      setStatementGen(res.data);
+      toast.success(
+        statementGen.enabled
+          ? `Statements scheduled for day ${statementGen.day_of_month} of each month`
+          : 'Statement generation saved (disabled)',
+      );
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to save statement generation settings');
+    } finally {
+      setSavingStatementGen(false);
     }
   };
 
@@ -939,6 +971,118 @@ export default function SettingsPage() {
                 <button type="submit" disabled={savingAutoGen} className="btn btn-primary">
                   <Save className="h-4 w-4" />
                   {savingAutoGen ? 'Saving...' : 'Save Schedule'}
+                </button>
+                <p className="text-xs text-slate-400">
+                  The scheduler checks every day and only fires once the configured day arrives —
+                  if the service was down that day it catches up on the next run instead of
+                  skipping the month. Changing the day restarts the schedule.
+                </p>
+              </form>
+            )}
+          </div>
+
+          {/* ── Statement Generation ─────────────────────────── */}
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary-600" />
+                <h3 className="text-base font-semibold text-slate-900">Statement Generation</h3>
+              </div>
+              {statementGen &&
+                (statementGen.enabled ? (
+                  <span className="badge badge-success">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> On — day {statementGen.day_of_month}
+                  </span>
+                ) : (
+                  <span className="badge badge-neutral">Off</span>
+                ))}
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              On the chosen day each month, generate every approved student's statements
+              (January through the current month) and, when enabled, send each billing parent an
+              SMS with a link to view them in the portal plus an in-app notification. Existing
+              statements are skipped, so a re-run never duplicates anything.
+            </p>
+
+            {!statementGen && !loadingSettings ? (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                <AlertCircle className="h-4 w-4" /> Unable to load statement generation settings.
+              </div>
+            ) : (
+              <form onSubmit={saveStatementGeneration} className="mt-4 space-y-4">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={statementGen?.enabled ?? false}
+                    onChange={(e) =>
+                      setStatementGen((p) => (p ? { ...p, enabled: e.target.checked } : p))
+                    }
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  Enable scheduled statement generation
+                </label>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Day of month</label>
+                    <select
+                      value={statementGen?.day_of_month ?? 1}
+                      onChange={(e) =>
+                        setStatementGen((p) =>
+                          p ? { ...p, day_of_month: Number(e.target.value) } : p,
+                        )
+                      }
+                      className={inputCls}
+                    >
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">SMS parents</label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStatementGen((p) =>
+                          p ? { ...p, notify_parents: !p.notify_parents } : p,
+                        )
+                      }
+                      className={`mt-1 rounded-lg px-3 py-2 text-sm font-medium ${
+                        statementGen?.notify_parents
+                          ? 'bg-green-600 text-white'
+                          : 'border border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      {statementGen?.notify_parents ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                </div>
+
+                {(statementGen?.last_run_date || statementGen?.next_run_date) && (
+                  <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    {statementGen.next_run_date && (
+                      <p>
+                        Next run:{' '}
+                        <b>
+                          {new Date(`${statementGen.next_run_date}T00:00:00`).toLocaleDateString()}
+                        </b>
+                      </p>
+                    )}
+                    {statementGen.last_run_date && (
+                      <p>
+                        Last run:{' '}
+                        {new Date(`${statementGen.last_run_date}T00:00:00`).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <button type="submit" disabled={savingStatementGen} className="btn btn-primary">
+                  <Save className="h-4 w-4" />
+                  {savingStatementGen ? 'Saving...' : 'Save Schedule'}
                 </button>
                 <p className="text-xs text-slate-400">
                   The scheduler checks every day and only fires once the configured day arrives —
