@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.schemas.common import SafeFullName, SafeName
 from app.schemas.student import (
@@ -135,6 +135,13 @@ class LoginRequest(BaseModel):
         if self.phone:
             return self.phone
         raise ValueError("Either email or phone must be provided")
+
+    @model_validator(mode="after")
+    def _require_identifier(self) -> "LoginRequest":
+        """Reject a request that carries neither an email nor a phone."""
+        if not (self.email or self.phone):
+            raise ValueError("Provide an email address or a phone number")
+        return self
 
 
 class PasswordChange(BaseModel):

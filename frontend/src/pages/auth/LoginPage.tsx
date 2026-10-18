@@ -17,7 +17,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(email.trim(), password);
       toast.success('Logged in');
       navigate('/');
     } catch (err: any) {
@@ -36,13 +36,14 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="mt-7 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <label className="block text-sm font-medium text-slate-700">Email or phone number</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
+              placeholder="you@example.com or 082 123 4567"
               className="mt-1.5 block w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             />
           </div>

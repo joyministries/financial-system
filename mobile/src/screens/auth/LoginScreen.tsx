@@ -41,12 +41,12 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Error', 'Enter email and password');
+      Alert.alert('Error', 'Enter your email or phone and password');
       return;
     }
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(email.trim(), password);
     } catch (err: any) {
       Alert.alert('Login failed', err?.response?.data?.detail || 'Invalid credentials');
     } finally {
@@ -83,10 +83,10 @@ export default function LoginScreen({ navigation }: any) {
           <Text style={styles.cardHeading}>Welcome back</Text>
 
           <Input
-            label="Email"
+            label="Email or phone"
             value={email}
             onChangeText={setEmail}
-            placeholder="you@example.com"
+            placeholder="you@example.com or 082 123 4567"
             keyboardType="email-address"
             autoCapitalize="none"
           />

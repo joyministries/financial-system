@@ -1,4 +1,5 @@
 import logging
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -46,6 +47,47 @@ def _token_expiry(role: str) -> timedelta:
     if role in ("admin", "super_admin"):
         return timedelta(minutes=ADMIN_SESSION_MINUTES)
     return timedelta(minutes=NORMAL_SESSION_MINUTES)
+
+
+# South African dial code — the school's primary country. Used only to expand
+# a typed local number into its international forms for the login lookup.
+_SA_DIAL_CODE = "27"
+
+
+def _phone_variants(identifier: str) -> list[str]:
+    """Every plausible stored form of a phone identifier.
+
+    Users type the same number many ways (``0842026535``, ``084 202 6535``,
+    ``+27842026535``, ``27842026535``) while ``users.phone`` stores a single
+    form. Return the forms to match with ``phone IN (...)`` so any of them
+    resolves. Email identifiers simply produce the raw string back.
+    """
+    variants: set[str] = set()
+    raw = identifier.strip()
+    if raw:
+        variants.add(raw)
+    digits = re.sub(r"\D", "", identifier)
+    if not digits:
+        return sorted(variants)
+
+    variants.add(digits)
+    if len(digits) == 10 and digits.startswith("0"):
+        # SA local (0XXXXXXXXX) -> +27XXXXXXXXX / 27XXXXXXXXX
+        national = digits[1:]
+        variants.add(f"+{_SA_DIAL_CODE}{national}")
+        variants.add(f"{_SA_DIAL_CODE}{national}")
+    elif len(digits) == 11 and digits.startswith(_SA_DIAL_CODE):
+        # SA international (27XXXXXXXXX) -> 0XXXXXXXXX / XXXXXXXXX
+        national = digits[2:]
+        variants.add(f"0{national}")
+        variants.add(national)
+    elif digits.startswith(f"00{_SA_DIAL_CODE}"):
+        # 0027XXXXXXXXX -> 0XXXXXXXXX / +27XXXXXXXXX
+        national = digits[4:]
+        if len(national) == 9:
+            variants.add(f"0{national}")
+            variants.add(f"+{_SA_DIAL_CODE}{national}")
+    return sorted(v for v in variants if v)
 
 
 @router.post("/register", response_model=UserResponse)
@@ -188,16 +230,33 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login endpoint. Rate limited: 10/minute.
-    
-    Accepts either email or phone number for login."""
-    identifier = data.get_identifier()
-    
-    # Try email first, then phone
-    stmt = select(User).where(
-        (User.email == identifier) | (User.phone == identifier)
-    )
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+
+    Accepts either an email address or a mobile number. Users without a phone
+    on file (most staff) simply log in with their email; users who registered
+    a phone can log in with either. The identifier arrives in whichever field
+    the client populated, so both fields are tried."""
+    try:
+        identifier = data.get_identifier()
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Email match first (indexed, unique).
+    user = (
+        await db.execute(select(User).where(User.email == identifier.strip().lower()))
+    ).scalar_one_or_none()
+
+    # Fall back to the phone number, tolerating local/international formats.
+    if user is None:
+        variants = _phone_variants(identifier)
+        if variants:
+            user = (
+                await db.execute(
+                    select(User)
+                    .where(User.phone.in_(variants))
+                    .order_by(User.created_at)
+                    .limit(1)
+                )
+            ).scalars().first()
 
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
