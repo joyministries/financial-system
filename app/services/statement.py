@@ -873,6 +873,108 @@ async def bulk_generate_statements(
     }
 
 
+# Portal URL used in the statement-ready SMS when the admin has not stored a
+# `frontend_base_url` (Settings → Base URLs). Mirrors the deployed frontend.
+PORTAL_BASE_URL_FALLBACK = "https://financial-system-flax.vercel.app"
+
+
+async def generate_statements_and_notify(
+    db: AsyncSession,
+    academic_year: int,
+    month: int,
+    *,
+    notify_parents: bool = True,
+    actor_id: str | None = None,
+) -> dict:
+    """Generate the month's statements, then optionally notify parents.
+
+    Shared by the scheduled beat task (``tasks.run_statement_generation_scheduler``)
+    and the admin "Generate now" action (``POST /settings/statement-generation/run-now``)
+    so a manual run and a scheduled run behave identically. Statements are
+    generated accumulatively from January and existing rows are skipped, so the
+    call is safe to repeat.
+
+    When ``notify_parents`` is on, each approved student's billing parent gets an
+    SMS with a portal link (students with no guardian phone are counted, not
+    failed) plus one in-app notification. Returns a summary dict; the caller owns
+    the transaction and the commit.
+    """
+    from calendar import month_name
+
+    from app.services.notification import NotificationService
+    from app.services.setting import SettingService
+    from app.services.sms import SmsNotConfiguredError, SmsService
+
+    statements = await bulk_generate_statements(db, academic_year, month)
+
+    sms_sent = sms_skipped = in_app = 0
+    sms_error: str | None = None
+
+    if notify_parents:
+        settings_service = SettingService(db)
+        base_url = (await settings_service.get_plain("frontend_base_url")).rstrip("/")
+        link = f"{base_url or PORTAL_BASE_URL_FALLBACK}/statements"
+
+        students = (
+            await db.execute(select(Student).where(Student.registration_status == "approved"))
+        ).scalars().all()
+
+        sms_service = SmsService(db)
+        notifications = NotificationService(db)
+        seen_parents: set[str] = set()
+        month_label = month_name[month]
+        sms_available = True
+
+        for student in students:
+            if sms_available:
+                try:
+                    message = await sms_service.send_statement_ready(
+                        student, month, academic_year, link, created_by=actor_id
+                    )
+                    if message:
+                        sms_sent += 1
+                    else:
+                        sms_skipped += 1
+                except SmsNotConfiguredError:
+                    # Channel not configured — stop trying to text, but keep
+                    # fanning out the in-app notification so the run is not a
+                    # total no-op.
+                    sms_available = False
+                    sms_error = "SMS channel not configured"
+                except Exception as exc:  # noqa: BLE001 - one student must not abort the run
+                    sms_error = f"{type(exc).__name__}: {exc}"
+
+            if student.parent_id and student.parent_id not in seen_parents:
+                seen_parents.add(student.parent_id)
+                await notifications.notify_user(
+                    user_id=student.parent_id,
+                    title=f"{student.first_name}'s statement is ready",
+                    message=(
+                        f"{student.first_name} {student.last_name}'s "
+                        f"{month_label} {academic_year} fee statement is ready "
+                        f"to view in the portal."
+                    ),
+                    category="system",
+                    entity_type="student",
+                    entity_id=student.id,
+                )
+                in_app += 1
+
+    return {
+        "academic_year": academic_year,
+        "month": month,
+        "generated": statements.get("generated", 0),
+        "skipped": statements.get("skipped", 0),
+        "failed": statements.get("failed", 0),
+        "notify_parents": notify_parents,
+        "sms_sent": sms_sent,
+        "sms_skipped_no_phone": sms_skipped,
+        "in_app_notified": in_app,
+        "sms_error": sms_error,
+        "errors": (statements.get("errors") or [])[:20],
+    }
+
+
 def dedupe_statements_by_month(statements: list[Statement]) -> list[Statement]:
     """Collapse duplicated statement rows down to one per month.
 

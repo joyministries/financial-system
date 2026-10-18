@@ -455,6 +455,26 @@ export interface StatementGenerationSettings {
   next_run_date: string | null;
 }
 
+/**
+ * Result of an admin-triggered "Generate now" run — the same work the schedule
+ * performs, run on demand. `generated` counts newly created statements
+ * (`skipped` already existed), `sms_sent`/`in_app_notified` count parent
+ * notifications, and `sms_error` is set if the SMS channel was unavailable.
+ */
+export interface StatementGenerationRunResult {
+  academic_year: number;
+  month: number;
+  generated: number;
+  skipped: number;
+  failed: number;
+  notify_parents: boolean;
+  sms_sent: number;
+  sms_skipped_no_phone: number;
+  in_app_notified: number;
+  sms_error: string | null;
+  errors: string[];
+}
+
 export interface ReminderRunResult {
   sent: number;
   skipped_no_phone: number;

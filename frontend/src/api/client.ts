@@ -4,6 +4,7 @@ import type {
   AppNotification,
   AutoGenerationSettings,
   StatementGenerationSettings,
+  StatementGenerationRunResult,
   CreditNote,
   EmailSettings,
   FeeStructure,
@@ -567,6 +568,10 @@ export const settingsApi = {
     day_of_month: number;
     notify_parents: boolean;
   }) => api.put<StatementGenerationSettings>('/settings/statement-generation', data),
+  runStatementGenerationNow: (notify_parents: boolean) =>
+    api.post<StatementGenerationRunResult>('/settings/statement-generation/run-now', {
+      notify_parents,
+    }),
   getRegistrationFee: () => api.get<{ amount: string }>('/settings/registration-fee'),
   updateRegistrationFee: (value: string) =>
     api.put<{ amount: string }>('/settings/registration-fee', { value }),

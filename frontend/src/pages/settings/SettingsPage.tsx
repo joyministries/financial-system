@@ -10,6 +10,7 @@ import type {
   SmsSettings,
   SmsTemplate,
   StatementGenerationSettings,
+  StatementGenerationRunResult,
 } from '@/types';
 import toast from 'react-hot-toast';
 import {
@@ -113,6 +114,7 @@ export default function SettingsPage() {
   const [savingAutoGen, setSavingAutoGen] = useState(false);
   const [statementGen, setStatementGen] = useState<StatementGenerationSettings | null>(null);
   const [savingStatementGen, setSavingStatementGen] = useState(false);
+  const [runningStatementGen, setRunningStatementGen] = useState(false);
 
   const [registrationFee, setRegistrationFee] = useState('');
   const [savingRegistrationFee, setSavingRegistrationFee] = useState(false);
@@ -332,6 +334,46 @@ export default function SettingsPage() {
       toast.error(detail || 'Failed to save statement generation settings');
     } finally {
       setSavingStatementGen(false);
+    }
+  };
+
+  const generateStatementsNow = async () => {
+    if (!statementGen) return;
+    const notify = statementGen.notify_parents;
+    const who = notify ? ' and text each billing parent a portal link' : '';
+    if (
+      !window.confirm(
+        `Generate this month's statements now${who}?\n\n` +
+          'Existing statements are skipped, so nothing is duplicated and the ' +
+          'schedule is not affected.',
+      )
+    ) {
+      return;
+    }
+    setRunningStatementGen(true);
+    try {
+      const r: StatementGenerationRunResult = (
+        await settingsApi.runStatementGenerationNow(notify)
+      ).data;
+      const parts = [`${r.generated} statements created`];
+      if (r.skipped) parts.push(`${r.skipped} already existed`);
+      if (r.failed) parts.push(`${r.failed} failed`);
+      if (notify) {
+        parts.push(`${r.sms_sent} parent SMS`);
+        if (r.sms_skipped_no_phone) parts.push(`${r.sms_skipped_no_phone} without a phone`);
+      }
+      if (r.sms_error) {
+        toast.error(`Statements generated, but SMS failed: ${r.sms_error}`);
+      } else {
+        toast.success(parts.join(' · '));
+      }
+      const refreshed = (await settingsApi.getStatementGeneration()).data;
+      setStatementGen(refreshed);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to generate statements');
+    } finally {
+      setRunningStatementGen(false);
     }
   };
 
@@ -1080,14 +1122,40 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                <button type="submit" disabled={savingStatementGen} className="btn btn-primary">
-                  <Save className="h-4 w-4" />
-                  {savingStatementGen ? 'Saving...' : 'Save Schedule'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={savingStatementGen} className="btn btn-primary">
+                    <Save className="h-4 w-4" />
+                    {savingStatementGen ? 'Saving...' : 'Save Schedule'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generateStatementsNow}
+                    disabled={runningStatementGen || !statementGen}
+                    className="btn btn-secondary"
+                    title={
+                      statementGen?.notify_parents && !smsReady
+                        ? 'SMS is not configured — statements will generate but no parent SMS will be sent'
+                        : 'Generate this month\'s statements now, ignoring the schedule'
+                    }
+                  >
+                    {runningStatementGen ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {runningStatementGen
+                      ? 'Generating...'
+                      : statementGen?.notify_parents
+                        ? 'Generate & send now'
+                        : 'Generate now'}
+                  </button>
+                </div>
                 <p className="text-xs text-slate-400">
                   The scheduler checks every day and only fires once the configured day arrives —
                   if the service was down that day it catches up on the next run instead of
-                  skipping the month. Changing the day restarts the schedule.
+                  skipping the month. Changing the day restarts the schedule. "Generate now"
+                  ignores the schedule, runs immediately, and texts parents only when "SMS parents"
+                  is set to Yes.
                 </p>
               </form>
             )}

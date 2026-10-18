@@ -165,6 +165,59 @@ async def update_statement_generation_settings(
     return _statement_generation_out(config)
 
 
+class StatementGenerationRunIn(BaseModel):
+    """Body for the manual "generate now" action.
+
+    ``notify_parents`` is required so the button always states plainly whether
+    this run texts guardians — never a silent default.
+    """
+
+    notify_parents: bool
+
+
+class StatementGenerationRunOut(BaseModel):
+    academic_year: int
+    month: int
+    generated: int
+    skipped: int
+    failed: int
+    notify_parents: bool
+    sms_sent: int
+    sms_skipped_no_phone: int
+    in_app_notified: int
+    sms_error: str | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
+@router.post("/statement-generation/run-now", response_model=StatementGenerationRunOut)
+async def run_statement_generation_now(
+    payload: StatementGenerationRunIn,
+    user=Depends(super_admin_only),
+    db: AsyncSession = Depends(get_db),
+) -> StatementGenerationRunOut:
+    """Generate the current month's statements now, optionally notifying parents.
+
+    Runs the same work as the scheduled beat task on demand, ignoring the
+    configured day. Generation is accumulative and idempotent (existing rows are
+    skipped), and this does **not** touch the schedule's next-run date, so the
+    admin can trigger a run any time without disturbing the schedule. Admin only.
+    """
+    from datetime import date
+
+    from app.services.statement import generate_statements_and_notify
+
+    today = date.today()
+    summary = await generate_statements_and_notify(
+        db,
+        today.year,
+        today.month,
+        notify_parents=payload.notify_parents,
+        actor_id=user.id,
+    )
+    await db.commit()
+    return StatementGenerationRunOut(**summary)
+
+
 # ── registration fee ─────────────────────────────────────────
 # The one-time registration fee charged on student registration. Moved out of
 # the per-grade FeeStructure ("Registration" category) so it is configured in

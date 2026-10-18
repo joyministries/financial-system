@@ -2,10 +2,6 @@ import asyncio
 
 from app.tasks import celery_app
 
-# Portal URL used in the statement-ready SMS when the admin has not stored a
-# `frontend_base_url` (Settings → Base URLs). Mirrors the deployed frontend.
-DEFAULT_PORTAL_BASE_URL = "https://financial-system-flax.vercel.app"
-
 
 def _run_task(coro):
     """Run a task coroutine on its own loop, then dispose the pooled engine.
@@ -375,18 +371,15 @@ def run_statement_generation_scheduler() -> dict:
     was down on the configured day is retried the next day rather than being
     skipped for the whole month.
     """
-    from calendar import month_name
     from datetime import date
 
     from sqlalchemy import select
 
     from app.core.database import async_session_factory
-    from app.models.grade import Student
     from app.models.user import User
     from app.services.notification import NotificationService
     from app.services.setting import SettingService
-    from app.services.sms import SmsNotConfiguredError, SmsService
-    from app.services.statement import bulk_generate_statements
+    from app.services.statement import generate_statements_and_notify
 
     async def _run():
         async with async_session_factory() as db:
@@ -417,97 +410,30 @@ def run_statement_generation_scheduler() -> dict:
                     "error": "No admin/finance user to attribute the run to",
                 }
 
-            academic_year = today.year
-            month = today.month
-            month_label = month_name[month]
-
-            statements = await bulk_generate_statements(db, academic_year, month)
+            summary = await generate_statements_and_notify(
+                db,
+                today.year,
+                today.month,
+                notify_parents=bool(config.get("notify_parents", True)),
+                actor_id=actor_id,
+            )
             await settings_service.record_statement_generation_run()
             await db.commit()
 
-            notify_parents = bool(config.get("notify_parents", True))
-            sms_sent = sms_skipped = in_app = 0
-            sms_error: str | None = None
-
-            if notify_parents:
-                base_url = (
-                    await settings_service.get_plain("frontend_base_url")
-                ).rstrip("/") or DEFAULT_PORTAL_BASE_URL
-                link = f"{base_url}/statements"
-
-                students = (
-                    await db.execute(
-                        select(Student).where(Student.registration_status == "approved")
-                    )
-                ).scalars().all()
-
-                sms_service = SmsService(db)
-                notifications = NotificationService(db)
-                seen_parents: set[str] = set()
-
-                for student in students:
-                    try:
-                        message = await sms_service.send_statement_ready(
-                            student, month, academic_year, link, created_by=actor_id
-                        )
-                        if message:
-                            sms_sent += 1
-                        else:
-                            sms_skipped += 1
-                    except SmsNotConfiguredError:
-                        # Channel not configured — stop SMS but still fan out
-                        # the in-app notification so the run is not a no-op.
-                        sms_error = "SMS channel not configured"
-                        break
-                    except Exception as exc:  # noqa: BLE001 - one student must not abort the run
-                        sms_error = f"{type(exc).__name__}: {exc}"
-
-                    if student.parent_id and student.parent_id not in seen_parents:
-                        seen_parents.add(student.parent_id)
-                        await notifications.notify_user(
-                            user_id=student.parent_id,
-                            title=f"{student.first_name}'s statement is ready",
-                            message=(
-                                f"{student.first_name} {student.last_name}'s "
-                                f"{month_label} {academic_year} fee statement is ready "
-                                f"to view in the portal."
-                            ),
-                            category="system",
-                            entity_type="student",
-                            entity_id=student.id,
-                        )
-                        in_app += 1
-
-                await db.commit()
-
-            failed_note = (
-                f", {statements.get('failed', 0)} failed" if statements.get("failed") else ""
-            )
-            sms_note = f" ({sms_error})" if sms_error else ""
+            failed_note = f", {summary['failed']} failed" if summary["failed"] else ""
+            sms_note = f" ({summary['sms_error']})" if summary["sms_error"] else ""
             await NotificationService(db).notify_staff(
                 title="Scheduled statement generation complete",
                 message=(
-                    f"{academic_year}-{month:02d}: {statements.get('generated', 0)} statements "
-                    f"created, {statements.get('skipped', 0)} already existed{failed_note}; "
-                    f"{sms_sent} parent SMS, {in_app} in-app notifications{sms_note}."
+                    f"{today.year}-{today.month:02d}: {summary['generated']} statements "
+                    f"created, {summary['skipped']} already existed{failed_note}; "
+                    f"{summary['sms_sent']} parent SMS, "
+                    f"{summary['in_app_notified']} in-app notifications{sms_note}."
                 ),
                 category="system",
             )
             await db.commit()
 
-            return {
-                "status": "generated",
-                "academic_year": academic_year,
-                "month": month,
-                "generated_statements": statements.get("generated", 0),
-                "skipped_statements": statements.get("skipped", 0),
-                "failed_statements": statements.get("failed", 0),
-                "notify_parents": notify_parents,
-                "sms_sent": sms_sent,
-                "sms_skipped_no_phone": sms_skipped,
-                "in_app_notified": in_app,
-                "sms_error": sms_error,
-                "errors": (statements.get("errors") or [])[:20],
-            }
+            return {"status": "generated", **summary}
 
     return _run_task(_run())
