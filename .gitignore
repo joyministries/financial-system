@@ -86,3 +86,8 @@ financial_see.txt
 opencode_loop.sh
 .opencode_loop_session
 .opencode_loop_logs/
+
+# local session artifacts
+.playwright-mcp/
+.opencode/
+celerybeat-schedule*
