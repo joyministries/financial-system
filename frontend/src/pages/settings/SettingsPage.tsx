@@ -25,7 +25,9 @@ import {
   Mail,
   MessageSquare,
   Pencil,
+  Plus,
   Send,
+  Trash2,
   Users,
   Save,
   Wallet,
@@ -35,7 +37,7 @@ const emailReady = (e: EmailSettings | null) =>
   !!e?.enabled && !!e?.host && !!e?.from_email && (e.password_set || !!e.password);
 
 const inputCls =
-  'input mt-1 disabled:text-slate-400';
+  'input mt-1 disabled:text-faint';
 
 function StatusPill({ ready }: { ready: boolean }) {
   return ready ? (
@@ -51,39 +53,61 @@ function StatusPill({ ready }: { ready: boolean }) {
 
 /**
  * Editable SMS template list — the Message Templates and Statement Templates
- * cards are the same widget over different key sets, so they share this.
+ * cards are the same widget over different slot sets, so they share this.
  *
- * The card owns which row is being edited and the textarea draft; the page owns
- * the list, its loading state and the save call (which reports its own toasts
- * and rejects on failure, keeping the draft open).
+ * The card shows, per message slot, every saved variant plus the built-in
+ * default, and lets the admin pick which variant is IN USE — that is the body
+ * every future send of that slot renders. `onActivate(…, null)` puts the
+ * built-in default back in use.
  */
 function TemplatesCard({
   title,
   description,
   icon,
   templates,
+  slotLabels,
   loading,
   onSave,
+  onActivate,
+  onDelete,
   emptyText,
 }: {
   title: string;
   description: string;
   icon: React.ReactNode;
   templates: SmsTemplate[];
+  slotLabels: Record<string, string>;
   loading: boolean;
-  onSave: (template: SmsTemplate, body: string) => Promise<void>;
+  onSave: (slot: string, templateId: string | null, name: string, body: string) => Promise<void>;
+  onActivate: (slot: string, templateId: string | null) => Promise<void>;
+  onDelete: (slot: string, templateId: string) => Promise<void>;
   emptyText: string;
 }) {
-  const [editing, setEditing] = useState<SmsTemplate | null>(null);
+  // Which slot is being edited (existing variant id or null = new variant),
+  // the name/body drafts, and the slot a new variant belongs to.
+  const [editing, setEditing] = useState<{
+    slot: string;
+    id: string | null;
+    name: string;
+  } | null>(null);
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
+  const [busySlot, setBusySlot] = useState<string | null>(null);
+
+  const slots = [...new Set(templates.map((t) => t.slot))];
+
+  const startEdit = (slot: string, id: string | null, name: string, bodyText: string) => {
+    setEditing({ slot, id, name });
+    setBody(bodyText);
+  };
 
   const save = async () => {
     if (!editing) return;
+    if (!editing.name.trim()) return toast.error('Template name is required');
     if (!body.trim()) return toast.error('Template content cannot be empty');
     setSaving(true);
     try {
-      await onSave(editing, body);
+      await onSave(editing.slot, editing.id, editing.name.trim(), body.trim());
       setEditing(null);
     } catch {
       // The page already reported it — leave the editor open with the draft.
@@ -92,57 +116,126 @@ function TemplatesCard({
     }
   };
 
+  const activate = async (slot: string, templateId: string | null) => {
+    if (templateId === (templates.find((t) => t.slot === slot && t.is_active)?.id ?? null)) return;
+    setBusySlot(slot);
+    try {
+      await onActivate(slot, templateId);
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+    <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
       <div className="flex items-center gap-2">
         {icon}
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-base font-semibold text-ink">{title}</h3>
       </div>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
+      <p className="mt-1 text-sm text-muted">{description}</p>
 
       {loading ? (
         <div className="mt-4 flex justify-center py-6">
-          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+          <Loader2 className="h-5 w-5 animate-spin text-faint" />
         </div>
+      ) : slots.length === 0 ? (
+        <p className="py-6 text-center text-sm text-faint">{emptyText}</p>
       ) : (
-        <ul className="mt-4 divide-y divide-slate-100">
-          {templates.map((t) => (
-            <li key={t.key} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900">{t.name}</p>
-                <p className="truncate text-xs text-slate-500">{t.body}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {t.is_default && (
-                  <span className="badge badge-neutral" title="Nothing saved yet — this is the built-in text">
-                    Built-in default
-                  </span>
+        <div className="mt-4 divide-y divide-line-soft">
+          {slots.map((slot) => {
+            const variants = templates.filter((t) => t.slot === slot);
+            const inUse = variants.find((t) => t.is_active);
+            return (
+              <div key={slot} className="py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink">{slotLabels[slot] ?? slot}</p>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted">In use:</label>
+                    <select
+                      value={inUse?.id ?? ''}
+                      disabled={busySlot === slot}
+                      onChange={(e) => activate(slot, e.target.value || null)}
+                      className="input h-9 w-52 py-0 text-[12.5px]"
+                    >
+                      {variants.map((t) => (
+                        <option key={t.id ?? slot} value={t.id ?? ''}>
+                          {t.is_default ? 'Built-in default' : t.name}
+                          {t.is_active ? ' (in use)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(slot, null, `${slotLabels[slot] ?? slot} variant`, '')}
+                      className="btn btn-secondary h-9 px-2.5 py-0 text-[12px]"
+                      title="Save a new variant of this message, then choose it above"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> New template
+                    </button>
+                  </div>
+                </div>
+                {inUse && (
+                  <p className="mt-1.5 truncate text-xs text-muted" title={inUse.body}>
+                    Sending:{' '}
+                    <span className="text-body">{inUse.body}</span>
+                  </p>
                 )}
-                {!t.is_active && <span className="badge badge-warning">Disabled</span>}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(t);
-                    setBody(t.body);
-                  }}
-                  className="rounded p-1.5 text-slate-400 hover:text-primary-600 hover:bg-slate-100"
-                  title={`Edit ${t.name}`}
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
+                {variants.length > 1 && (
+                  <ul className="mt-2 space-y-1">
+                    {variants
+                      .filter((t) => !t.is_active)
+                      .map((t) => (
+                        <li
+                          key={t.id ?? slot}
+                          className="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span className="truncate text-muted">
+                            {t.is_default ? 'Built-in default' : t.name} — {t.body}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {!t.is_default && t.id && (
+                              <button
+                                type="button"
+                                onClick={() => startEdit(slot, t.id, t.name, t.body)}
+                                className="rounded p-1 text-faint hover:text-primary-800 hover:bg-[#f3efe6]"
+                                title={`Edit ${t.name}`}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {!t.is_default && t.id && (
+                              <button
+                                type="button"
+                                onClick={() => onDelete(slot, t.id!)}
+                                className="rounded p-1 text-faint hover:text-[#a8382c] hover:bg-[#fbeeec]"
+                                title={`Delete ${t.name}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                )}
               </div>
-            </li>
-          ))}
-          {templates.length === 0 && (
-            <li className="py-6 text-center text-sm text-slate-400">{emptyText}</li>
-          )}
-        </ul>
+            );
+          })}
+        </div>
       )}
 
       {editing && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-900">{editing.name}</p>
-          <p className="mt-0.5 text-xs text-slate-500">
+        <div className="mt-4 rounded-lg border border-line bg-[#faf8f2] p-4">
+          <p className="text-sm font-semibold text-ink">
+            {editing.id ? 'Edit template' : `New template — ${slotLabels[editing.slot] ?? editing.slot}`}
+          </p>
+          <input
+            value={editing.name}
+            onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+            placeholder="Template name"
+            className="input mt-2"
+          />
+          <p className="mt-2 text-xs text-muted">
             Use placeholders in {'{braces}'}: {'{parent}'}, {'{student}'}, {'{amount}'},
             {'{balance}'}, {'{link}'}, {'{month}'}, {'{year}'}, {'{receipt}'}
           </p>
@@ -154,7 +247,7 @@ function TemplatesCard({
           />
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={save} disabled={saving} className="btn btn-primary">
-              {saving ? 'Saving…' : 'Save Template'}
+              {saving ? 'Saving…' : editing.id ? 'Save Template' : 'Save Template'}
             </button>
             <button type="button" onClick={() => setEditing(null)} className="btn btn-secondary">
               Cancel
@@ -182,9 +275,9 @@ function SecretField({
   const [show, setShow] = useState(false);
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700">
+      <label className="block text-sm font-medium text-body">
         {label}
-        {setHint && <span className="ml-1 text-xs text-green-600">(saved)</span>}
+        {setHint && <span className="ml-1 text-xs text-[#1c7a4f]">(saved)</span>}
       </label>
       <div className="relative mt-1">
         <input
@@ -198,7 +291,7 @@ function SecretField({
         <button
           type="button"
           onClick={() => setShow((s) => !s)}
-          className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+          className="absolute inset-y-0 right-0 flex items-center pr-3 text-faint hover:text-muted"
           tabIndex={-1}
         >
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -262,29 +355,74 @@ export default function SettingsPage() {
       .finally(() => setLoadingStatementTemplates(false));
   };
 
-  /** Persist a curated body. Rejects on failure so the editor stays open. */
-  const saveTemplate = async (t: SmsTemplate, body: string) => {
+  /** Persist a template variant. Rejects on failure so the editor stays open. */
+  const saveTemplate = async (
+    slot: string,
+    templateId: string | null,
+    name: string,
+    body: string,
+  ) => {
     try {
-      await smsApi.updateTemplate(t.key, {
-        name: t.name,
-        body,
-        is_active: t.is_active,
-      });
+      if (templateId) {
+        await smsApi.updateTemplate(templateId, { name, body });
+      } else {
+        await smsApi.createTemplate({ slot, name, body });
+      }
     } catch (err) {
       toast.error('Failed to save template — please try again');
       throw err;
     }
   };
 
-  const saveMessageTemplate = async (t: SmsTemplate, body: string) => {
-    await saveTemplate(t, body);
-    toast.success('Message template saved — new sends use it');
+  /** Switch which saved variant (or the built-in default) a slot sends. */
+  const activateTemplate = async (slot: string, templateId: string | null) => {
+    try {
+      await smsApi.activateTemplate(slot, templateId);
+      toast.success('Template set as the one in use');
+    } catch (err) {
+      toast.error('Could not switch template — please try again');
+      throw err;
+    } finally {
+      loadTemplates();
+      loadStatementTemplates();
+    }
+  };
+
+  const deleteTemplate = async (_slot: string, templateId: string) => {
+    if (!window.confirm('Delete this template? If it was in use, the built-in default is used again.')) {
+      return;
+    }
+    try {
+      await smsApi.deleteTemplate(templateId);
+      toast.success('Template deleted');
+    } catch (err) {
+      toast.error('Could not delete template — please try again');
+      throw err;
+    } finally {
+      loadTemplates();
+      loadStatementTemplates();
+    }
+  };
+
+  const saveMessageTemplate = async (
+    slot: string,
+    templateId: string | null,
+    name: string,
+    body: string,
+  ) => {
+    await saveTemplate(slot, templateId, name, body);
+    toast.success('Message template saved');
     loadTemplates();
   };
 
-  const saveStatementTemplate = async (t: SmsTemplate, body: string) => {
-    await saveTemplate(t, body);
-    toast.success('Statement template saved — new statements use it');
+  const saveStatementTemplate = async (
+    slot: string,
+    templateId: string | null,
+    name: string,
+    body: string,
+  ) => {
+    await saveTemplate(slot, templateId, name, body);
+    toast.success('Statement template saved');
     loadStatementTemplates();
   };
 
@@ -543,18 +681,18 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+      <h1 className="text-2xl font-bold text-ink">Settings</h1>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <div
-        className={`rounded-xl bg-white p-6 shadow-sm border border-slate-100 ${
+        className={`rounded-xl bg-white p-6 shadow-sm border border-line-soft ${
           !isAdmin ? 'max-w-lg' : ''
         }`}
       >
-        <h2 className="text-lg font-semibold text-slate-900">Change Password</h2>
+        <h2 className="text-lg font-semibold text-ink">Change Password</h2>
         <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Current Password</label>
+            <label className="block text-sm font-medium text-body">Current Password</label>
             <input
               type="password"
               value={currentPassword}
@@ -564,7 +702,7 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">New Password</label>
+            <label className="block text-sm font-medium text-body">New Password</label>
             <input
               type="password"
               value={newPassword}
@@ -575,7 +713,7 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Confirm New Password</label>
+            <label className="block text-sm font-medium text-body">Confirm New Password</label>
             <input
               type="password"
               value={confirmPassword}
@@ -599,38 +737,38 @@ export default function SettingsPage() {
       {isAdmin && (
         <>
           {/* ── Email (SMTP) ─────────────────────────────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">Email (SMTP)</h3>
+                <Mail className="h-5 w-5 text-primary-800" />
+                <h3 className="text-base font-semibold text-ink">Email (SMTP)</h3>
               </div>
               {email && <StatusPill ready={email.enabled && !!email.host && !!email.from_email} />}
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted">
               Used for sending fee receipts, statements and notifications. Provide your mail
               server (SMTP) credentials below — sending is switched on once saved.
             </p>
 
             {!email && !loadingSettings ? (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
                 <AlertCircle className="h-4 w-4" /> Unable to load email settings.
               </div>
             ) : (
               <form onSubmit={saveEmail} className="mt-4 space-y-4">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-body">
                   <input
                     type="checkbox"
                     checked={email?.enabled ?? false}
                     onChange={(e) => setEmail((p) => (p ? { ...p, enabled: e.target.checked } : p))}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   Enable email sending
                 </label>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700">SMTP Host</label>
+                    <label className="block text-sm font-medium text-body">SMTP Host</label>
                     <input
                       value={email?.host ?? ''}
                       onChange={(e) => setEmail((p) => (p ? { ...p, host: e.target.value } : p))}
@@ -639,7 +777,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Port</label>
+                    <label className="block text-sm font-medium text-body">Port</label>
                     <input
                       type="number"
                       min={1}
@@ -655,7 +793,7 @@ export default function SettingsPage() {
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Username</label>
+                    <label className="block text-sm font-medium text-body">Username</label>
                     <input
                       value={email?.username ?? ''}
                       onChange={(e) => setEmail((p) => (p ? { ...p, username: e.target.value } : p))}
@@ -672,7 +810,7 @@ export default function SettingsPage() {
                     placeholder="SMTP password / app password"
                   />
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">From Email</label>
+                    <label className="block text-sm font-medium text-body">From Email</label>
                     <input
                       value={email?.from_email ?? ''}
                       onChange={(e) => setEmail((p) => (p ? { ...p, from_email: e.target.value } : p))}
@@ -681,7 +819,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">From Name</label>
+                    <label className="block text-sm font-medium text-body">From Name</label>
                     <input
                       value={email?.from_name ?? ''}
                       onChange={(e) => setEmail((p) => (p ? { ...p, from_name: e.target.value } : p))}
@@ -691,14 +829,14 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-body">
                   <input
                     type="checkbox"
                     checked={email?.use_tls ?? true}
                     onChange={(e) =>
                       setEmail((p) => (p ? { ...p, use_tls: e.target.checked } : p))
                     }
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   Use TLS (STARTTLS)
                 </label>
@@ -717,11 +855,11 @@ export default function SettingsPage() {
           </div>
 
           {/* ── SMS ──────────────────────────────────────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100 lg:col-span-2">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft lg:col-span-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">SMS</h3>
+                <MessageSquare className="h-5 w-5 text-primary-800" />
+                <h3 className="text-base font-semibold text-ink">SMS</h3>
               </div>
               {sms && (
                 <StatusPill
@@ -729,29 +867,29 @@ export default function SettingsPage() {
                 />
               )}
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted">
               Used for payment reminders and fee notifications. Provide your SMS provider
               credentials below — sending is switched on once saved.
             </p>
 
             {!sms && !loadingSettings ? (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
                 <AlertCircle className="h-4 w-4" /> Unable to load SMS settings.
               </div>
             ) : (
               <form onSubmit={saveSms} className="mt-4 space-y-4">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-body">
                   <input
                     type="checkbox"
                     checked={sms?.enabled ?? false}
                     onChange={(e) => setSms((p) => (p ? { ...p, enabled: e.target.checked } : p))}
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   Enable SMS sending
                 </label>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Provider</label>
+                  <label className="block text-sm font-medium text-body">Provider</label>
                   <select
                     value={sms?.provider ?? ''}
                     onChange={(e) => setSms((p) => (p ? { ...p, provider: e.target.value } : p))}
@@ -785,7 +923,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Sender ID</label>
+                  <label className="block text-sm font-medium text-body">Sender ID</label>
                   <input
                     value={sms?.sender_id ?? ''}
                     onChange={(e) => setSms((p) => (p ? { ...p, sender_id: e.target.value } : p))}
@@ -811,28 +949,36 @@ export default function SettingsPage() {
           {/* ── Message Templates ────────────────────────────── */}
           <TemplatesCard
             title="Message Templates"
-            description="Curate the SMS messages sent to parents. Edits apply to every future send — reminders, payment links and receipt notifications."
-            icon={<Pencil className="h-5 w-5 text-primary-600" />}
+            description="Curate the SMS messages sent to parents. Save several variants per message and choose which one is in use — every future send of that slot uses it."
+            icon={<Pencil className="h-5 w-5 text-primary-800" />}
             templates={templates}
+            slotLabels={{
+              payment_receipt: 'Payment received',
+              balance_reminder: 'Balance reminder',
+              payment_link: 'Payment link',
+              invoice_ready: 'Invoice ready',
+            }}
             loading={loadingTemplates}
             onSave={saveMessageTemplate}
+            onActivate={activateTemplate}
+            onDelete={deleteTemplate}
             emptyText="No message templates yet."
           />
 
           {/* ── Registration Fee ─────────────────────────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
             <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary-600" />
-              <h3 className="text-base font-semibold text-slate-900">Registration Fee</h3>
+              <Wallet className="h-5 w-5 text-primary-800" />
+              <h3 className="text-base font-semibold text-ink">Registration Fee</h3>
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted">
               One-time fee charged when a student is registered — SMSed to the guardian when an
               admin ticks "send payment link" on registration, or paid via the portal by a parent
               registering on their own. Leave blank to charge nothing.
             </p>
             <form onSubmit={saveRegistrationFee} className="mt-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+                <label className="block text-sm font-medium text-body">Amount (R)</label>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -854,41 +1000,41 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Payment Link Reminders ───────────────────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BellRing className="h-5 w-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">Payment Link Reminders</h3>
+                <BellRing className="h-5 w-5 text-primary-800" />
+                <h3 className="text-base font-semibold text-ink">Payment Link Reminders</h3>
               </div>
               {reminders && <StatusPill ready={!!reminders.enabled} />}
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted">
               Automatically SMS every parent with an outstanding balance a secure payment
               link for exactly what they owe — the same link as "Pay Online". Reminder 1
               goes out on the start date, then every interval until the total count is sent.
             </p>
 
             {!reminders && !loadingSettings ? (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
                 <AlertCircle className="h-4 w-4" /> Unable to load reminder settings.
               </div>
             ) : (
               <form onSubmit={saveReminders} className="mt-4 space-y-4">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-body">
                   <input
                     type="checkbox"
                     checked={reminders?.enabled ?? false}
                     onChange={(e) =>
                       setReminders((p) => (p ? { ...p, enabled: e.target.checked } : p))
                     }
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   Enable automated reminders
                 </label>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Start date</label>
+                    <label className="block text-sm font-medium text-body">Start date</label>
                     <input
                       type="date"
                       value={reminders?.start_date ?? ''}
@@ -899,7 +1045,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Every (days)</label>
+                    <label className="block text-sm font-medium text-body">Every (days)</label>
                     <input
                       type="number"
                       min={1}
@@ -914,7 +1060,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Reminders</label>
+                    <label className="block text-sm font-medium text-body">Reminders</label>
                     <input
                       type="number"
                       min={1}
@@ -929,7 +1075,7 @@ export default function SettingsPage() {
                 </div>
 
                 {(reminders?.last_run_date || reminders?.next_run_date) && (
-                  <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <div className="space-y-1 rounded-lg bg-[#faf8f2] px-3 py-2 text-xs text-muted">
                     {reminders.next_run_date && (
                       <p>
                         Next reminder:{' '}
@@ -965,7 +1111,7 @@ export default function SettingsPage() {
                     {sendingReminders ? 'Sending...' : 'Send Now'}
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-faint">
                   "Send Now" ignores the schedule and immediately SMSes every parent with an
                   outstanding balance. Each parent receives a link for only what they owe.
                 </p>
@@ -974,11 +1120,11 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Invoice & Statement Auto-generation ──────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CalendarClock className="h-5 w-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">
+                <CalendarClock className="h-5 w-5 text-primary-800" />
+                <h3 className="text-base font-semibold text-ink">
                   Invoice &amp; Statement Auto-generation
                 </h3>
               </div>
@@ -991,7 +1137,7 @@ export default function SettingsPage() {
                   <span className="badge badge-neutral">Off</span>
                 ))}
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted">
               Runs unattended each month instead of the whole-school "Generate" button: on the
               chosen day it creates that month's invoices for every approved student, then that
               month's statements. Rows that already exist are skipped, so a re-run never
@@ -999,26 +1145,26 @@ export default function SettingsPage() {
             </p>
 
             {!autoGen && !loadingSettings ? (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
                 <AlertCircle className="h-4 w-4" /> Unable to load auto-generation settings.
               </div>
             ) : (
               <form onSubmit={saveAutoGeneration} className="mt-4 space-y-4">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-body">
                   <input
                     type="checkbox"
                     checked={autoGen?.enabled ?? false}
                     onChange={(e) =>
                       setAutoGen((p) => (p ? { ...p, enabled: e.target.checked } : p))
                     }
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   Enable monthly auto-generation
                 </label>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Day of month</label>
+                    <label className="block text-sm font-medium text-body">Day of month</label>
                     <select
                       value={autoGen?.day_of_month ?? 1}
                       onChange={(e) =>
@@ -1034,7 +1180,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">SMS parents</label>
+                    <label className="block text-sm font-medium text-body">SMS parents</label>
                     <button
                       type="button"
                       onClick={() =>
@@ -1042,8 +1188,8 @@ export default function SettingsPage() {
                       }
                       className={`mt-1 rounded-lg px-3 py-2 text-sm font-medium ${
                         autoGen?.notify_parents
-                          ? 'bg-green-600 text-white'
-                          : 'border border-slate-300 text-slate-600'
+                          ? 'bg-[#1c7a4f] text-white'
+                          : 'border border-[#d8d2c4] text-muted'
                       }`}
                     >
                       {autoGen?.notify_parents ? 'Yes' : 'No'}
@@ -1052,7 +1198,7 @@ export default function SettingsPage() {
                 </div>
 
                 {(autoGen?.last_run_date || autoGen?.next_run_date) && (
-                  <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <div className="space-y-1 rounded-lg bg-[#faf8f2] px-3 py-2 text-xs text-muted">
                     {autoGen.next_run_date && (
                       <p>
                         Next run:{' '}
@@ -1074,7 +1220,7 @@ export default function SettingsPage() {
                   <Save className="h-4 w-4" />
                   {savingAutoGen ? 'Saving...' : 'Save Schedule'}
                 </button>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-faint">
                   The scheduler checks every day and only fires once the configured day arrives —
                   if the service was down that day it catches up on the next run instead of
                   skipping the month. Changing the day restarts the schedule.
@@ -1084,11 +1230,11 @@ export default function SettingsPage() {
           </div>
 
           {/* ── Statement Generation ─────────────────────────── */}
-          <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+          <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">Statement Generation</h3>
+                <FileText className="h-5 w-5 text-primary-800" />
+                <h3 className="text-base font-semibold text-ink">Statement Generation</h3>
               </div>
               {statementGen &&
                 (statementGen.enabled ? (
@@ -1099,7 +1245,7 @@ export default function SettingsPage() {
                   <span className="badge badge-neutral">Off</span>
                 ))}
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted">
               On the chosen day each month, generate every approved student's statements
               (January through the current month) and, when enabled, send each billing parent an
               SMS with a link to view them in the portal plus an in-app notification. Existing
@@ -1107,26 +1253,26 @@ export default function SettingsPage() {
             </p>
 
             {!statementGen && !loadingSettings ? (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
                 <AlertCircle className="h-4 w-4" /> Unable to load statement generation settings.
               </div>
             ) : (
               <form onSubmit={saveStatementGeneration} className="mt-4 space-y-4">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium text-body">
                   <input
                     type="checkbox"
                     checked={statementGen?.enabled ?? false}
                     onChange={(e) =>
                       setStatementGen((p) => (p ? { ...p, enabled: e.target.checked } : p))
                     }
-                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   Enable scheduled statement generation
                 </label>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Day of month</label>
+                    <label className="block text-sm font-medium text-body">Day of month</label>
                     <select
                       value={statementGen?.day_of_month ?? 1}
                       onChange={(e) =>
@@ -1144,7 +1290,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">SMS parents</label>
+                    <label className="block text-sm font-medium text-body">SMS parents</label>
                     <button
                       type="button"
                       onClick={() =>
@@ -1154,8 +1300,8 @@ export default function SettingsPage() {
                       }
                       className={`mt-1 rounded-lg px-3 py-2 text-sm font-medium ${
                         statementGen?.notify_parents
-                          ? 'bg-green-600 text-white'
-                          : 'border border-slate-300 text-slate-600'
+                          ? 'bg-[#1c7a4f] text-white'
+                          : 'border border-[#d8d2c4] text-muted'
                       }`}
                     >
                       {statementGen?.notify_parents ? 'Yes' : 'No'}
@@ -1164,7 +1310,7 @@ export default function SettingsPage() {
                 </div>
 
                 {(statementGen?.last_run_date || statementGen?.next_run_date) && (
-                  <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <div className="space-y-1 rounded-lg bg-[#faf8f2] px-3 py-2 text-xs text-muted">
                     {statementGen.next_run_date && (
                       <p>
                         Next run:{' '}
@@ -1210,7 +1356,7 @@ export default function SettingsPage() {
                         : 'Generate now'}
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-faint">
                   The scheduler checks every day and only fires once the configured day arrives —
                   if the service was down that day it catches up on the next run instead of
                   skipping the month. Changing the day restarts the schedule. "Generate now"
@@ -1224,11 +1370,14 @@ export default function SettingsPage() {
           {/* ── Statement Templates ──────────────────────────── */}
           <TemplatesCard
             title="Statement Templates"
-            description="The SMS parents receive when statements are generated. Until you save your own wording the built-in default is shown here, and it is what parents currently receive."
-            icon={<FileText className="h-5 w-5 text-primary-600" />}
+            description="The SMS parents receive when statements are generated. Save several variants and choose which one is in use — the statement workflow sends it. Until a variant is in use the built-in default is what parents receive."
+            icon={<FileText className="h-5 w-5 text-primary-800" />}
             templates={statementTemplates}
+            slotLabels={{ statement_ready: 'Statement ready' }}
             loading={loadingStatementTemplates}
             onSave={saveStatementTemplate}
+            onActivate={activateTemplate}
+            onDelete={deleteTemplate}
             emptyText="No statement templates yet."
           />
         </>
@@ -1260,15 +1409,15 @@ function EmailTools({ ready }: { ready: boolean }) {
   };
 
   return (
-    <div className="mt-6 border-t border-slate-100 pt-5">
-      <h4 className="text-sm font-semibold text-slate-900">Email tools</h4>
-      <p className="mt-1 text-xs text-slate-500">
+    <div className="mt-6 border-t border-line-soft pt-5">
+      <h4 className="text-sm font-semibold text-ink">Email tools</h4>
+      <p className="mt-1 text-xs text-muted">
         Verify the SMTP channel by sending a test email.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <div className="min-w-[260px] flex-1">
-          <label className="block text-sm font-medium text-slate-700">Email address</label>
+          <label className="block text-sm font-medium text-body">Email address</label>
           <input
             value={testEmail}
             onChange={(e) => setTestEmail(e.target.value)}
@@ -1289,7 +1438,7 @@ function EmailTools({ ready }: { ready: boolean }) {
       </div>
 
       {!ready && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
           <AlertCircle className="h-4 w-4" />
           Configure and save SMTP credentials above before testing.
         </div>
@@ -1363,16 +1512,16 @@ function SmsTools({ ready }: { ready: boolean }) {
   };
 
   return (
-    <div className="mt-6 border-t border-slate-100 pt-5">
-      <h4 className="text-sm font-semibold text-slate-900">SMS tools</h4>
-      <p className="mt-1 text-xs text-slate-500">
+    <div className="mt-6 border-t border-line-soft pt-5">
+      <h4 className="text-sm font-semibold text-ink">SMS tools</h4>
+      <p className="mt-1 text-xs text-muted">
         Verify the channel, remind parents with outstanding balances, and review the send log.
       </p>
 
       <div className="mt-4 space-y-4">
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[220px] flex-1">
-            <label className="block text-sm font-medium text-slate-700">Mobile number</label>
+            <label className="block text-sm font-medium text-body">Mobile number</label>
             <input
               value={testPhone}
               onChange={(e) => setTestPhone(e.target.value)}
@@ -1397,7 +1546,7 @@ function SmsTools({ ready }: { ready: boolean }) {
             type="button"
             onClick={runReminders}
             disabled={reminding || !ready}
-            className="flex items-center gap-2 rounded-lg border border-primary-600 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-primary-600 px-4 py-2 text-sm font-medium text-primary-800 hover:bg-primary-50 disabled:opacity-50"
           >
             <Users className="h-4 w-4" />
             {reminding ? 'Sending…' : 'Remind everyone owing'}
@@ -1413,23 +1562,23 @@ function SmsTools({ ready }: { ready: boolean }) {
         </div>
 
         {!ready && (
-          <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          <div className="flex items-center gap-2 rounded-lg bg-[#fbf4e2] px-4 py-3 text-sm text-[#8a6f13]">
             <AlertCircle className="h-4 w-4" />
             Save SMSportal credentials above before testing or sending reminders.
           </div>
         )}
 
         {showLog && (
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
+          <div className="overflow-x-auto rounded-lg border border-line">
+            <div className="border-b border-line bg-[#faf8f2] px-4 py-2 text-xs font-medium text-muted">
               {loadingLog ? 'Loading…' : `Latest SMS (${log?.length ?? 0})`}
             </div>
             {log && log.length > 0 ? (
-              <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+              <div className="max-h-72 divide-y divide-line-soft overflow-y-auto">
                 {log.map((m) => (
                   <div key={m.id} className="px-4 py-2.5 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-slate-500">{m.to_phone}</span>
+                      <span className="font-mono text-xs text-muted">{m.to_phone}</span>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
                           m.status === 'sent'
@@ -1443,15 +1592,15 @@ function SmsTools({ ready }: { ready: boolean }) {
                         {m.cost != null ? ` · R${Number(m.cost).toFixed(2)}` : ''}
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate text-xs text-slate-600" title={m.content}>
+                    <p className="mt-0.5 truncate text-xs text-muted" title={m.content}>
                       {m.content}
                     </p>
-                    {m.error && <p className="mt-0.5 text-xs text-red-500">{m.error}</p>}
+                    {m.error && <p className="mt-0.5 text-xs text-[#a8382c]">{m.error}</p>}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="px-4 py-6 text-center text-sm text-slate-500">
+              <div className="px-4 py-6 text-center text-sm text-muted">
                 No SMS sent yet.
               </div>
             )}

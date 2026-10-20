@@ -8,6 +8,17 @@ import Pagination from '@/components/Pagination';
 
 const DEFAULT_PAGE_SIZE = 50;
 
+// Human labels for the message template slots in the SMS popup dropdown.
+const SLOT_LABELS: Record<string, string> = {
+  payment_receipt: 'Payment received',
+  balance_reminder: 'Balance reminder',
+  payment_link: 'Payment link',
+  invoice_ready: 'Invoice ready',
+  statement_ready: 'Statement ready',
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -377,6 +388,7 @@ export default function StudentsPage() {
   const [smsTemplates, setSmsTemplates] = useState<SmsTemplate[]>([]);
   const [smsTemplateKey, setSmsTemplateKey] = useState('');
   const [smsContent, setSmsContent] = useState('');
+  const [smsContentEdited, setSmsContentEdited] = useState(false);
   const [smsLoading, setSmsLoading] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
 
@@ -384,6 +396,7 @@ export default function StudentsPage() {
     setSmsTarget(s);
     setSmsTemplateKey('');
     setSmsContent('');
+    setSmsContentEdited(false);
     setSmsLoading(true);
     try {
       const res = await smsApi.templates();
@@ -395,9 +408,12 @@ export default function StudentsPage() {
     }
   };
 
-  const selectSmsTemplate = async (key: string) => {
+  const selectSmsTemplate = async (selected: string) => {
+    // A saved variant id, or "slot:<slot>" for the built-in default entry.
+    const key = selected.startsWith('slot:') ? selected.slice(5) : selected;
     setSmsTemplateKey(key);
-    if (!smsTarget || !key) {
+    setSmsContentEdited(false);
+    if (!smsTarget || !key || (!UUID_RE.test(key) && !SLOT_LABELS[key])) {
       setSmsContent('');
       return;
     }
@@ -424,13 +440,18 @@ export default function StudentsPage() {
 
   const sendSmsToParent = async () => {
     if (!smsTarget) return;
-    if (!smsContent.trim()) return toast.error('Message content is empty');
+    // A chosen template that was left untouched is sent AS the template, so
+    // the backend fills real values (balance, amount, month) — the preview's
+    // placeholder text never reaches a parent. Once the admin edits the text,
+    // their edited message is what goes out.
+    const useTemplateOnly = !!smsTemplateKey && !smsContentEdited;
+    if (!smsContent.trim() && !useTemplateOnly) return toast.error('Message content is empty');
     setSmsSending(true);
     try {
       await smsApi.sendToStudent({
         student_id: smsTarget.id,
         template_key: smsTemplateKey || undefined,
-        content: smsContent.trim(),
+        content: useTemplateOnly ? undefined : smsContent.trim(),
       });
       toast.success(`SMS sent to ${smsTarget.first_name}'s parent`);
       setSmsTarget(null);
@@ -444,7 +465,7 @@ export default function StudentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Students</h1>
+        <h1 className="text-2xl font-bold text-ink">Students</h1>
         <div className="flex gap-2">
           <button onClick={() => setShowAdminRegister(true)} className="btn btn-outline">
             <UserPlus className="h-4 w-4" /> Register Student + Parent
@@ -457,7 +478,7 @@ export default function StudentsPage() {
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -465,7 +486,7 @@ export default function StudentsPage() {
             className="input pl-9"
           />
           {searchInput.trim().length === 1 && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">Type 2+ chars</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-faint">Type 2+ chars</span>
           )}
         </div>
         <select value={filterGrade} onChange={(e) => { setFilterGrade(e.target.value); setPage(1); }} className="input w-44">
@@ -473,7 +494,7 @@ export default function StudentsPage() {
           {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
         {!loading && (
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-muted">
             {totalCount.toLocaleString()} student{totalCount === 1 ? '' : 's'}
             {search ? ` matching "${search}"` : ''}
           </span>
@@ -485,31 +506,31 @@ export default function StudentsPage() {
           {editingId && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Student Number</label>
+                <label className="block text-sm font-medium text-body">Student Number</label>
                 <input value={studentNum} onChange={(e) => setStudentNum(e.target.value)} required className="input mt-1 font-mono" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Enrollment Date</label>
+                  <label className="block text-sm font-medium text-body">Enrollment Date</label>
                   <input type="date" value={enrollDate} onChange={(e) => setEnrollDate(e.target.value)} className="input mt-1" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Payment Preference</label>
+                  <label className="block text-sm font-medium text-body">Payment Preference</label>
                   <select value={paymentPref} onChange={(e) => setPaymentPref(e.target.value as 'monthly' | 'cumulative')} className="input mt-1">
                     <option value="monthly">Monthly installments</option>
                     <option value="cumulative">Cumulative</option>
                   </select>
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-3 text-sm font-semibold text-slate-700">Parents / Guardians</p>
+              <div className="rounded-lg border border-line bg-[#faf8f2] p-3">
+                <p className="mb-3 text-sm font-semibold text-body">Parents / Guardians</p>
                 <div className="space-y-4">
                   {editGuardians.length === 0 && (
-                    <p className="text-sm text-slate-500">No guardians on file.</p>
+                    <p className="text-sm text-muted">No guardians on file.</p>
                   )}
                   {editGuardians.map((g, idx) => (
-                    <div key={g.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <div key={g.id} className="rounded-lg border border-line bg-white p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
                         {g.guardian_type === 'father' ? 'Father' : g.guardian_type === 'mother' ? 'Mother' : g.guardian_type === 'primary' ? 'Primary Guardian' : 'Secondary Guardian'}
                       </p>
                       <div className="space-y-2">
@@ -558,11 +579,11 @@ export default function StudentsPage() {
           {!editingId && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Student Number</label>
+                <label className="block text-sm font-medium text-body">Student Number</label>
                 <input value={studentNum} onChange={(e) => setStudentNum(e.target.value)} required className="input mt-1" />
               </div>
               <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
-                <p className="mb-2 text-sm font-semibold text-primary-700">Father (required)</p>
+                <p className="mb-2 text-sm font-semibold text-primary-800">Father (required)</p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <input value={p1First} onChange={(e) => setP1First(e.target.value)} required placeholder="First name" className="input" />
@@ -579,8 +600,8 @@ export default function StudentsPage() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-2 text-sm font-semibold text-slate-700">Mother (optional)</p>
+              <div className="rounded-lg border border-line bg-[#faf8f2] p-3">
+                <p className="mb-2 text-sm font-semibold text-body">Mother (optional)</p>
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <input value={p2First} onChange={(e) => setP2First(e.target.value)} placeholder="First name" className="input" />
@@ -601,16 +622,16 @@ export default function StudentsPage() {
           )}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">First Name</label>
+              <label className="block text-sm font-medium text-body">First Name</label>
               <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Last Name</label>
+              <label className="block text-sm font-medium text-body">Last Name</label>
               <input value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input mt-1" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Grade</label>
+            <label className="block text-sm font-medium text-body">Grade</label>
             <select value={gradeId} onChange={(e) => setGradeId(e.target.value)} required className="input mt-1">
               <option value="">Select</option>
               {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -618,7 +639,7 @@ export default function StudentsPage() {
           </div>
           {!editingId && (
             <div>
-              <label className="block text-sm font-medium text-slate-700">Enrollment Date</label>
+              <label className="block text-sm font-medium text-body">Enrollment Date</label>
               <input type="date" value={enrollDate} onChange={(e) => setEnrollDate(e.target.value)} required className="input mt-1" />
             </div>
           )}
@@ -634,14 +655,14 @@ export default function StudentsPage() {
       <Modal open={showAdminRegister} onClose={closeAdminRegister} title="Register Student + Parent">
         {adminRegisterResult ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-800">
+            <div className="rounded-lg border border-[#cfe3d8] bg-[#eef6f1] p-4">
+              <p className="text-sm font-semibold text-[#176641]">
                 {adminRegisterResult.student.first_name} {adminRegisterResult.student.last_name} registered
               </p>
-              <p className="mt-1 text-sm text-emerald-700">
+              <p className="mt-1 text-sm text-[#1c7a4f]">
                 Student number: <span className="font-mono font-medium">{adminRegisterResult.student.student_number}</span>
               </p>
-              <p className="text-sm text-emerald-700">
+              <p className="text-sm text-[#1c7a4f]">
                 Parent account: <span className="font-medium">{adminRegisterResult.parent.email}</span>
                 {!adminRegisterResult.temporary_password && (
                   <span className="ml-2 badge badge-success">Existing account linked</span>
@@ -649,38 +670,38 @@ export default function StudentsPage() {
               </p>
             </div>
             {adminRegisterResult.temporary_password ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-semibold text-amber-800">
+              <div className="rounded-lg border border-[#eadfbe] bg-[#fbf4e2] p-4">
+                <p className="text-sm font-semibold text-[#6b5413]">
                   Temporary password — shown ONCE, give it to the parent now
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <code className="flex-1 rounded bg-white border border-amber-200 px-3 py-2 font-mono text-sm text-slate-800">
+                  <code className="flex-1 rounded bg-white border border-[#eadfbe] px-3 py-2 font-mono text-sm text-ink">
                     {adminRegisterResult.temporary_password}
                   </code>
                   <button onClick={copyCredentials} className="btn btn-outline" title="Copy credentials">
                     <Copy className="h-4 w-4" />
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-amber-700">
+                <p className="mt-2 text-xs text-[#8a6f13]">
                   The parent signs in with {adminRegisterResult.parent.email} and this password, then changes it in
                   their profile.
                 </p>
               </div>
             ) : (
-              <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              <p className="rounded-lg border border-line bg-[#faf8f2] p-3 text-sm text-muted">
                 The email <span className="font-medium">{adminRegisterResult.parent.email}</span> was already a portal
                 account, so the student was linked to it — no new password was created.
               </p>
             )}
             {adminRegisterResult.payment_url && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <p className="text-sm font-semibold text-blue-800">Registration fee payment link</p>
-                <p className="mt-1 text-xs text-blue-600">
+              <div className="rounded-lg border border-line bg-[#f4f6f9] p-4">
+                <p className="text-sm font-semibold text-ink">Registration fee payment link</p>
+                <p className="mt-1 text-xs text-primary-600">
                   {adminRegisterResult.sms_sent
                     ? 'Payment link SMS sent to the guardian. You can also share it directly:'
                     : 'The payment link could not be SMSed — share it directly with the guardian:'}
                   {adminRegisterResult.sms_error && (
-                    <span className="block font-medium text-amber-600">
+                    <span className="block font-medium text-[#8a6f13]">
                       {adminRegisterResult.sms_error}
                     </span>
                   )}
@@ -689,7 +710,7 @@ export default function StudentsPage() {
                   href={adminRegisterResult.payment_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-flex max-w-full items-center gap-1 truncate rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  className="mt-2 inline-flex max-w-full items-center gap-1 truncate rounded-lg border border-[#d8d2c4] bg-white px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
                 >
                   <Send className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{adminRegisterResult.payment_url}</span>
@@ -703,7 +724,7 @@ export default function StudentsPage() {
         ) : (
           <form onSubmit={handleAdminRegister} className="space-y-4">
             <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
-              <p className="mb-2 text-sm font-semibold text-primary-700">Child</p>
+              <p className="mb-2 text-sm font-semibold text-primary-800">Child</p>
               <div className="grid grid-cols-2 gap-2">
                 <input value={arFirstName} onChange={(e) => setArFirstName(e.target.value)} required placeholder="First name" className="input" />
                 <input value={arLastName} onChange={(e) => setArLastName(e.target.value)} required placeholder="Last name" className="input" />
@@ -715,7 +736,7 @@ export default function StudentsPage() {
             </div>
 
             <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
-              <p className="mb-2 text-sm font-semibold text-primary-700">
+              <p className="mb-2 text-sm font-semibold text-primary-800">
                 Parent portal account <span className="font-normal text-primary-500">(email is the login)</span>
               </p>
               <div className="space-y-2">
@@ -733,16 +754,16 @@ export default function StudentsPage() {
                   <input value={arPoBox} onChange={(e) => setArPoBox(e.target.value)} placeholder="PO Box" className="input" />
                 </div>
                 <input value={arAddress} onChange={(e) => setArAddress(e.target.value)} placeholder="Physical address" className="input" />
-                <label className="flex items-start gap-2 rounded-lg border border-primary-100 bg-white p-2.5 text-sm text-slate-700">
+                <label className="flex items-start gap-2 rounded-lg border border-primary-100 bg-white p-2.5 text-sm text-body">
                   <input
                     type="checkbox"
                     checked={arSendSms}
                     onChange={(e) => setArSendSms(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    className="mt-0.5 h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                   />
                   <span>
                     Send the registration fee payment link to the guardian by SMS
-                    <span className="block text-xs text-slate-400">
+                    <span className="block text-xs text-faint">
                       Requires a registration fee to be set in Settings. The parent pays through the portal.
                     </span>
                   </span>
@@ -750,8 +771,8 @@ export default function StudentsPage() {
               </div>
             </div>
 
-            <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <summary className="text-sm font-semibold text-slate-700">Other parent (optional)</summary>
+            <details className="rounded-lg border border-line bg-[#faf8f2] p-3">
+              <summary className="text-sm font-semibold text-body">Other parent (optional)</summary>
               <div className="mt-2 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <input value={arOtherFirst} onChange={(e) => setArOtherFirst(e.target.value)} placeholder="First name" className="input" />
@@ -774,61 +795,61 @@ export default function StudentsPage() {
         )}
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+      <div className="table-wrap overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Reg No.</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grade</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Parents</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Phone</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+              <th className="th">Reg no.</th>
+              <th className="th">Name</th>
+              <th className="th">Grade</th>
+              <th className="th">Parents</th>
+              <th className="th">Phone</th>
+              <th className="th">Status</th>
+              <th className="th text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
+              <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-faint" /></td></tr>
             ) : students.length === 0 ? (
-              <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-500">No students found.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-sm text-muted">No students found.</td></tr>
             ) : students.map((s) => (
-              <tr key={s.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-sm font-mono text-slate-700">{s.student_number}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">{s.first_name} {s.last_name}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{grades.find((g) => g.id === s.grade_id)?.name || s.grade_id}</td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-slate-700">
+              <tr key={s.id} className="row-hover">
+                <td className="td whitespace-nowrap font-mono text-[12px] text-muted">{s.student_number}</td>
+                <td className="td whitespace-nowrap font-semibold text-ink">{s.first_name} {s.last_name}</td>
+                <td className="td whitespace-nowrap text-muted">{grades.find((g) => g.id === s.grade_id)?.name || s.grade_id}</td>
+                <td className="td">
+                  <div className="max-w-[190px] text-[12.5px] text-body">
                     {s.guardians?.map((g) => {
                       const isMother = g.guardian_type === 'mother' || g.guardian_type === 'secondary';
                       return (
                         <div key={g.id} className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            {isMother ? 'Mother:' : 'Father:'}
+                          <span className="flex-shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+                            {isMother ? 'Mother' : 'Father'}
                           </span>
-                          <span>{g.full_name}</span>
+                          <span className="truncate">{g.full_name}</span>
                         </div>
                       );
                     })}
-                    {(!s.guardians || s.guardians.length === 0) && <span className="text-slate-400">-</span>}
+                    {(!s.guardians || s.guardians.length === 0) && <span className="text-faint">—</span>}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                <td className="td whitespace-nowrap font-mono text-[12px] text-muted">
                   {s.guardians?.length
-                    ? s.guardians.map((g) => <div key={g.id}>{g.phone || '-'}</div>)
-                    : <span className="text-slate-400">-</span>}
+                    ? s.guardians.map((g) => <div key={g.id}>{g.phone || '—'}</div>)
+                    : <span className="text-faint">—</span>}
                 </td>
-                <td className="px-6 py-4">
+                <td className="td">
                   <span className={`badge ${s.is_active ? 'badge-success' : 'badge-danger'}`}>
                     {s.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => openView(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="View full profile"><Eye className="h-4 w-4" /></button>
-                    <button onClick={() => openSmsModal(s)} className="rounded p-1 text-slate-400 hover:text-green-600" title="Send SMS to parent"><MessageSquare className="h-4 w-4" /></button>
-                    <button onClick={() => handleEdit(s)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="Edit"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => handleDeactivate(s.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Deactivate"><UserX className="h-4 w-4" /></button>
+                <td className="td text-right">
+                  <div className="flex justify-end gap-0.5">
+                    <button onClick={() => openView(s)} className="rounded p-1 text-faint transition-colors hover:bg-[#f3efe6] hover:text-ink" title="View full profile"><Eye className="h-4 w-4" /></button>
+                    <button onClick={() => openSmsModal(s)} className="rounded p-1 text-faint transition-colors hover:bg-[#eef6f1] hover:text-[#1c7a4f]" title="Send SMS to parent"><MessageSquare className="h-4 w-4" /></button>
+                    <button onClick={() => handleEdit(s)} className="rounded p-1 text-faint transition-colors hover:bg-[#f3efe6] hover:text-ink" title="Edit"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => handleDeactivate(s.id)} className="rounded p-1 text-faint transition-colors hover:bg-[#fbeeec] hover:text-[#a8382c]" title="Deactivate"><UserX className="h-4 w-4" /></button>
                   </div>
                 </td>
               </tr>
@@ -867,44 +888,44 @@ export default function StudentsPage() {
             </div>
 
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Parents / Guardians</h4>
+              <h4 className="text-sm font-semibold text-ink">Parents / Guardians</h4>
               <div className="mt-2 space-y-2">
                 {viewing.guardians?.length ? viewing.guardians.map((g) => (
-                  <div key={g.id} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                    <p className="font-medium text-slate-900">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <div key={g.id} className="rounded-lg border border-line bg-[#faf8f2] px-4 py-3 text-sm">
+                    <p className="font-medium text-ink">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-faint">
                         {g.guardian_type === 'mother' || g.guardian_type === 'secondary' ? 'Mother · ' : 'Father · '}
                       </span>
                       {g.full_name}
                     </p>
-                    <div className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
+                    <div className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-2">
                       {g.phone && <span>Phone: <span className="font-mono">{g.phone}</span></span>}
                       {g.email && <span>Email: {g.email}</span>}
                       {g.physical_address && <span>Address: {g.physical_address}</span>}
                       {g.po_box && <span>PO Box: {g.po_box}</span>}
                       {!g.phone && !g.email && !g.physical_address && !g.po_box && (
-                        <span className="text-slate-400">No contact details on file.</span>
+                        <span className="text-faint">No contact details on file.</span>
                       )}
                     </div>
                   </div>
                 )) : (
-                  <p className="text-sm text-slate-400">No guardian records.</p>
+                  <p className="text-sm text-faint">No guardian records.</p>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Recent payments</h4>
+                <h4 className="text-sm font-semibold text-ink">Recent payments</h4>
                 {viewLoading ? (
-                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-line" /></div>
                 ) : viewPayments.length ? (
-                  <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  <ul className="mt-2 divide-y divide-line-soft rounded-lg border border-line">
                     {viewPayments.map((p) => (
                       <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
                         <div>
-                          <p className="font-medium text-slate-800">R {p.amount.toLocaleString()}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="font-medium text-ink">R {p.amount.toLocaleString()}</p>
+                          <p className="text-xs text-faint">
                             {new Date(p.payment_date).toLocaleDateString()} · {p.payment_method}
                           </p>
                         </div>
@@ -915,26 +936,26 @@ export default function StudentsPage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">No payments recorded.</p>
+                  <p className="mt-2 text-sm text-faint">No payments recorded.</p>
                 )}
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Statements ({new Date().getFullYear()})</h4>
+                <h4 className="text-sm font-semibold text-ink">Statements ({new Date().getFullYear()})</h4>
                 {viewLoading ? (
-                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-line" /></div>
                 ) : viewStatements.length ? (
-                  <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  <ul className="mt-2 divide-y divide-line-soft rounded-lg border border-line">
                     {viewStatements.slice(0, 4).map((st) => (
                       <li key={st.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                        <span className="text-slate-700">Month {st.month}</span>
-                        <span className={`font-medium ${Number(st.closing_balance) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        <span className="text-body">Month {st.month}</span>
+                        <span className={`font-medium ${Number(st.closing_balance) > 0 ? 'text-[#a8382c]' : 'text-[#1c7a4f]'}`}>
                           R {Number(st.closing_balance).toLocaleString()}
                         </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">No statements generated yet.</p>
+                  <p className="mt-2 text-sm text-faint">No statements generated yet.</p>
                 )}
               </div>
             </div>
@@ -942,23 +963,23 @@ export default function StudentsPage() {
             {/* ── Fee override (per-student fee) ─────────────── */}
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-900">Fee Override</h4>
+                <h4 className="text-sm font-semibold text-ink">Fee Override</h4>
                 <span className="badge badge-info">
                   {viewOverrides.length > 0
                     ? `${viewOverrides.length} override${viewOverrides.length === 1 ? '' : 's'}`
                     : 'Grade fee applies'}
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-muted">
                 Set a custom fee for this student only, without changing the grade fee.
               </p>
 
               {viewLoading ? (
-                <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" /></div>
+                <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-line" /></div>
               ) : viewFees.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-400">No fee structures set for this grade yet.</p>
+                <p className="mt-2 text-sm text-faint">No fee structures set for this grade yet.</p>
               ) : (
-                <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                <div className="mt-2 divide-y divide-line-soft rounded-lg border border-line">
                   {viewFees.map((fee) => {
                     const override = viewOverrides.find((o) => o.fee_structure_id === fee.id && o.is_active);
                     const formOpen = ovrFormFeeId === fee.id;
@@ -966,12 +987,12 @@ export default function StudentsPage() {
                       <div key={fee.id} className="px-4 py-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <p className="text-sm font-medium text-slate-900">{fee.category}</p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-sm font-medium text-ink">{fee.category}</p>
+                            <p className="text-xs text-muted">
                               {override ? (
                                 <>
                                   Paying{' '}
-                                  <span className="font-semibold text-emerald-700">
+                                  <span className="font-semibold text-[#1c7a4f]">
                                     R {Number(override.annual_amount).toLocaleString()}
                                   </span>
                                   {' '}{override.discount_type === 'percent' ? `${override.annual_amount}% off` : 'per year (override)'}
@@ -982,14 +1003,14 @@ export default function StudentsPage() {
                               )}
                             </p>
                             {override?.reason && (
-                              <p className="mt-0.5 text-xs italic text-slate-500">Reason: {override.reason}</p>
+                              <p className="mt-0.5 text-xs italic text-muted">Reason: {override.reason}</p>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
                             {override && (
                               <button
                                 onClick={() => removeFeeOverride(override.id)}
-                                className="rounded-lg border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                                className="rounded-lg border border-[#ecd2cd] px-3 py-1 text-xs font-medium text-[#8f2e24] hover:bg-[#fbeeec]"
                               >
                                 Clear
                               </button>
@@ -1001,7 +1022,7 @@ export default function StudentsPage() {
                                 setOvrFormAmount(override ? String(Number(override.annual_amount)) : '');
                                 setOvrFormReason(override?.reason || '');
                               }}
-                              className="rounded-lg border border-blue-300 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                              className="rounded-lg border border-[#d8d2c4] px-3 py-1 text-xs font-medium text-primary-700 hover:bg-[#f4f6f9]"
                             >
                               {override ? 'Edit' : 'Set'}
                             </button>
@@ -1009,10 +1030,10 @@ export default function StudentsPage() {
                         </div>
 
                         {formOpen && (
-                          <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                          <div className="mt-3 space-y-3 border-t border-line pt-3">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs font-medium text-slate-600">Type</label>
+                                <label className="block text-xs font-medium text-muted">Type</label>
                                 <select
                                   value={ovrFormType}
                                   onChange={(e) => setOvrFormType(e.target.value as 'override' | 'percent')}
@@ -1023,7 +1044,7 @@ export default function StudentsPage() {
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-xs font-medium text-slate-600">
+                                <label className="block text-xs font-medium text-muted">
                                   {ovrFormType === 'percent' ? 'Percentage off' : 'Custom annual amount (R)'}
                                 </label>
                                 <input
@@ -1038,7 +1059,7 @@ export default function StudentsPage() {
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-600">Reason</label>
+                              <label className="block text-xs font-medium text-muted">Reason</label>
                               <input
                                 type="text"
                                 maxLength={255}
@@ -1083,7 +1104,7 @@ export default function StudentsPage() {
         {smsTarget && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Message template</label>
+              <label className="block text-sm font-medium text-body">Message template</label>
               <select
                 value={smsTemplateKey}
                 onChange={(e) => selectSmsTemplate(e.target.value)}
@@ -1092,31 +1113,40 @@ export default function StudentsPage() {
               >
                 <option value="">Custom message (no template)</option>
                 {smsTemplates.map((t) => (
-                  <option key={t.key} value={t.key}>{t.name}</option>
+                  <option
+                    key={t.id ?? t.slot}
+                    value={t.id ?? `slot:${t.slot}`}
+                  >
+                    {t.slot && t.is_default ? `${SLOT_LABELS[t.slot] ?? t.slot} (default)` : t.name}
+                    {t.slot && !t.is_default ? ` · ${SLOT_LABELS[t.slot] ?? t.slot}` : ''}
+                  </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted">
                 Pick a template to pre-fill the message, then edit the text below before sending.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Message</label>
+              <label className="block text-sm font-medium text-body">Message</label>
               {smsLoading ? (
-                <div className="mt-2 flex h-24 items-center justify-center rounded-lg border border-slate-200">
-                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                <div className="mt-2 flex h-24 items-center justify-center rounded-lg border border-line">
+                  <Loader2 className="h-5 w-5 animate-spin text-faint" />
                 </div>
               ) : (
                 <textarea
                   value={smsContent}
-                  onChange={(e) => setSmsContent(e.target.value)}
+                  onChange={(e) => {
+                    setSmsContent(e.target.value);
+                    setSmsContentEdited(true);
+                  }}
                   rows={4}
                   maxLength={1600}
                   placeholder="Type your message to this parent…"
                   className="input mt-1"
                 />
               )}
-              <p className="mt-1 text-right text-xs text-slate-400">{smsContent.length}/1600</p>
+              <p className="mt-1 text-right text-xs text-faint">{smsContent.length}/1600</p>
             </div>
 
             <div className="flex gap-2 pt-1">
@@ -1147,8 +1177,8 @@ export default function StudentsPage() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
-      <dd className="mt-0.5 font-medium text-slate-900">{value || '—'}</dd>
+      <dt className="text-xs font-medium uppercase tracking-wide text-faint">{label}</dt>
+      <dd className="mt-0.5 font-medium text-ink">{value || '—'}</dd>
     </div>
   );
 }
