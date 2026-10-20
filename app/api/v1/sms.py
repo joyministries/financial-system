@@ -15,6 +15,8 @@ from app.schemas.sms import (
     SmsSendRequest,
     SmsSendResponse,
     SmsStudentSendRequest,
+    SmsTemplateActivateRequest,
+    SmsTemplateCreate,
     SmsTemplateOut,
     SmsTemplateRenderRequest,
     SmsTemplateRenderResponse,
@@ -180,8 +182,14 @@ async def list_sms_templates(
     _user=Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ) -> list[SmsTemplateOut]:
-    """List editable message templates (admin-curated SMS content)."""
-    return await SmsService(db).list_templates()
+    """Message templates with every saved variant per slot.
+
+    Built-in defaults are merged in, so the card shows the actual message
+    before anything has been saved. `is_active` marks the variant future sends
+    use (true on the built-in default entry when nothing is in use yet).
+    """
+    groups = await SmsService(db).list_message_template_groups()
+    return [SmsTemplateOut(**g) for g in groups]
 
 
 @router.get("/statement-templates", response_model=list[SmsTemplateOut])
@@ -189,50 +197,144 @@ async def list_statement_templates(
     _user=Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ) -> list[SmsTemplateOut]:
-    """SMS templates the statement workflow sends.
-
-    Built-in defaults are merged in, so the card shows the actual message text
-    before anything has been saved. Saving an edit uses the same
-    `PUT /sms/templates/{key}` as every other template.
-    """
-    return await SmsService(db).list_statement_templates()
+    """Statement-workflow templates, with saved variants and the built-in
+    default merged in — same shape as `GET /sms/templates`."""
+    groups = await SmsService(db).list_statement_template_groups()
+    return [SmsTemplateOut(**g) for g in groups]
 
 
-@router.put("/templates/{key}", response_model=SmsTemplateOut)
+@router.post("/templates", response_model=SmsTemplateOut)
+async def create_sms_template(
+    payload: SmsTemplateCreate,
+    user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsTemplateOut:
+    """Save a new variant of a message slot. The FIRST variant saved for a slot
+    becomes the one in use; afterwards the admin chooses via
+    `PUT /sms/templates/{slot}/activate`."""
+    service = SmsService(db)
+    try:
+        template = await service.create_template(
+            payload.slot, payload.name, payload.body, updated_by=user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await db.commit()
+    return SmsTemplateOut(
+        id=template.id,
+        slot=template.slot,
+        name=template.name,
+        body=template.body,
+        is_active=template.is_active,
+        is_default=False,
+        updated_at=template.updated_at,
+    )
+
+
+@router.put("/templates/{template_id}", response_model=SmsTemplateOut)
 async def update_sms_template(
-    key: str,
+    template_id: str,
     payload: SmsTemplateUpdate,
     user=Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ) -> SmsTemplateOut:
-    """Create or update a message template. The saved body is used for every
-    future send with that template key (overriding the built-in fallback)."""
+    """Edit a saved variant's name/body; `is_active: true` also switches the
+    slot's sends to this variant."""
     service = SmsService(db)
-    template = await service.upsert_template(
-        key=key,
-        body=payload.body,
-        name=payload.name,
-        is_active=payload.is_active,
-        updated_by=user.id,
-    )
+    try:
+        template = await service.update_variant(
+            template_id,
+            name=payload.name,
+            body=payload.body,
+            is_active=payload.is_active,
+            updated_by=user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     await db.commit()
-    return template
+    return SmsTemplateOut(
+        id=template.id,
+        slot=template.slot,
+        name=template.name,
+        body=template.body,
+        is_active=template.is_active,
+        is_default=False,
+        updated_at=template.updated_at,
+    )
 
 
-@router.post("/templates/{key}/render", response_model=SmsTemplateRenderResponse)
+@router.put("/templates/{slot}/activate", response_model=SmsTemplateOut)
+async def activate_sms_template(
+    slot: str,
+    payload: SmsTemplateActivateRequest,
+    user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsTemplateOut:
+    """Choose which template a slot sends: pass a saved variant id, or null to
+    put the built-in default back in use."""
+    service = SmsService(db)
+    try:
+        await service.activate_template(payload.template_id, slot)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await db.commit()
+    variants = await service.list_variants((slot,))
+    groups = service.template_groups((slot,), variants)
+    if payload.template_id:
+        entry = next((g for g in groups if g["id"] == payload.template_id), None)
+    else:
+        entry = next((g for g in groups if g["is_default"]), groups[0])
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return SmsTemplateOut(**entry)
+
+
+@router.delete("/templates/{template_id}", response_model=SmsSendResponse)
+async def delete_sms_template(
+    template_id: str,
+    user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsSendResponse:
+    """Delete a saved variant. If it was in use, the slot falls back to the
+    built-in default text on every future send."""
+    service = SmsService(db)
+    try:
+        await service.delete_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await db.commit()
+    return SmsSendResponse(id=template_id, status="deleted", to_phone="", detail="Template deleted")
+
+
+@router.post("/templates/render", response_model=SmsTemplateRenderResponse)
 async def render_sms_template(
-    key: str,
     payload: SmsTemplateRenderRequest,
     _user=Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ) -> SmsTemplateRenderResponse:
-    """Preview a template with sample/real values — never sends."""
+    """Preview a template with sample/real values — never sends.
+
+   Identify the template by a saved variant `id`, or by `slot`/`key` to render
+    the variant currently in use (built-in default when nothing is saved)."""
     service = SmsService(db)
-    template = await service.get_template(key)
+    template = None
+    if payload.id:
+        template = await service.get_variant(payload.id)
+        if template is None:
+            raise HTTPException(status_code=404, detail="Template not found")
+    else:
+        slot = payload.slot or payload.key
+        if not slot:
+            raise HTTPException(status_code=422, detail="Provide template id or slot")
+        template = await service.get_template(slot)
     content, missing = service.render_template(
-        key, payload.values, fallback=template.body if template else None
+        template.slot, payload.values, fallback=template.body if template else None
     )
-    return SmsTemplateRenderResponse(key=key, content=content, missing=missing)
+    return SmsTemplateRenderResponse(
+        key=template.slot if template else (payload.slot or payload.key or ""),
+        content=content,
+        missing=missing,
+    )
 
 
 # ── single parent ────────────────────────────────────────────
@@ -258,26 +360,29 @@ async def send_sms_to_student(
         template_key = "manual"
     elif payload.template_key:
         template_key = payload.template_key
-        template = await service.get_template(template_key)
+        # Accept a saved variant id OR a slot name: the variant's saved body
+        # wins, otherwise the slot's in-use variant, else the built-in default.
+        template = await service.get_variant(template_key)
+        if template is None:
+            template = await service.get_template(template_key)
+        template_body = template.body if template else None
         values: dict[str, str | None] = {
             "parent": await service.parent_first_name(student),
             "student": student.first_name,
         }
         # Fill in balance context if the template uses it.
-        if "{balance}" in (template.body if template else "") or "{month}" in (
-            template.body if template else ""
-        ):
+        if "{balance}" in (template_body or "") or "{month}" in (template_body or ""):
             from app.services.reminder import outstanding_total
 
             values["balance"] = f"{await outstanding_total(db, student.id):,.2f}"
             values["month"] = f"{datetime.now(UTC).month:02d}"
             values["year"] = str(datetime.now(UTC).year)
-        if "{amount}" in (template.body if template else ""):
+        if "{amount}" in (template_body or ""):
             from app.services.reminder import outstanding_total
 
             values["amount"] = f"{await outstanding_total(db, student.id):,.2f}"
         content, missing = service.render_template(
-            template_key, values, fallback=template.body if template else None
+            template_key, values, fallback=template_body
         )
         if missing:
             raise HTTPException(

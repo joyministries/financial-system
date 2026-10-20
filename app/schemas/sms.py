@@ -57,33 +57,56 @@ class SmsReminderResponse(BaseModel):
 
 
 class SmsTemplateOut(BaseModel):
-    key: str
+    id: str | None
+    slot: str
     name: str
     body: str
     is_active: bool
-    # None when the body shown is the built-in default and no row exists yet
-    # (see SmsService.list_statement_templates).
+    # None when no template id exists yet (built-in default entry shown when
+    # nothing has been saved for this slot).
     updated_at: datetime | None = None
-    # True when nothing has been saved for this key yet, so the text on screen
-    # is the code default rather than a curated body.
+    # True when this entry is the built-in code default rather than a saved
+    # variant (and when no variant of the slot is in use).
     is_default: bool = False
 
     model_config = {"from_attributes": True}
 
 
+class SmsTemplateCreate(BaseModel):
+    """Save a new variant of a message slot (Settings → Message/Statement
+    Templates → New template)."""
+
+    slot: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=100)
+    body: str = Field(min_length=1, max_length=1600)
+
+
 class SmsTemplateUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    body: str = Field(min_length=1, max_length=1600)
-    is_active: bool = True
+    body: str | None = Field(default=None, min_length=1, max_length=1600)
+    # Setting True switches this variant in as the one sends will use.
+    is_active: bool | None = None
+
+
+class SmsTemplateActivateRequest(BaseModel):
+    """Choose which variant is in use for a slot. `template_id: null` puts the
+    built-in default back in use."""
+
+    template_id: str | None = Field(default=None, max_length=50)
 
 
 class SmsTemplateRenderRequest(BaseModel):
     """Render a template with the given values without sending.
 
-    Values are the placeholder tokens in the template body, e.g.
+    Identify the template by `id` of a saved variant, or by `slot` to render
+    the variant currently in use (built-in default when nothing is saved).
+    Values are placeholder tokens in the body, e.g.
     {"parent": "Thabo", "student": "Adam", "amount": "1 200,00"}.
     """
 
+    id: str | None = Field(default=None, max_length=50)
+    # `key` kept for older callers — treated as a slot name.
+    key: str | None = Field(default=None, max_length=50)
     values: dict[str, str] = Field(default_factory=dict)
 
 

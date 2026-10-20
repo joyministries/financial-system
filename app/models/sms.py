@@ -9,22 +9,29 @@ from app.core.database import Base
 
 
 class SmsTemplate(Base):
-    """Editable SMS message templates.
+    """Saved SMS template variant.
 
-    Each template has a stable `key` (the code path that uses it) and a
-    `body` with `{placeholder}` tokens that are substituted at send time
+    Admins can save several variants per message slot (e.g. a few alternative
+    statement texts) and pick which one is IN USE — that is the body every
+    future send of that slot renders. Exactly one variant per slot is
+    `is_active`; before any variant is saved the built-in default in
+    `app/services/sms.py` is what gets sent.
+
+    `slot` is the code path that uses the template (`payment_receipt`,
+    `balance_reminder`, `payment_link`, `invoice_ready`, `statement_ready`).
+    The active body carries `{placeholder}` tokens substituted at send time
     (e.g. `{parent}`, `{student}`, `{amount}`, `{balance}`, `{link}`).
-    Admins curate these from Settings -> SMS -> Message Templates; the
-    built-in defaults in `app/services/sms.py` are the fallback when a
-    template row does not exist.
     """
 
     __tablename__ = "sms_templates"
 
-    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    slot: Mapped[str] = mapped_column(String(50), index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The variant currently used by sends of this slot. One per slot —
+    # enforced by SmsService when it flips `is_active`.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)

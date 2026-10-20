@@ -483,13 +483,17 @@ export interface ReminderRunResult {
 }
 
 export interface SmsTemplate {
-  key: string;
+  /** Saved variant id; null on the built-in default entry of a slot. */
+  id: string | null;
+  /** Message slot this variant belongs to (payment_receipt, statement_ready…). */
+  slot: string;
   name: string;
   body: string;
+  /** True on the variant future sends use (one per slot). */
   is_active: boolean;
   /** Null while the card shows the built-in default (nothing saved yet). */
   updated_at: string | null;
-  /** True when no row is stored yet, so the text shown is the code default. */
+  /** True for the built-in code default entry of a slot. */
   is_default?: boolean;
 }
 
