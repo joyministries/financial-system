@@ -23,8 +23,8 @@ class AuditService:
             entity_id=entity_id,
             action=action,
             user_id=user_id,
-            old_values=json.dumps(old_values) if old_values else None,
-            new_values=json.dumps(new_values) if new_values else None,
+            old_values=json.dumps(old_values, default=str) if old_values else None,
+            new_values=json.dumps(new_values, default=str) if new_values else None,
         )
         self.db.add(entry)
         await self.db.flush()
