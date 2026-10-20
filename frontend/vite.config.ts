@@ -20,8 +20,9 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
-      // Public pay-by-link page served by the backend at /pay/{payment_id}
-      '/pay': {
+      // Public pay-by-link page served by the backend at /pay/{payment_id}.
+      // Anchored so the SPA route /payments is not swallowed by this proxy.
+      '^/pay/': {
         target: 'http://localhost:8001',
         changeOrigin: true,
       },

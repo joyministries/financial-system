@@ -174,21 +174,21 @@ export default function UserAccountsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
             Staff Accounts
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted">
             Admin and finance users who manage the platform
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-muted">
             <Users className="h-4 w-4" />
             <span className="font-medium">{users.length}</span> accounts
           </div>
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="flex items-center gap-2 rounded-lg bg-primary-900 px-4 py-2 text-sm font-medium text-white hover:bg-primary-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2"
           >
             <Plus className="h-4 w-4" />
             Create account
@@ -198,21 +198,21 @@ export default function UserAccountsPage() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
         <input
           type="text"
           placeholder="Search by name, email, or role..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-lg border border-line bg-white py-2 pl-10 pr-4 text-sm text-ink placeholder-faint focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
         />
       </div>
 
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-          <span className="ml-2 text-sm text-slate-500">Loading accounts...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-faint" />
+          <span className="ml-2 text-sm text-muted">Loading accounts...</span>
         </div>
       )}
 
@@ -234,7 +234,7 @@ export default function UserAccountsPage() {
           {admins.length > 0 && (
             <UserSection
               title="Admins"
-              icon={<Shield className="h-4 w-4 text-blue-500" />}
+              icon={<Shield className="h-4 w-4 text-primary-600" />}
               color="blue"
               users={admins}
               onEdit={openEdit}
@@ -246,7 +246,7 @@ export default function UserAccountsPage() {
           {financeUsers.length > 0 && (
             <UserSection
               title="Finance"
-              icon={<Users className="h-4 w-4 text-emerald-500" />}
+              icon={<Users className="h-4 w-4 text-[#1c7a4f]" />}
               color="emerald"
               users={financeUsers}
               onEdit={openEdit}
@@ -256,9 +256,9 @@ export default function UserAccountsPage() {
             />
           )}
           {filtered.length === 0 && (
-            <div className="rounded-lg border border-slate-200 bg-white py-12 text-center">
-              <Users className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-2 text-sm text-slate-500">
+            <div className="rounded-lg border border-line bg-white py-12 text-center">
+              <Users className="mx-auto h-8 w-8 text-line" />
+              <p className="mt-2 text-sm text-muted">
                 {search
                   ? 'No accounts match your search.'
                   : 'No staff accounts found.'}
@@ -273,49 +273,49 @@ export default function UserAccountsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 className="text-lg font-semibold text-ink">
                 {formMode === 'create' ? 'Create account' : 'Edit account'}
               </h2>
-              <button onClick={closeForm} className="text-slate-400 hover:text-slate-600">
+              <button onClick={closeForm} className="text-faint hover:text-muted">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Full name</label>
+                <label className="block text-sm font-medium text-body">Full name</label>
                 <input
                   type="text"
                   required
                   value={form.full_name}
                   onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Email</label>
+                <label className="block text-sm font-medium text-body">Email</label>
                 <input
                   type="email"
                   required
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Phone (optional)</label>
+                <label className="block text-sm font-medium text-body">Phone (optional)</label>
                 <input
                   type="tel"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Role</label>
+                <label className="block text-sm font-medium text-body">Role</label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value as FormData['role'] })}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                 >
                   <option value="admin">Admin</option>
                   <option value="finance">Finance</option>
@@ -324,30 +324,30 @@ export default function UserAccountsPage() {
               </div>
               {formMode === 'create' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Password</label>
+                  <label className="block text-sm font-medium text-body">Password</label>
                   <input
                     type="password"
                     required
                     minLength={8}
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                   />
-                  <p className="mt-1 text-xs text-slate-400">Minimum 8 characters</p>
+                  <p className="mt-1 text-xs text-faint">Minimum 8 characters</p>
                 </div>
               )}
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={closeForm}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-body hover:bg-[#fdfbf5]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-primary-900 px-4 py-2 text-sm font-medium text-white hover:bg-primary-900 disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   {formMode === 'create' ? 'Create account' : 'Save changes'}
@@ -363,36 +363,36 @@ export default function UserAccountsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">Reset password</h2>
-              <button onClick={() => setResetUserId(null)} className="text-slate-400 hover:text-slate-600">
+              <h2 className="text-lg font-semibold text-ink">Reset password</h2>
+              <button onClick={() => setResetUserId(null)} className="text-faint hover:text-muted">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">New password</label>
+                <label className="block text-sm font-medium text-body">New password</label>
                 <input
                   type="password"
                   required
                   minLength={8}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
                 />
-                <p className="mt-1 text-xs text-slate-400">Minimum 8 characters</p>
+                <p className="mt-1 text-xs text-faint">Minimum 8 characters</p>
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setResetUserId(null)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-body hover:bg-[#fdfbf5]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={resetSubmitting}
-                  className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-primary-900 px-4 py-2 text-sm font-medium text-white hover:bg-primary-900 disabled:opacity-50"
                 >
                   {resetSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Reset password
@@ -429,14 +429,14 @@ function UserSection({
     color === 'purple'
       ? 'bg-purple-100 text-purple-700'
       : color === 'blue'
-        ? 'bg-blue-100 text-blue-700'
-        : 'bg-emerald-100 text-emerald-700';
+        ? 'bg-primary-100 text-primary-700'
+        : 'bg-[#e3f0e8] text-[#1c7a4f]';
 
   return (
     <section>
       <div className="mb-3 flex items-center gap-2">
         {icon}
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
           {title}
         </h2>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor}`}>
@@ -480,21 +480,21 @@ function UserCard({
     .slice(0, 2);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:bg-slate-50">
+    <div className="rounded-lg border border-line bg-white p-4 transition-colors hover:bg-[#fdfbf5]">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f3efe6] text-sm font-semibold text-muted">
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-900">{user.full_name}</p>
-          <p className="truncate text-xs text-slate-500">{user.email}</p>
-          {user.phone && <p className="mt-0.5 text-xs text-slate-400">{user.phone}</p>}
+          <p className="truncate text-sm font-medium text-ink">{user.full_name}</p>
+          <p className="truncate text-xs text-muted">{user.email}</p>
+          {user.phone && <p className="mt-0.5 text-xs text-faint">{user.phone}</p>}
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+      <div className="mt-3 flex items-center justify-between border-t border-line-soft pt-3">
+        <div className="flex items-center gap-2 text-xs text-faint">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-400'}`}
+            className={`h-1.5 w-1.5 rounded-full ${user.is_active ? 'bg-[#1c7a4f]' : 'bg-[#a8382c]'}`}
           />
           {user.is_active ? 'Active' : 'Inactive'}
         </div>
@@ -502,14 +502,14 @@ function UserCard({
           <button
             onClick={onEdit}
             title="Edit account"
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded p-1.5 text-faint hover:bg-[#f3efe6] hover:text-muted"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={onResetPassword}
             title="Reset password"
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded p-1.5 text-faint hover:bg-[#f3efe6] hover:text-muted"
           >
             <KeyRound className="h-3.5 w-3.5" />
           </button>
@@ -517,7 +517,7 @@ function UserCard({
             <button
               onClick={onDeactivate}
               title="Deactivate account"
-              className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+              className="rounded p-1.5 text-faint hover:bg-[#fbeeec] hover:text-[#a8382c]"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -525,7 +525,7 @@ function UserCard({
             <button
               onClick={onReactivate}
               title="Reactivate account"
-              className="rounded p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600"
+              className="rounded p-1.5 text-faint hover:bg-[#eef6f1] hover:text-[#1c7a4f]"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
             </button>

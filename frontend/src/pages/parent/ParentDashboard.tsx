@@ -26,10 +26,10 @@ const money = (v: number | string) =>
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const monthStatusStyle: Record<string, string> = {
-  paid: 'bg-green-500 text-white',
-  partial: 'bg-yellow-400 text-yellow-900',
-  pending: 'bg-red-400 text-white',
-  none: 'bg-slate-200 text-slate-500',
+  paid: 'bg-[#1c7a4f] text-white',
+  partial: 'bg-[#c9a227] text-[#554211]',
+  pending: 'bg-[#a8382c] text-white',
+  none: 'bg-line text-muted',
 };
 
 const monthStatusLabel: Record<string, string> = {
@@ -432,7 +432,7 @@ export default function ParentDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-faint" />
       </div>
     );
   }
@@ -440,7 +440,7 @@ export default function ParentDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">My Children</h1>
+        <h1 className="text-2xl font-bold text-ink">My Children</h1>
         <button
           onClick={openRegisterForm}
           className="btn btn-primary"
@@ -453,18 +453,18 @@ export default function ParentDashboard() {
         <form onSubmit={handleRegisterChild} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Child details */}
           <div className="sm:col-span-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Child</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Child</h3>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">First Name</label>
+            <label className="block text-sm font-medium text-body">First Name</label>
             <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input mt-1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Last Name</label>
+            <label className="block text-sm font-medium text-body">Last Name</label>
             <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input mt-1" />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-slate-700">Grade</label>
+            <label className="block text-sm font-medium text-body">Grade</label>
             <select value={gradeId} onChange={(e) => setGradeId(e.target.value)} required className="input mt-1">
               <option value="">Select Grade</option>
               {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -473,73 +473,73 @@ export default function ParentDashboard() {
 
           {/* Registering parent's contact details for this application */}
           <div className="sm:col-span-2 mt-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Your Contact Details <span className="font-normal normal-case text-slate-400">({user?.full_name} — from your account)</span>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              Your Contact Details <span className="font-normal normal-case text-faint">({user?.full_name} — from your account)</span>
             </h3>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Your relationship to the child</label>
+            <label className="block text-sm font-medium text-body">Your relationship to the child</label>
             <select value={relationship} onChange={(e) => setRelationship(e.target.value as 'father' | 'mother')} className="input mt-1">
               <option value="father">Father</option>
               <option value="mother">Mother</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">ID / Passport Number</label>
+            <label className="block text-sm font-medium text-body">ID / Passport Number</label>
             <input type="text" value={guardianId} onChange={(e) => setGuardianId(e.target.value)} placeholder="National ID / passport" className="input mt-1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Phone</label>
+            <label className="block text-sm font-medium text-body">Phone</label>
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+263 7X XXX XXXX" className="input mt-1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Email</label>
+            <label className="block text-sm font-medium text-body">Email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input mt-1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Physical Address</label>
+            <label className="block text-sm font-medium text-body">Physical Address</label>
             <input type="text" value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} placeholder="Street, suburb, city" className="input mt-1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">P.O. Box</label>
+            <label className="block text-sm font-medium text-body">P.O. Box</label>
             <input type="text" value={poBox} onChange={(e) => setPoBox(e.target.value)} className="input mt-1" />
           </div>
 
           {/* Other parent (optional) */}
           <div className="sm:col-span-2 mt-2">
-            <button type="button" onClick={() => setShowOtherParent(!showOtherParent)} className="inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-wide text-slate-500 hover:text-primary-600">
+            <button type="button" onClick={() => setShowOtherParent(!showOtherParent)} className="inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-wide text-muted hover:text-primary-800">
               <ChevronRight className={`h-4 w-4 transition-transform ${showOtherParent ? 'rotate-90' : ''}`} />
-              Other Parent <span className="font-normal normal-case text-slate-400">(optional)</span>
+              Other Parent <span className="font-normal normal-case text-faint">(optional)</span>
             </button>
           </div>
           {showOtherParent && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700">First Name</label>
+                <label className="block text-sm font-medium text-body">First Name</label>
                 <input type="text" value={otherParent.first_name} onChange={(e) => setOtherParent({ ...otherParent, first_name: e.target.value })} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Last Name</label>
+                <label className="block text-sm font-medium text-body">Last Name</label>
                 <input type="text" value={otherParent.last_name} onChange={(e) => setOtherParent({ ...otherParent, last_name: e.target.value })} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">ID / Passport Number</label>
+                <label className="block text-sm font-medium text-body">ID / Passport Number</label>
                 <input type="text" value={otherParent.guardian_id} onChange={(e) => setOtherParent({ ...otherParent, guardian_id: e.target.value })} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Phone</label>
+                <label className="block text-sm font-medium text-body">Phone</label>
                 <input type="tel" value={otherParent.phone} onChange={(e) => setOtherParent({ ...otherParent, phone: e.target.value })} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Email</label>
+                <label className="block text-sm font-medium text-body">Email</label>
                 <input type="email" value={otherParent.email} onChange={(e) => setOtherParent({ ...otherParent, email: e.target.value })} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Physical Address</label>
+                <label className="block text-sm font-medium text-body">Physical Address</label>
                 <input type="text" value={otherParent.physical_address} onChange={(e) => setOtherParent({ ...otherParent, physical_address: e.target.value })} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">P.O. Box</label>
+                <label className="block text-sm font-medium text-body">P.O. Box</label>
                 <input type="text" value={otherParent.po_box} onChange={(e) => setOtherParent({ ...otherParent, po_box: e.target.value })} className="input mt-1" />
               </div>
             </>
@@ -547,10 +547,10 @@ export default function ParentDashboard() {
 
           {/* Supporting documents — one section, select multiple files at once */}
           <div className="sm:col-span-2 mt-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Supporting Documents <span className="font-normal normal-case text-slate-400">(optional — upload all in one go)</span>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              Supporting Documents <span className="font-normal normal-case text-faint">(optional — upload all in one go)</span>
             </h3>
-            <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600">
+            <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[#d8d2c4] px-3 py-3 text-sm text-muted hover:border-primary-400 hover:text-primary-800">
               <FileText className="h-4 w-4" /> Choose files to upload
               <input
                 type="file"
@@ -567,12 +567,12 @@ export default function ParentDashboard() {
             {docFiles.length > 0 && (
               <ul className="mt-2 space-y-1.5">
                 {docFiles.map((f, i) => (
-                  <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                    <span className="truncate text-slate-700">{f.name}</span>
+                  <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm">
+                    <span className="truncate text-body">{f.name}</span>
                     <button
                       type="button"
                       onClick={() => setDocFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="ml-2 shrink-0 text-xs font-medium text-red-500 hover:text-red-700"
+                      className="ml-2 shrink-0 text-xs font-medium text-[#a8382c] hover:text-[#8f2e24]"
                     >
                       Remove
                     </button>
@@ -591,7 +591,7 @@ export default function ParentDashboard() {
                 Cancel
               </button>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted">
               The school will review and approve your child's registration. You'll see the status below.
             </p>
           </div>
@@ -599,7 +599,7 @@ export default function ParentDashboard() {
       </Modal>
 
       {children.length === 0 ? (
-        <p className="text-sm text-slate-500">No children enrolled yet. Use "Register Child" above.</p>
+        <p className="text-sm text-muted">No children enrolled yet. Use "Register Child" above.</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {children.map((child) => {
@@ -609,7 +609,7 @@ export default function ParentDashboard() {
             const summary = summaries[child.id];
             const currentMonth = new Date().getMonth() + 1;
             return (
-              <div key={child.id} className="flex flex-col rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+              <div key={child.id} className="flex flex-col rounded-xl bg-white p-6 shadow-sm border border-line-soft">
                 <button
                   type="button"
                   onClick={() => setExpandedChild(expandedChild === child.id ? null : child.id)}
@@ -617,28 +617,28 @@ export default function ParentDashboard() {
                   title={expandedChild === child.id ? 'Hide monthly schedule' : 'Show monthly schedule'}
                 >
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-slate-900">{child.first_name} {child.last_name}</h3>
-                    <p className="text-sm text-slate-500 mt-1">{child.student_number}</p>
+                    <h3 className="font-semibold text-ink">{child.first_name} {child.last_name}</h3>
+                    <p className="text-sm text-muted mt-1">{child.student_number}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <span className={`badge ${badge.cls}`}>
                       <BadgeIcon className="h-3 w-3" /> {badge.label}
                     </span>
                     <ChevronDown
-                      className={`h-4 w-4 text-slate-400 transition-transform ${expandedChild === child.id ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 text-faint transition-transform ${expandedChild === child.id ? 'rotate-180' : ''}`}
                     />
                   </div>
                 </button>
 
                 {/* Monthly schedule — only shown when the card is pressed/expanded */}
                 {summary && expandedChild === child.id && (
-                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="mt-4 rounded-lg border border-line bg-[#faf8f2]/60 p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Monthly payments — {currentYear}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-faint">Monthly payments — {currentYear}</p>
                       <button
                         type="button"
                         onClick={() => setExpandedChild(null)}
-                        className="text-[11px] font-medium text-slate-400 hover:text-slate-600"
+                        className="text-[11px] font-medium text-faint hover:text-muted"
                       >
                         Hide
                       </button>
@@ -654,33 +654,33 @@ export default function ParentDashboard() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                    <div className="mt-2 flex items-center justify-between text-xs text-muted">
                       <span>Required <b>R {money(summary.total_required)}</b></span>
-                      <span>Paid <b className="text-green-600">R {money(summary.total_paid)}</b></span>
-                      <span>Due <b className={summary.total_outstanding > 0 ? 'text-red-600' : 'text-green-600'}>R {money(summary.total_outstanding)}</b></span>
+                      <span>Paid <b className="text-[#1c7a4f]">R {money(summary.total_paid)}</b></span>
+                      <span>Due <b className={summary.total_outstanding > 0 ? 'text-[#a8382c]' : 'text-[#1c7a4f]'}>R {money(summary.total_outstanding)}</b></span>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 pt-2 text-[10px] text-slate-500">
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-green-500" /> Paid</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-yellow-400" /> Partial</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-red-400" /> Unpaid</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-200" /> No additional charge</span>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 text-[10px] text-muted">
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#1c7a4f]" /> Paid</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#c9a227]" /> Partial</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#a8382c]" /> Unpaid</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-line" /> No additional charge</span>
                     </div>
                   </div>
                 )}
 
                 <div className="mt-3 flex-1">
-                  <span className="text-sm text-slate-500">Outstanding</span>
-                  <span className={`ml-2 text-lg font-bold ${due > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <span className="text-sm text-muted">Outstanding</span>
+                  <span className={`ml-2 text-lg font-bold ${due > 0 ? 'text-[#a8382c]' : 'text-[#1c7a4f]'}`}>
                     R {money(due)}
                   </span>
                 </div>
 
                 {nextDueDates[child.id]?.next_due_date && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                    <CalendarDays className="h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-[#eadfbe] bg-[#fbf4e2] px-3 py-2">
+                    <CalendarDays className="h-4 w-4 shrink-0 text-[#8a6f13]" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-amber-800 truncate">{nextDueDates[child.id].next_description}</p>
-                      <p className="text-xs text-amber-600">
+                      <p className="text-xs font-medium text-[#6b5413] truncate">{nextDueDates[child.id].next_description}</p>
+                      <p className="text-xs text-[#8a6f13]">
                         Due {new Date(nextDueDates[child.id].next_due_date!).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                         {' · '}R {money(nextDueDates[child.id].next_amount_due)}
                       </p>
@@ -698,10 +698,10 @@ export default function ParentDashboard() {
                 )}
 
                 {regFees[child.id]?.configured && (
-                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="mt-3 rounded-lg border border-line bg-[#faf8f2]/60 p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-700">Registration Fee</span>
-                      <span className="text-sm font-bold text-slate-900">R {money(regFees[child.id].amount)}</span>
+                      <span className="text-sm font-medium text-body">Registration Fee</span>
+                      <span className="text-sm font-bold text-ink">R {money(regFees[child.id].amount)}</span>
                     </div>
                     <div className="mt-2">
                       {regFees[child.id].paid ? (
@@ -728,7 +728,7 @@ export default function ParentDashboard() {
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => openBreakdown(child)}
-                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-line bg-[#faf8f2] px-3 py-2 text-xs font-medium text-body hover:bg-[#f3efe6]"
                   >
                     <ReceiptIcon className="h-3.5 w-3.5" /> Breakdown
                   </button>
@@ -748,7 +748,7 @@ export default function ParentDashboard() {
       {recentPayments.length > 0 && (
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Payments</h2>
+            <h2 className="text-lg font-semibold text-ink">Payments</h2>
             <input
               type="month"
               value={paymentMonth}
@@ -757,22 +757,22 @@ export default function ParentDashboard() {
               title="Filter by month"
             />
           </div>
-          <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+          <div className="rounded-xl bg-white shadow-sm border border-line-soft overflow-x-auto">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="bg-[#faf8f2]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Method</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Method</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-line">
                 {recentPayments.map((p) => (
                   <tr key={p.id}>
-                    <td className="px-6 py-4 text-sm text-slate-700">{new Date(p.payment_date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">R {money(p.amount)}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{p.payment_method}</td>
+                    <td className="px-6 py-4 text-sm text-body">{new Date(p.payment_date).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-ink">R {money(p.amount)}</td>
+                    <td className="px-6 py-4 text-sm text-muted">{p.payment_method}</td>
                     <td className="px-6 py-4">
                       <span className={`badge ${
                         p.status === 'verified' ? 'badge-success' :
@@ -791,47 +791,47 @@ export default function ParentDashboard() {
 
       {/* ── Breakdown modal (what the fees are) ─────────── */}
       {breakdownChild && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[85vh] w-full max-w-2xl animate-modal-in overflow-y-auto rounded-2xl bg-white shadow-lift" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 flex items-start justify-between border-b border-slate-100 bg-white px-6 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-950/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[85vh] w-full max-w-2xl animate-modal-in overflow-y-auto rounded-xl bg-white shadow-lift" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 flex items-start justify-between border-b border-line-soft bg-white px-6 py-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Fee Breakdown — {breakdownChild.first_name} {breakdownChild.last_name}</h2>
-                <p className="text-sm text-slate-500">{breakdownChild.student_number} · Academic year {currentYear}</p>
+                <h2 className="text-lg font-semibold text-ink">Fee Breakdown — {breakdownChild.first_name} {breakdownChild.last_name}</h2>
+                <p className="text-sm text-muted">{breakdownChild.student_number} · Academic year {currentYear}</p>
               </div>
-              <button onClick={closeBreakdown} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+              <button onClick={closeBreakdown} className="rounded-lg p-1.5 text-faint hover:bg-[#f3efe6] hover:text-muted" aria-label="Close">
                 <X className="h-5 w-5" />
               </button>
             </div>
             {loadingBreakdown || !breakdown ? (
-              <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-slate-400" /></div>
+              <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-faint" /></div>
             ) : (
               <div className="px-6 py-4 space-y-6">
                 <section>
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">School Fees</h3>
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">School Fees</h3>
                   {breakdown.fees.length === 0 ? (
-                    <p className="text-sm text-slate-400">No fee structures set for this grade yet.</p>
+                    <p className="text-sm text-faint">No fee structures set for this grade yet.</p>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
-                      <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50">
+                    <div className="overflow-x-auto rounded-lg border border-line">
+                      <table className="min-w-full divide-y divide-line">
+                        <thead className="bg-[#faf8f2]">
                           <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Category</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Plan</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Annual</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Monthly</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Category</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Plan</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Annual</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Monthly</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-line-soft">
                           {breakdown.fees.map((f) => (
                             <tr key={f.id}>
-                              <td className="px-4 py-2.5 text-sm font-medium text-slate-900">{f.category}</td>
+                              <td className="px-4 py-2.5 text-sm font-medium text-ink">{f.category}</td>
                               <td className="px-4 py-2.5 text-sm">
                                 <span className={`badge ${f.payment_plan === 'yearly' ? 'badge-info' : 'badge-neutral'}`}>
                                   {f.payment_plan}
                                 </span>
                               </td>
-                              <td className="px-4 py-2.5 text-right text-sm text-slate-700">R {money(f.annual_amount)}</td>
-                              <td className="px-4 py-2.5 text-right text-sm text-slate-700">{f.monthly_installment ? `R ${money(f.monthly_installment)}` : '—'}</td>
+                              <td className="px-4 py-2.5 text-right text-sm text-body">R {money(f.annual_amount)}</td>
+                              <td className="px-4 py-2.5 text-right text-sm text-body">{f.monthly_installment ? `R ${money(f.monthly_installment)}` : '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -840,29 +840,29 @@ export default function ParentDashboard() {
                   )}
                 </section>
                 <section>
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Additional Charges</h3>
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Additional Charges</h3>
                   {breakdown.charges.length === 0 ? (
-                    <p className="text-sm text-slate-400">No additional charges for {currentYear}.</p>
+                    <p className="text-sm text-faint">No additional charges for {currentYear}.</p>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
-                      <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50">
+                    <div className="overflow-x-auto rounded-lg border border-line">
+                      <table className="min-w-full divide-y divide-line">
+                        <thead className="bg-[#faf8f2]">
                           <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Additional Charge</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Amount</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Status</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Additional Charge</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Month</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Amount</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Status</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-line-soft">
                           {breakdown.charges.map((c) => (
                             <tr key={c.id}>
                               <td className="px-4 py-2.5">
-                                <p className="text-sm font-medium text-slate-900">{c.charge_type}</p>
-                                <p className="text-xs text-slate-500">{c.description}</p>
+                                <p className="text-sm font-medium text-ink">{c.charge_type}</p>
+                                <p className="text-xs text-muted">{c.description}</p>
                               </td>
-                              <td className="px-4 py-2.5 text-sm text-slate-700">{MONTHS[c.month] || c.month}</td>
-                              <td className="px-4 py-2.5 text-right text-sm text-slate-700">R {money(c.amount)}</td>
+                              <td className="px-4 py-2.5 text-sm text-body">{MONTHS[c.month] || c.month}</td>
+                              <td className="px-4 py-2.5 text-right text-sm text-body">R {money(c.amount)}</td>
                               <td className="px-4 py-2.5 text-right">
                                 <span className={`badge ${c.is_paid ? 'badge-success' : 'badge-danger'}`}>
                                   {c.is_paid ? 'Paid' : 'Unpaid'}
@@ -875,9 +875,9 @@ export default function ParentDashboard() {
                     </div>
                   )}
                 </section>
-                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-700">Total Outstanding</span>
-                  <span className={`text-xl font-bold ${breakdown.totalDue > 0 ? 'text-red-600' : 'text-green-600'}`}>R {money(breakdown.totalDue)}</span>
+                <div className="flex items-center justify-between rounded-xl bg-[#faf8f2] px-4 py-3">
+                  <span className="text-sm font-semibold text-body">Total Outstanding</span>
+                  <span className={`text-xl font-bold ${breakdown.totalDue > 0 ? 'text-[#a8382c]' : 'text-[#1c7a4f]'}`}>R {money(breakdown.totalDue)}</span>
                 </div>
               </div>
             )}
@@ -887,21 +887,21 @@ export default function ParentDashboard() {
 
       {/* ── Financial modal (schedule / documents / settings) ── */}
       {finChild && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[90vh] w-full max-w-3xl animate-modal-in flex-col overflow-hidden rounded-2xl bg-white shadow-lift" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-950/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[90vh] w-full max-w-3xl animate-modal-in flex-col overflow-hidden rounded-xl bg-white shadow-lift" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-line-soft px-6 py-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">
+                <h2 className="text-lg font-semibold text-ink">
                   {finChild.first_name} {finChild.last_name} — {currentYear}
                 </h2>
-                <p className="text-sm text-slate-500">{finChild.student_number} · {grades.find((g) => g.id === finChild.grade_id)?.name || ''}</p>
+                <p className="text-sm text-muted">{finChild.student_number} · {grades.find((g) => g.id === finChild.grade_id)?.name || ''}</p>
               </div>
-              <button onClick={closeFinancial} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+              <button onClick={closeFinancial} className="rounded-lg p-1.5 text-faint hover:bg-[#f3efe6] hover:text-muted" aria-label="Close">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="flex gap-1 border-b border-slate-100 bg-slate-50 px-4 pt-2">
+            <div className="flex gap-1 border-b border-line-soft bg-[#faf8f2] px-4 pt-2">
               {([
                 { key: 'schedule', label: 'Schedule', icon: CalendarDays },
                 { key: 'invoices', label: 'Invoices', icon: FileText },
@@ -911,7 +911,7 @@ export default function ParentDashboard() {
                   key={t.key}
                   onClick={() => setFinTab(t.key)}
                   className={`inline-flex items-center gap-1.5 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium ${
-                    finTab === t.key ? 'border-primary-600 text-primary-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    finTab === t.key ? 'border-primary-600 text-primary-800 bg-white' : 'border-transparent text-muted hover:text-body'
                   }`}
                 >
                   <t.icon className="h-4 w-4" /> {t.label}
@@ -921,43 +921,43 @@ export default function ParentDashboard() {
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {loadingFin || !finData ? (
-                <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-slate-400" /></div>
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-faint" /></div>
               ) : finTab === 'schedule' ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-xl bg-slate-50 p-3 text-center">
-                      <p className="text-xs text-slate-500">Required (year)</p>
-                      <p className="text-lg font-bold text-slate-900">R {money(finData.summary?.total_required || 0)}</p>
+                    <div className="rounded-xl bg-[#faf8f2] p-3 text-center">
+                      <p className="text-xs text-muted">Required (year)</p>
+                      <p className="text-lg font-bold text-ink">R {money(finData.summary?.total_required || 0)}</p>
                     </div>
-                    <div className="rounded-xl bg-green-50 p-3 text-center">
-                      <p className="text-xs text-slate-500">Paid so far</p>
-                      <p className="text-lg font-bold text-green-600">R {money(finData.summary?.total_paid || 0)}</p>
+                    <div className="rounded-xl bg-[#eef6f1] p-3 text-center">
+                      <p className="text-xs text-muted">Paid so far</p>
+                      <p className="text-lg font-bold text-[#1c7a4f]">R {money(finData.summary?.total_paid || 0)}</p>
                     </div>
-                    <div className="rounded-xl bg-red-50 p-3 text-center">
-                      <p className="text-xs text-slate-500">Outstanding</p>
-                      <p className="text-lg font-bold text-red-600">R {money(finData.summary?.total_outstanding || 0)}</p>
+                    <div className="rounded-xl bg-[#fbeeec] p-3 text-center">
+                      <p className="text-xs text-muted">Outstanding</p>
+                      <p className="text-lg font-bold text-[#a8382c]">R {money(finData.summary?.total_outstanding || 0)}</p>
                     </div>
                   </div>
-                  <div className="overflow-x-auto rounded-lg border border-slate-200">
-                    <table className="min-w-full divide-y divide-slate-200">
-                      <thead className="bg-slate-50">
+                  <div className="overflow-x-auto rounded-lg border border-line">
+                    <table className="min-w-full divide-y divide-line">
+                      <thead className="bg-[#faf8f2]">
                         <tr>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Month</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Required</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Paid</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Outstanding</th>
-                          <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Status</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Month</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Required</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Paid</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Outstanding</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-line-soft">
                         {finData.summary?.months.map((m) => (
                           <tr key={m.month} className={m.month === new Date().getMonth() + 1 ? 'bg-primary-50' : ''}>
-                            <td className="px-4 py-2.5 text-sm font-medium text-slate-900">
-                              {MONTHS[m.month]} {m.month === new Date().getMonth() + 1 && <span className="ml-1 rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700">current</span>}
+                            <td className="px-4 py-2.5 text-sm font-medium text-ink">
+                              {MONTHS[m.month]} {m.month === new Date().getMonth() + 1 && <span className="ml-1 rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-semibold text-primary-800">current</span>}
                             </td>
-                            <td className="px-4 py-2.5 text-right text-sm text-slate-700">R {money(m.amount_required)}</td>
-                            <td className="px-4 py-2.5 text-right text-sm text-green-700">R {money(m.amount_paid)}</td>
-                            <td className={`px-4 py-2.5 text-right text-sm font-medium ${m.outstanding > 0 ? 'text-red-600' : 'text-slate-400'}`}>R {money(m.outstanding)}</td>
+                            <td className="px-4 py-2.5 text-right text-sm text-body">R {money(m.amount_required)}</td>
+                            <td className="px-4 py-2.5 text-right text-sm text-[#1c7a4f]">R {money(m.amount_paid)}</td>
+                            <td className={`px-4 py-2.5 text-right text-sm font-medium ${m.outstanding > 0 ? 'text-[#a8382c]' : 'text-faint'}`}>R {money(m.outstanding)}</td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`badge ${
                                 m.status === 'paid' ? 'badge-success' :
@@ -975,36 +975,36 @@ export default function ParentDashboard() {
                 </div>
               ) : finTab === 'invoices' ? (
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Invoices</h3>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Invoices</h3>
                   {finData.invoices.length === 0 ? (
-                    <p className="rounded-lg bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                    <p className="rounded-lg bg-[#faf8f2] px-4 py-6 text-center text-sm text-muted">
                       No invoices yet. The school office issues an invoice each billing month — it will appear here
                       automatically, ready to download.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
-                      <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50">
+                    <div className="overflow-x-auto rounded-lg border border-line">
+                      <table className="min-w-full divide-y divide-line">
+                        <thead className="bg-[#faf8f2]">
                           <tr>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Invoice #</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Period</th>
-                            <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Due date</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Balance due</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase">Status</th>
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-slate-500 uppercase"></th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Invoice #</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Period</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-muted uppercase">Due date</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Balance due</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase">Status</th>
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-muted uppercase"></th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-line-soft">
                           {finData.invoices.map((inv) => (
                             <tr key={inv.id}>
-                              <td className="px-4 py-2.5 font-mono text-sm font-medium text-slate-900">{inv.invoice_number}</td>
-                              <td className="px-4 py-2.5 text-sm text-slate-700">
+                              <td className="px-4 py-2.5 font-mono text-sm font-medium text-ink">{inv.invoice_number}</td>
+                              <td className="px-4 py-2.5 text-sm text-body">
                                 {MONTHS[inv.month]} {inv.academic_year}
                               </td>
-                              <td className="px-4 py-2.5 text-sm text-slate-700">
+                              <td className="px-4 py-2.5 text-sm text-body">
                                 {new Date(inv.due_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                               </td>
-                              <td className={`px-4 py-2.5 text-right text-sm font-medium ${inv.balance_due > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                              <td className={`px-4 py-2.5 text-right text-sm font-medium ${inv.balance_due > 0 ? 'text-[#a8382c]' : 'text-faint'}`}>
                                 R {money(inv.balance_due)}
                               </td>
                               <td className="px-4 py-2.5 text-right">
@@ -1018,7 +1018,7 @@ export default function ParentDashboard() {
                               <td className="px-4 py-2.5 text-right">
                                 <button
                                   onClick={() => downloadInvoice(inv)}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-body hover:bg-[#fdfbf5]"
                                   aria-label={`Download ${inv.invoice_number}`}
                                 >
                                   <FileText className="h-3.5 w-3.5" /> PDF
@@ -1033,8 +1033,8 @@ export default function ParentDashboard() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Payment Preference</h3>
-                  <p className="text-sm text-slate-500">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Payment Preference</h3>
+                  <p className="text-sm text-muted">
                     Choose how you would like to pay for {finChild.first_name}&apos;s fees for {currentYear}.
                   </p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1044,11 +1044,11 @@ export default function ParentDashboard() {
                       className={`rounded-xl border-2 p-4 text-left transition ${
                         prefChoice === 'monthly'
                           ? 'border-primary-600 bg-primary-50'
-                          : 'border-slate-200 hover:border-primary-300'
+                          : 'border-line hover:border-primary-300'
                       }`}
                     >
-                      <p className="text-sm font-semibold text-slate-900">Monthly Payment</p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="text-sm font-semibold text-ink">Monthly Payment</p>
+                      <p className="mt-1 text-xs text-muted">
                         Pay each month&apos;s installment as it falls due (e.g. the monthly amount on your schedule).
                       </p>
                     </button>
@@ -1058,11 +1058,11 @@ export default function ParentDashboard() {
                       className={`rounded-xl border-2 p-4 text-left transition ${
                         prefChoice === 'cumulative'
                           ? 'border-primary-600 bg-primary-50'
-                          : 'border-slate-200 hover:border-primary-300'
+                          : 'border-line hover:border-primary-300'
                       }`}
                     >
-                      <p className="text-sm font-semibold text-slate-900">Cumulative Payment</p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="text-sm font-semibold text-ink">Cumulative Payment</p>
+                      <p className="mt-1 text-xs text-muted">
                         Pay the full year&apos;s fees in one lump sum (e.g. the total annual amount).
                       </p>
                     </button>
@@ -1076,7 +1076,7 @@ export default function ParentDashboard() {
                       <Save className="h-4 w-4" /> {savingPref ? 'Saving...' : 'Save Preference'}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-faint">
                     This tells the school how you intend to pay. Fees remain billed per the school&apos;s schedule.
                   </p>
                 </div>
@@ -1090,22 +1090,22 @@ export default function ParentDashboard() {
       <Modal open={!!payChild} onClose={closePay} title="Pay Online">
         {payChild && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm">
-              <p className="text-slate-500">Paying for</p>
-              <p className="font-semibold text-slate-900">
+            <div className="rounded-lg bg-[#faf8f2] px-4 py-3 text-sm">
+              <p className="text-muted">Paying for</p>
+              <p className="font-semibold text-ink">
                 {payChild.first_name} {payChild.last_name}
-                <span className="ml-2 font-normal text-slate-400">{payChild.student_number}</span>
+                <span className="ml-2 font-normal text-faint">{payChild.student_number}</span>
               </p>
-              <p className="mt-1 text-slate-500">
+              <p className="mt-1 text-muted">
                 Outstanding:{' '}
-                <b className={balances[payChild.id] > 0 ? 'text-red-600' : 'text-green-600'}>
+                <b className={balances[payChild.id] > 0 ? 'text-[#a8382c]' : 'text-[#1c7a4f]'}>
                   R {money(balances[payChild.id] || 0)}
                 </b>
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Amount (ZAR)</label>
+              <label className="block text-sm font-medium text-body">Amount (ZAR)</label>
               <input
                 type="number"
                 min="0.01"
@@ -1115,7 +1115,7 @@ export default function ParentDashboard() {
                 disabled={!!payForm || paying}
                 className="input mt-1"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted">
                 You'll be taken to PayFast (secure card / instant EFT). Your receipt and an SMS
                 confirmation are sent automatically once the payment is confirmed.
               </p>
@@ -1158,7 +1158,7 @@ export default function ParentDashboard() {
                   <p className="text-xs font-medium text-accent-800">
                     Payment link ready
                   </p>
-                  <p className="mt-1 break-all text-xs text-slate-600">{payForm.payment_url}</p>
+                  <p className="mt-1 break-all text-xs text-muted">{payForm.payment_url}</p>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
@@ -1171,7 +1171,7 @@ export default function ParentDashboard() {
                     >
                       {payCopied ? 'Copied ✓' : 'Copy link'}
                     </button>
-                    <span className="self-center text-xs text-slate-500">
+                    <span className="self-center text-xs text-muted">
                       Send this link to pay from any phone — no login needed
                     </span>
                   </div>

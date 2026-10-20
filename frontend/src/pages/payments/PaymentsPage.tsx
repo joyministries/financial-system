@@ -224,14 +224,14 @@ export default function PaymentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
+        <h1 className="text-2xl font-bold text-ink">Payments</h1>
         <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
             <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search student name…" className="input pl-9 w-56" />
             {searchInput.trim().length === 1 && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">Type 2+ chars</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-faint">Type 2+ chars</span>
             )}
           </div>
           <select value={filter} onChange={(e) => { setFilter(e.target.value as 'all' | 'pending'); setPage(1); }} className="input">
@@ -252,18 +252,18 @@ export default function PaymentsPage() {
       <Modal open={showForm} onClose={closeForm} title="Record Payment">
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Student</label>
+            <label className="block text-sm font-medium text-body">Student</label>
             <div className="mt-1">
               <StudentSearchSelect value={studentId} onChange={setStudentId} placeholder="Search by name or number…" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+              <label className="block text-sm font-medium text-body">Amount (R)</label>
               <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Method</label>
+              <label className="block text-sm font-medium text-body">Method</label>
               <select value={method} onChange={(e) => setMethod(e.target.value)} className="input mt-1">
                 {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -271,11 +271,11 @@ export default function PaymentsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Payment Date</label>
+              <label className="block text-sm font-medium text-body">Payment Date</label>
               <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required className="input mt-1" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Reference Number</label>
+              <label className="block text-sm font-medium text-body">Reference Number</label>
               <input value={refNum} onChange={(e) => setRefNum(e.target.value)} className="input mt-1" />
             </div>
           </div>
@@ -294,12 +294,12 @@ export default function PaymentsPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+                <label className="block text-sm font-medium text-body">Amount (R)</label>
                 <input type="number" step="0.01" min="0.01" value={editAmount}
                   onChange={(e) => setEditAmount(e.target.value)} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Method</label>
+                <label className="block text-sm font-medium text-body">Method</label>
                 <select value={editMethod} onChange={(e) => setEditMethod(e.target.value)} className="input mt-1">
                   {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
@@ -307,16 +307,16 @@ export default function PaymentsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Payment Date</label>
+                <label className="block text-sm font-medium text-body">Payment Date</label>
                 <input type="date" value={editPayDate} onChange={(e) => setEditPayDate(e.target.value)} className="input mt-1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Reference Number</label>
+                <label className="block text-sm font-medium text-body">Reference Number</label>
                 <input value={editRefNum} onChange={(e) => setEditRefNum(e.target.value)} className="input mt-1" />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Notes</label>
+              <label className="block text-sm font-medium text-body">Notes</label>
               <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={2} className="input mt-1" />
             </div>
             <div className="flex gap-2 pt-2">
@@ -333,7 +333,7 @@ export default function PaymentsPage() {
       <Modal open={!!showReverse} onClose={() => { setShowReverse(null); setReverseReason(''); }} title="Reverse Payment">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Reason for reversal</label>
+            <label className="block text-sm font-medium text-body">Reason for reversal</label>
             <textarea value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} required rows={3} className="input mt-1" />
           </div>
           <div className="flex gap-2 pt-2">
@@ -346,37 +346,37 @@ export default function PaymentsPage() {
       </Modal>
 
       {/* Payments Table */}
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+      <div className="table-wrap overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Method</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+              <th className="th">Student</th>
+              <th className="th text-right">Amount</th>
+              <th className="th">Method</th>
+              <th className="th">Date</th>
+              <th className="th">Status</th>
+              <th className="th text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody>
             {loading || namesLoading ? (
-              <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400 mx-auto" /></td></tr>
+              <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-faint mx-auto" /></td></tr>
             ) : payments.length === 0 ? (
-              <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-500">No payments found.</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-sm text-muted">No payments found.</td></tr>
             ) : payments.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(p.student_id)}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {Number(p.amount).toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{p.payment_method}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{new Date(p.payment_date).toLocaleDateString()}</td>
-                <td className="px-6 py-4">
+              <tr key={p.id} className="hover:bg-[#fdfbf5]">
+                <td className="td font-semibold text-ink">{getStudentName(p.student_id)}</td>
+                <td className="td text-right font-semibold tabular-nums text-ink">R {Number(p.amount).toLocaleString()}</td>
+                <td className="td text-muted">{p.payment_method}</td>
+                <td className="td font-mono text-[12px] text-muted">{new Date(p.payment_date).toLocaleDateString('en-ZA')}</td>
+                <td className="td">
                   <span className={`badge ${statusBadge(p.status)}`}>{p.status}</span>
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="td text-right">
                   {/* Delete on every payment: permanently removes the record */}
                   <button
                     onClick={() => handleDelete(p)}
-                    className="rounded p-1 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                    className="rounded p-1 text-faint transition-colors hover:bg-[#fbeeec] hover:text-[#a8382c]"
                     title="Permanently delete this payment"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -384,10 +384,10 @@ export default function PaymentsPage() {
                   {/* Quick actions for pending */}
                   {p.status === 'pending' && (
                     <div className="inline-flex items-center gap-1 mr-2">
-                      <button onClick={() => handleVerify(p.id, 'approve')} className="rounded p-1 text-slate-400 hover:text-green-600" title="Approve">
+                      <button onClick={() => handleVerify(p.id, 'approve')} className="rounded p-1 text-faint hover:text-[#1c7a4f]" title="Approve">
                         <Check className="h-4 w-4" />
                       </button>
-                      <button onClick={() => handleVerify(p.id, 'reject')} className="rounded p-1 text-slate-400 hover:text-yellow-600" title="Reject">
+                      <button onClick={() => handleVerify(p.id, 'reject')} className="rounded p-1 text-faint hover:text-[#8a6f13]" title="Reject">
                         <XCircle className="h-4 w-4" />
                       </button>
                     </div>
@@ -396,33 +396,33 @@ export default function PaymentsPage() {
                   <div className="relative inline-block" ref={openDropdown === p.id ? dropdownRef : undefined}>
                     <button
                       onClick={() => setOpenDropdown(openDropdown === p.id ? null : p.id)}
-                      className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                      className="rounded-lg p-1.5 text-faint transition-colors hover:bg-[#f3efe6] hover:text-muted"
                       title="More actions"
                     >
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
                     {openDropdown === p.id && (
-                      <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                      <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-line bg-white py-1 shadow-lg">
                         <button
                           onClick={() => openEdit(p)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-body hover:bg-[#fdfbf5]"
                         >
-                          <Pencil className="h-3.5 w-3.5 text-blue-500" /> Edit
+                          <Pencil className="h-3.5 w-3.5 text-primary-600" /> Edit
                         </button>
                         {/* Delete — permanently removes the record */}
                         <button
                           onClick={() => handleDelete(p)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-rose-50 hover:text-rose-700"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-body hover:bg-[#fbeeec] hover:text-[#8f2e24]"
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-red-500" /> Delete
+                          <Trash2 className="h-3.5 w-3.5 text-[#a8382c]" /> Delete
                         </button>
                         {/* Reverse — keeps record, reverses allocations */}
                         {p.status !== 'reversed' && p.status !== 'voided' && (
                           <button
                             onClick={() => { setShowReverse(p.id); setOpenDropdown(null); }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-body hover:bg-[#fdfbf5]"
                           >
-                            <RotateCcw className="h-3.5 w-3.5 text-amber-500" /> Reverse
+                            <RotateCcw className="h-3.5 w-3.5 text-[#8a6f13]" /> Reverse
                           </button>
                         )}
                       </div>

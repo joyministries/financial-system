@@ -1,0 +1,42 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [aria-hidden] [ref=e6]: L
+      - generic [ref=e7]:
+        - paragraph [ref=e8]: Lambton Christian School
+        - paragraph [ref=e9]: Finance Portal
+    - generic [ref=e10]:
+      - heading "Fees, payments and statements all in one place." [level=2] [ref=e11]
+      - paragraph [ref=e12]: Lambton Christian School's finance portal keeps parents and staff in sync, pay fees online, download receipts and statements, and follow every rand of the academic year.
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - paragraph [ref=e15]: R 0
+          - paragraph [ref=e16]: setup fees
+          - paragraph [ref=e17]: for parents
+        - generic [ref=e18]:
+          - paragraph [ref=e19]: 24/7
+          - paragraph [ref=e20]: portal access
+          - paragraph [ref=e21]: payments & history
+        - generic [ref=e22]:
+          - paragraph [ref=e23]: PDF
+          - paragraph [ref=e24]: receipts
+          - paragraph [ref=e25]: instant download
+    - paragraph [ref=e26]: © 2026 Lambton Christian School. All rights reserved.
+  - generic [ref=e29]:
+    - heading "Welcome back" [level=1] [ref=e30]
+    - paragraph [ref=e31]: Sign in to manage school finances.
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - generic [ref=e34]: Email
+        - textbox [ref=e35]
+      - generic [ref=e36]:
+        - generic [ref=e37]: Password
+        - generic [ref=e38]:
+          - textbox [ref=e39]
+          - button "Show password" [ref=e40] [cursor=pointer]
+      - button "Sign In" [ref=e44] [cursor=pointer]
+    - generic [ref=e45]:
+      - link "Forgot password?" [ref=e46] [cursor=pointer]:
+        - /url: /forgot-password
+      - link "Create a parent account" [ref=e47] [cursor=pointer]:
+        - /url: /register

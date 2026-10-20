@@ -13,13 +13,13 @@ const CONTACT_EMAIL =
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#faf8f2]">
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <BrandMark className="h-10 w-10 text-lg" />
             <div>
-              <p className="font-display text-base font-bold leading-tight text-slate-900">
+              <p className="font-display text-base font-bold leading-tight text-ink">
                 Lambton Christian School
               </p>
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-600">
@@ -30,20 +30,20 @@ export default function PrivacyPage() {
           <Link to="/login" className="btn btn-outline">Sign in</Link>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-card">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <div className="rounded-xl border border-line bg-white p-8 shadow-card">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">
             Privacy and Data Protection Policy
           </h1>
-          <p className="mt-1 text-sm font-medium text-slate-600">Effective Date: September 8, 2026</p>
-          <p className="text-sm text-slate-500">Organization: Lambton Christian School</p>
+          <p className="mt-1 text-sm font-medium text-muted">Effective Date: September 8, 2026</p>
+          <p className="text-sm text-muted">Organization: Lambton Christian School</p>
 
           <div className="mt-6 space-y-6">
             {/* 1. Introduction and Scope */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 1. Introduction and Scope
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 Lambton Christian School ("we," "our," or "us") is committed to protecting the
                 privacy and security of all personal and financial data processed through our
                 financial management system. This Privacy and Data Protection Policy applies to
@@ -55,43 +55,43 @@ export default function PrivacyPage() {
 
             {/* 2. Information We Collect */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 2. Information We Collect
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 To automate student registration, tuition fee tracking, and statistical
                 reporting, our system collects and processes specific categories of data:
               </p>
               <div className="mt-3 table-wrap">
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
+                <table className="min-w-full divide-y divide-line">
+                  <thead className="bg-[#faf8f2]">
                     <tr>
                       <th className="th">Data Category</th>
                       <th className="th">Specific Elements Collected</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-line">
                     <tr>
-                      <td className="td font-medium text-slate-900">Student Identifiers</td>
-                      <td className="td text-slate-600">
+                      <td className="td font-medium text-ink">Student Identifiers</td>
+                      <td className="td text-muted">
                         Student names, admission numbers, class/grade levels, and academic enrollment details.
                       </td>
                     </tr>
                     <tr>
-                      <td className="td font-medium text-slate-900">Payer & Guardian Information</td>
-                      <td className="td text-slate-600">
+                      <td className="td font-medium text-ink">Payer & Guardian Information</td>
+                      <td className="td text-muted">
                         Parent or guardian names, contact phone numbers, and email addresses.
                       </td>
                     </tr>
                     <tr>
-                      <td className="td font-medium text-slate-900">Financial & Transaction Records</td>
-                      <td className="td text-slate-600">
+                      <td className="td font-medium text-ink">Financial & Transaction Records</td>
+                      <td className="td text-muted">
                         Bank transaction codes, reference numbers, invoice balances, payment history, and fee allocations.
                       </td>
                     </tr>
                     <tr>
-                      <td className="td font-medium text-slate-900">System & Technical Logs</td>
-                      <td className="td text-slate-600">
+                      <td className="td font-medium text-ink">System & Technical Logs</td>
+                      <td className="td text-muted">
                         User login timestamps, IP addresses, and administrative audit trails for security monitoring.
                       </td>
                     </tr>
@@ -102,14 +102,14 @@ export default function PrivacyPage() {
 
             {/* 3. Purpose and Use of Data */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 3. Purpose and Use of Data
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 We process personal and financial data exclusively for authorized educational and
                 administrative purposes:
               </p>
-              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-slate-600">
+              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-muted">
                 <li>
                   Facilitating school billing, fee tracking, and financial reconciliation
                   obligations to parents and guardians.
@@ -127,13 +127,13 @@ export default function PrivacyPage() {
 
             {/* 4. Strict Purpose Limitation */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 4. Strict Purpose Limitation
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 We enforce strict operational boundaries regarding data usage:
               </p>
-              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-slate-600">
+              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-muted">
                 <li>
                   Financial and student records processed within the system are never utilized for
                   commercial profiling, targeted advertising, or marketing purposes.
@@ -147,14 +147,14 @@ export default function PrivacyPage() {
 
             {/* 5. Data Security Measures */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 5. Data Security Measures
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 Protecting sensitive financial and student data is a core priority. Our technical
                 safeguards include:
               </p>
-              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-slate-600">
+              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-muted">
                 <li>End-to-end encryption for data in transit using HTTPS/TLS protocols.</li>
                 <li>
                   Encrypted database storage for sensitive transaction references and user credentials.
@@ -172,10 +172,10 @@ export default function PrivacyPage() {
 
             {/* 6. Data Retention and Disposal Policy */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 6. Data Retention and Disposal Policy
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 Financial records and student data are retained only as long as necessary to
                 fulfill the educational and administrative purposes for which they were collected,
                 or to comply with statutory financial auditing timelines. Once retention periods
@@ -186,25 +186,25 @@ export default function PrivacyPage() {
 
             {/* 7. User Rights */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 7. User Rights
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 Under applicable data privacy regulations, data subjects have the right to:
               </p>
-              <ol className="mt-2 list-inside list-decimal space-y-1.5 text-sm leading-relaxed text-slate-600">
+              <ol className="mt-2 list-inside list-decimal space-y-1.5 text-sm leading-relaxed text-muted">
                 <li>
-                  <span className="font-medium text-slate-700">Access:</span> Request confirmation
+                  <span className="font-medium text-body">Access:</span> Request confirmation
                   on whether their personal data is being processed and obtain a copy of their
                   financial records.
                 </li>
                 <li>
-                  <span className="font-medium text-slate-700">Rectification:</span> Request
+                  <span className="font-medium text-body">Rectification:</span> Request
                   corrections to inaccurate billing details, student names, or contact information
                   through the school administration.
                 </li>
                 <li>
-                  <span className="font-medium text-slate-700">Objection &amp; Restriction:</span>{' '}
+                  <span className="font-medium text-body">Objection &amp; Restriction:</span>{' '}
                   Raise inquiries or complaints regarding data handling practices by contacting the
                   school administration.
                 </li>
@@ -213,10 +213,10 @@ export default function PrivacyPage() {
 
             {/* 8. Policy Updates */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 8. Policy Updates
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 We may update this Privacy and Data Protection Policy periodically to reflect
                 enhancements or changes in legal requirements. Material updates will be
                 communicated through system notifications or directly to users.
@@ -225,21 +225,21 @@ export default function PrivacyPage() {
 
             {/* 9. Contact Information */}
             <section>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-body">
                 9. Contact Information
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 For any questions, concerns, or requests regarding this policy or system security,
                 please reach out directly to the Lambton Christian School administration office.
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 School office:{' '}
-                <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary-600 hover:text-primary-700">
+                <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-primary-800 hover:text-primary-800">
                   {CONTACT_EMAIL}
                 </a>
                 <br />
                 Data deletion requests:{' '}
-                <Link to="/data-deletion" className="font-medium text-primary-600 hover:text-primary-700">
+                <Link to="/data-deletion" className="font-medium text-primary-800 hover:text-primary-800">
                   request deletion of your personal data
                 </Link>
               </p>
@@ -247,7 +247,7 @@ export default function PrivacyPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
+        <p className="mt-6 text-center text-xs text-faint">
           © {new Date().getFullYear()} Lambton Christian School. All rights reserved.
         </p>
       </div>

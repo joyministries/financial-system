@@ -60,7 +60,7 @@ const newChild = (): ChildApplication => ({
 
 const inputCls =
   'input mt-1';
-const labelCls = 'block text-sm font-medium text-slate-700';
+const labelCls = 'block text-sm font-medium text-body';
 
 export default function RegisterPage() {
   // Students being applied for (one required, more optional)
@@ -262,13 +262,13 @@ export default function RegisterPage() {
     const students = submitted.students;
     return (
       <AuthLayout>
-        <div className="rounded-2xl bg-white p-8 shadow-card">
+        <div className="rounded-xl bg-white p-8 shadow-card">
             <div className="mb-6 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-green-100">
-                <BadgeCheck className="h-6 w-6 text-green-600" />
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#e3f0e8]">
+                <BadgeCheck className="h-6 w-6 text-[#1c7a4f]" />
               </div>
-              <h1 className="mt-3 text-2xl font-bold text-slate-900">Application Submitted</h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <h1 className="mt-3 text-2xl font-bold text-ink">Application Submitted</h1>
+              <p className="mt-1 text-sm text-muted">
                 {students.length === 1
                   ? `The school will review the registration for ${students[0].first_name} ${students[0].last_name}.`
                   : `The school will review the registrations for all ${students.length} children.`}
@@ -278,24 +278,24 @@ export default function RegisterPage() {
             {/* One card per registered child */}
             <div className="space-y-3">
               {students.map((student) => (
-                <div key={student.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div key={student.id} className="rounded-lg border border-line bg-[#faf8f2] p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Student ID</p>
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">Student ID</p>
+                    <span className="rounded-full bg-[#f7eccd] px-2 py-0.5 text-xs font-medium text-[#8a6f13]">
                       Pending approval
                     </span>
                   </div>
-                  <p className="mt-1 font-mono text-2xl font-bold text-primary-600">{student.student_number}</p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-primary-800">{student.student_number}</p>
                   <dl className="mt-3 space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">Student</dt>
-                      <dd className="font-medium text-slate-900">
+                      <dt className="text-muted">Student</dt>
+                      <dd className="font-medium text-ink">
                         {student.first_name} {student.last_name}
                       </dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">Grade applying for</dt>
-                      <dd className="font-medium text-slate-900">{gradeName(student.grade_id) || 'Selected grade'}</dd>
+                      <dt className="text-muted">Grade applying for</dt>
+                      <dd className="font-medium text-ink">{gradeName(student.grade_id) || 'Selected grade'}</dd>
                     </div>
                   </dl>
                 </div>
@@ -303,18 +303,18 @@ export default function RegisterPage() {
             </div>
 
             {/* Document uploads */}
-            <div className="mt-4 rounded-lg border border-slate-200 p-4">
+            <div className="mt-4 rounded-lg border border-line p-4">
               <div className="flex items-center gap-2">
-                <FileUp className="h-4 w-4 text-primary-600" />
-                <h2 className="text-sm font-semibold text-slate-900">Supporting Documents</h2>
+                <FileUp className="h-4 w-4 text-primary-800" />
+                <h2 className="text-sm font-semibold text-ink">Supporting Documents</h2>
               </div>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted">
                 Add the birth certificate, transcripts, or any other required document.
               </p>
 
               {students.length > 1 && (
                 <div className="mt-3">
-                  <label className="block text-xs font-medium text-slate-700">Child</label>
+                  <label className="block text-xs font-medium text-body">Child</label>
                   <select
                     value={docStudentId}
                     onChange={(e) => setDocStudentId(e.target.value)}
@@ -334,14 +334,14 @@ export default function RegisterPage() {
                   {(uploaded[docStudentId] || []).map((doc) => (
                     <li
                       key={doc.id}
-                      className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1.5 text-xs"
+                      className="flex items-center justify-between rounded-md bg-[#faf8f2] px-2 py-1.5 text-xs"
                     >
-                      <span className="truncate text-slate-700">{doc.original_filename}</span>
+                      <span className="truncate text-body">{doc.original_filename}</span>
                       <a
                         href={documentsApi.downloadUrl(docStudentId, doc.id)}
                         target="_blank"
                         rel="noreferrer"
-                        className="ml-2 shrink-0 font-medium text-primary-600 hover:text-primary-700"
+                        className="ml-2 shrink-0 font-medium text-primary-800 hover:text-primary-800"
                       >
                         Open
                       </a>
@@ -351,7 +351,7 @@ export default function RegisterPage() {
               )}
 
               <div className="mt-3">
-                <label className="block text-xs font-medium text-slate-700">Document type</label>
+                <label className="block text-xs font-medium text-body">Document type</label>
                 <select id="post-type" className={inputCls} defaultValue="birth_certificate">
                   {DOCUMENT_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>
@@ -360,7 +360,7 @@ export default function RegisterPage() {
                   ))}
                 </select>
               </div>
-              <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600">
+              <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[#d8d2c4] px-3 py-3 text-sm text-muted hover:border-primary-400 hover:text-primary-800">
                 <UploadCloud className="h-4 w-4" />
                 {uploading ? 'Uploading…' : 'Choose a file (PDF, PNG, JPG — max 10 MB)'}
                 <input
@@ -381,9 +381,9 @@ export default function RegisterPage() {
             </div>
 
             {submitted.payment_url && submitted.registration_fee && (
-              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <h2 className="text-sm font-semibold text-blue-900">Registration Fee</h2>
-                <p className="mt-1 text-sm text-blue-800">
+              <div className="mt-4 rounded-lg border border-line bg-[#f4f6f9] p-4">
+                <h2 className="text-sm font-semibold text-ink">Registration Fee</h2>
+                <p className="mt-1 text-sm text-ink">
                   A one-time registration fee of{' '}
                   <span className="font-semibold">
                     R {Number(submitted.registration_fee.amount).toLocaleString()}
@@ -414,13 +414,13 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout maxW="lg">
-      <div className="rounded-2xl bg-white p-6 shadow-card">
+      <div className="rounded-xl bg-white p-6 shadow-card">
           <div className="mb-4 text-center">
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100">
-              <GraduationCap className="h-5 w-5 text-primary-600" />
+              <GraduationCap className="h-5 w-5 text-primary-800" />
             </div>
-            <h1 className="mt-2 text-xl font-bold text-slate-900">Parent Registration</h1>
-            <p className="mt-1 text-xs text-slate-500">
+            <h1 className="mt-2 text-xl font-bold text-ink">Parent Registration</h1>
+            <p className="mt-1 text-xs text-muted">
               Apply for your child(ren) — student IDs are generated automatically.
             </p>
           </div>
@@ -429,34 +429,34 @@ export default function RegisterPage() {
             {/* Students applying for */}
             <section>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                   1. Student(s) Applying For
                 </h2>
                 <button
                   type="button"
                   onClick={addChild}
                   disabled={children.length >= MAX_CHILDREN}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-primary-400 hover:text-primary-700 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#d8d2c4] px-2.5 py-1.5 text-xs font-medium text-body hover:border-primary-400 hover:text-primary-800 disabled:opacity-40"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add another child
                 </button>
               </div>
-              <p className="-mt-2 mb-3 text-xs text-slate-500">
+              <p className="-mt-2 mb-3 text-xs text-muted">
                 Registering more than one child? Add them all here — no need to register again later.
               </p>
 
               <div className="space-y-4">
                 {children.map((child, idx) => (
-                  <div key={child.id} className="rounded-lg border border-slate-200 p-3">
+                  <div key={child.id} className="rounded-lg border border-line p-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-600">
+                      <p className="text-xs font-semibold text-muted">
                         Child {idx + 1}{idx === 0 ? ' (required)' : ''}
                       </p>
                       {children.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeChild(child.id)}
-                          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-500"
+                          className="inline-flex items-center gap-1 text-xs text-faint hover:text-[#a8382c]"
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Remove
                         </button>
@@ -505,22 +505,22 @@ export default function RegisterPage() {
 
                     {/* Registration fee details for the selected grade */}
                     {child.grade_id && (
-                      <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                      <div className="mt-3 rounded-lg border border-line bg-[#f4f6f9] p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
                           Fees for {CURRENT_YEAR} school year
                         </p>
                         {feesLoadingGrade === child.grade_id && feesByGrade[child.grade_id] === undefined ? (
-                          <p className="mt-1 flex items-center gap-1 text-xs text-blue-600">
+                          <p className="mt-1 flex items-center gap-1 text-xs text-primary-600">
                             <Loader2 className="h-3 w-3 animate-spin" /> Loading fees…
                           </p>
                         ) : (feesByGrade[child.grade_id] || []).length > 0 ? (
                           <ul className="mt-2 space-y-1.5">
                             {(feesByGrade[child.grade_id] || []).map((fee) => (
                               <li key={fee.id} className="flex items-center justify-between text-sm">
-                                <span className="text-blue-900">{fee.category}</span>
-                                <span className="font-semibold text-blue-900">
+                                <span className="text-ink">{fee.category}</span>
+                                <span className="font-semibold text-ink">
                                   R {Number(fee.annual_amount).toLocaleString()}
-                                  <span className="ml-1 text-xs font-normal text-blue-600">
+                                  <span className="ml-1 text-xs font-normal text-primary-600">
                                     /{fee.payment_plan === 'monthly' ? 'month' : 'year'}
                                   </span>
                                 </span>
@@ -528,7 +528,7 @@ export default function RegisterPage() {
                             ))}
                           </ul>
                         ) : (
-                          <p className="mt-1 text-xs text-blue-600">
+                          <p className="mt-1 text-xs text-primary-600">
                             No published fees for this grade yet. The school will confirm fees on approval.
                           </p>
                         )}
@@ -539,11 +539,11 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            <hr className="border-slate-100" />
+            <hr className="border-line-soft" />
 
             {/* Parent account */}
             <section>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
                 2. Your Details (Parent Account)
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -626,12 +626,12 @@ export default function RegisterPage() {
                       required
                       minLength={8}
                       placeholder="At least 8 characters"
-                      className="block w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="block w-full rounded-lg border border-[#d8d2c4] px-3 py-2 pr-10 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-faint hover:text-muted"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -651,11 +651,11 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            <hr className="border-slate-100" />
+            <hr className="border-line-soft" />
 
             {/* Relationship */}
             <section>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
                 3. Your Relationship to the Child
               </h2>
               <div className="grid grid-cols-2 gap-3">
@@ -666,8 +666,8 @@ export default function RegisterPage() {
                     onClick={() => setRelationship(r)}
                     className={`rounded-lg border px-3 py-2 text-sm font-medium capitalize transition ${
                       relationship === r
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-slate-300 text-slate-600 hover:border-slate-400'
+                        ? 'border-primary-500 bg-primary-50 text-primary-800'
+                        : 'border-[#d8d2c4] text-muted hover:border-[#c9c3b6]'
                     }`}
                   >
                     {r}
@@ -676,20 +676,20 @@ export default function RegisterPage() {
               </div>
             </section>
 
-            <hr className="border-slate-100" />
+            <hr className="border-line-soft" />
 
             {/* Other parent (optional) */}
             <section>
               <button
                 type="button"
                 onClick={() => setShowOtherParent(!showOtherParent)}
-                className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300"
+                className="flex w-full items-center justify-between rounded-lg border border-line px-3 py-2 text-sm font-medium text-body hover:border-[#d8d2c4]"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-slate-400" />
+                  <Users className="h-4 w-4 text-faint" />
                   {relationship === 'father' ? 'Mother' : 'Father'} details {showOtherParent ? '(added)' : ''}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-faint">
                   {showOtherParent ? 'Click to remove' : 'Add second parent details'}
                 </span>
               </button>
@@ -772,14 +772,14 @@ export default function RegisterPage() {
               )}
             </section>
 
-            <hr className="border-slate-100" />
+            <hr className="border-line-soft" />
 
             {/* Documents */}
             <section>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
                 4. Supporting Documents
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted">
                 Upload the birth certificate, transcripts, or any other required documents.
                 You can also add them after submitting.
               </p>
@@ -789,7 +789,7 @@ export default function RegisterPage() {
                   {queue.map((item) => (
                     <li
                       key={item.id}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -803,7 +803,7 @@ export default function RegisterPage() {
                                 )
                               )
                             }
-                            className="w-44 rounded border border-slate-300 px-2 py-1 text-xs"
+                            className="w-44 rounded border border-[#d8d2c4] px-2 py-1 text-xs"
                           >
                             {DOCUMENT_TYPES.map((t) => (
                               <option key={t.value} value={t.value}>
@@ -811,33 +811,33 @@ export default function RegisterPage() {
                               </option>
                             ))}
                           </select>
-                          <span className="truncate text-xs text-slate-700">{item.file.name}</span>
+                          <span className="truncate text-xs text-body">{item.file.name}</span>
                         </div>
                         {item.status === 'error' && (
-                          <p className="mt-1 text-xs text-red-600">{item.error}</p>
+                          <p className="mt-1 text-xs text-[#a8382c]">{item.error}</p>
                         )}
                       </div>
                       {item.status === 'pending' && (
                         <button
                           type="button"
                           onClick={() => removeQueued(item.id)}
-                          className="ml-2 shrink-0 text-slate-400 hover:text-red-500"
+                          className="ml-2 shrink-0 text-faint hover:text-[#a8382c]"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       )}
                       {item.status === 'uploading' && (
-                        <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin text-primary-600" />
+                        <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin text-primary-800" />
                       )}
                       {item.status === 'done' && (
-                        <BadgeCheck className="ml-2 h-4 w-4 shrink-0 text-green-600" />
+                        <BadgeCheck className="ml-2 h-4 w-4 shrink-0 text-[#1c7a4f]" />
                       )}
                     </li>
                   ))}
                 </ul>
               )}
 
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600">
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[#d8d2c4] px-3 py-3 text-sm text-muted hover:border-primary-400 hover:text-primary-800">
                 <UploadCloud className="h-4 w-4" />
                 Choose files (PDF, PNG, JPG — max 10 MB each)
                 <input
@@ -862,9 +862,9 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <p className="mt-4 text-center text-sm text-slate-500">
+          <p className="mt-4 text-center text-sm text-muted">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-700">
+            <Link to="/login" className="font-medium text-primary-800 hover:text-primary-800">
               Sign in
             </Link>
           </p>

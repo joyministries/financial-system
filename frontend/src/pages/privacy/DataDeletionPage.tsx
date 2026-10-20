@@ -39,29 +39,29 @@ export default function DataDeletionPage() {
 
   return (
     <AuthLayout>
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-card">
+      <div className="rounded-xl border border-line bg-white p-8 shadow-card">
         <div className="mb-1 flex items-center gap-2 text-accent-600">
           <ShieldCheck className="h-5 w-5" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-ink">
           Request deletion of your information
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Under the Protection of Personal Information Act (POPIA) you may ask the
           school to erase your account and personal details from the parent portal.
         </p>
 
         {submitted ? (
           <div className="mt-6 space-y-4">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-medium text-emerald-800">Your request has been received.</p>
-              <p className="mt-1 text-sm leading-relaxed text-emerald-700">
+            <div className="rounded-xl border border-[#cfe3d8] bg-[#eef6f1] p-4">
+              <p className="text-sm font-medium text-[#176641]">Your request has been received.</p>
+              <p className="mt-1 text-sm leading-relaxed text-[#1c7a4f]">
                 The school will process it within 10 working days. If approved, your
                 login, name, contact details and any other personal information will
                 be removed from the portal.
               </p>
             </div>
-            <ol className="list-inside list-decimal space-y-1.5 text-sm text-slate-600">
+            <ol className="list-inside list-decimal space-y-1.5 text-sm text-muted">
               <li>The request is reviewed by the school office.</li>
               <li>
                 If approved, your account and personal data are deleted — you will no
@@ -80,22 +80,22 @@ export default function DataDeletionPage() {
         ) : (
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Email address</label>
+              <label className="block text-sm font-medium text-body">Email address</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder={user?.email ? user.email : 'you@example.co.za'}
-                className="mt-1.5 block w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                className="mt-1.5 block w-full rounded-xl border border-[#d8d2c4] px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted">
                 The email on the account you want removed.
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Reason <span className="font-normal text-slate-400">(optional)</span>
+              <label className="block text-sm font-medium text-body">
+                Reason <span className="font-normal text-faint">(optional)</span>
               </label>
               <textarea
                 value={reason}
@@ -103,7 +103,7 @@ export default function DataDeletionPage() {
                 rows={3}
                 maxLength={2000}
                 placeholder="e.g. My child has left the school."
-                className="mt-1.5 block w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                className="mt-1.5 block w-full rounded-xl border border-[#d8d2c4] px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
             </div>
             <button type="submit" disabled={loading} className="btn btn-primary w-full">
@@ -114,10 +114,10 @@ export default function DataDeletionPage() {
               )}
               Submit deletion request
             </button>
-            <p className="flex items-center gap-1.5 text-xs text-slate-400">
+            <p className="flex items-center gap-1.5 text-xs text-faint">
               <FileText className="h-3.5 w-3.5" />
               Read the{' '}
-              <Link to="/privacy" className="font-medium text-primary-600 hover:text-primary-700">
+              <Link to="/privacy" className="font-medium text-primary-800 hover:text-primary-800">
                 privacy policy
               </Link>{' '}
               to see what we keep and why.

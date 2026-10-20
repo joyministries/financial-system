@@ -57,41 +57,41 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
+      <h1 className="text-2xl font-bold text-ink">My Profile</h1>
 
-      <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+      <div className="rounded-xl bg-white p-6 shadow-sm border border-line-soft">
         <div className="mb-5 flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#131d3c] text-lg font-bold text-white">
             {(fullName || user?.full_name || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
           </div>
           <div>
-            <p className="text-lg font-semibold text-slate-900">{user?.full_name}</p>
-            <p className="text-sm capitalize text-slate-500">{user?.role === 'super_admin' ? 'Administrator' : user?.role}</p>
+            <p className="text-lg font-semibold text-ink">{user?.full_name}</p>
+            <p className="text-sm capitalize text-muted">{user?.role === 'super_admin' ? 'Administrator' : user?.role}</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Full name</label>
+            <label className="block text-sm font-medium text-body">Full name</label>
             <div className="relative mt-1">
-              <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
               <input value={fullName} onChange={(e) => setFullName(e.target.value)} required className="input pl-9" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Email address</label>
+            <label className="block text-sm font-medium text-body">Email address</label>
             <div className="relative mt-1">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="input pl-9" />
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted">
               This is your login email. If you change it, use the new email to sign in next time.
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Phone number</label>
+            <label className="block text-sm font-medium text-body">Phone number</label>
             <div className="relative mt-1">
-              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+27 …" className="input pl-9" />
             </div>
           </div>
@@ -104,21 +104,21 @@ export default function ProfilePage() {
       </div>
 
       {user?.role === 'parent' && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-6">
+        <div className="rounded-xl border border-[#ecd2cd] bg-[#fbeeec]/60 p-6">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f7e2de] text-[#a8382c]">
               <ShieldCheck className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-rose-900">Privacy & data protection (POPIA)</h2>
-              <p className="mt-1 text-sm leading-relaxed text-rose-700/80">
+              <h2 className="text-sm font-semibold text-[#7a271f]">Privacy & data protection (POPIA)</h2>
+              <p className="mt-1 text-sm leading-relaxed text-[#8f2e24]/80">
                 You may ask the school to delete your account and personal information. The school
                 reviews the request and, if approved, removes your data from the portal (statutory
                 financial records are kept). Your access stops once the request is approved.
               </p>
               <Link
                 to="/data-deletion"
-                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#ecd2cd] bg-white px-3.5 py-2 text-sm font-medium text-[#8f2e24] transition-colors hover:bg-[#f7e2de]"
               >
                 Request account deletion
               </Link>

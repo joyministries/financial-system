@@ -132,7 +132,7 @@ export default function StudentSearchSelect({
   return (
     <div ref={rootRef} className="relative min-w-56">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
 
         <input
           ref={inputRef}
@@ -175,7 +175,7 @@ export default function StudentSearchSelect({
           disabled={disabled}
           className={clsx(
             'input pl-9 pr-9',
-            selected && 'cursor-default bg-slate-50 text-slate-700'
+            selected && 'cursor-default bg-[#faf8f2] text-body'
           )}
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -187,7 +187,7 @@ export default function StudentSearchSelect({
           <button
             type="button"
             onClick={clear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-rose-500"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-faint hover:text-[#a8382c]"
             aria-label="Clear selection"
           >
             <X className="h-4 w-4" />
@@ -196,13 +196,13 @@ export default function StudentSearchSelect({
           <button
             type="button"
             onClick={() => { setQuery(''); setOpen(false); setResults([]); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-rose-500"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-faint hover:text-[#a8382c]"
             aria-label="Clear"
           >
             <X className="h-4 w-4" />
           </button>
         ) : (
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-line" />
         )}
       </div>
 
@@ -210,23 +210,23 @@ export default function StudentSearchSelect({
       {open && (
         <div
           role="listbox"
-          className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-line bg-white py-1 shadow-lg"
         >
           {query.trim().length < 2 ? (
-            <p className="px-4 py-3 text-sm text-slate-400">Type at least 2 characters to search…</p>
+            <p className="px-4 py-3 text-sm text-faint">Type at least 2 characters to search…</p>
           ) : results.length === 0 ? (
             loading ? (
-              <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-slate-500">
+              <div className="flex items-center justify-center gap-2 px-4 py-3 text-sm text-muted">
                 <Loader2 className="h-4 w-4 animate-spin" /> Searching…
               </div>
             ) : (
-              <p className="px-4 py-3 text-sm text-slate-500">No students found for "{query}".</p>
+              <p className="px-4 py-3 text-sm text-muted">No students found for "{query}".</p>
             )
           ) : (
             <>
               {/* Results stay clickable while a refresh is in flight */}
               {loading && (
-                <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-1.5 text-xs text-slate-400">
+                <div className="flex items-center gap-2 border-b border-line-soft bg-[#faf8f2] px-4 py-1.5 text-xs text-faint">
                   <Loader2 className="h-3 w-3 animate-spin" /> Refreshing…
                 </div>
               )}
@@ -238,10 +238,10 @@ export default function StudentSearchSelect({
                   onClick={() => pick(s)}
                   className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm hover:bg-primary-50 focus:bg-primary-50 focus:outline-none"
                 >
-                  <span className="truncate font-medium text-slate-800">
+                  <span className="truncate font-medium text-ink">
                     {s.first_name} {s.last_name}
                   </span>
-                  <span className="shrink-0 font-mono text-xs text-slate-400">{s.student_number}</span>
+                  <span className="shrink-0 font-mono text-xs text-faint">{s.student_number}</span>
                 </button>
               ))}
             </>

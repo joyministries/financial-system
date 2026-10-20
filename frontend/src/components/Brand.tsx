@@ -2,11 +2,11 @@ interface BrandMarkProps {
   className?: string;
 }
 
-/** Lambton Christian School gold-on-ink brand mark. */
+/** Lambton Christian School brand mark — gold square, ink letter. */
 export default function BrandMark({ className = 'h-10 w-10 text-lg' }: BrandMarkProps) {
   return (
     <div
-      className={`flex items-center justify-center rounded-xl bg-gradient-to-br from-accent-300 via-accent-400 to-accent-600 font-extrabold text-primary-950 shadow-lg shadow-black/25 ${className}`}
+      className={`flex items-center justify-center rounded-[9px] bg-accent-500 font-extrabold tracking-[-0.02em] text-primary-950 ${className}`}
       aria-hidden="true"
     >
       L

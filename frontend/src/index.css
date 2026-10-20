@@ -2,9 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fix: inputs rendered black/dark on machines whose OS uses a dark color
-   scheme. The app is light-themed, so force light scheme + white form
-   controls everywhere regardless of the OS/browser dark mode. */
+/* ─────────────────────────────────────────────────────────────
+   Base — warm paper, ink text, light forms.
+   The app is light-only: force light colour scheme so inputs never
+   render black on machines whose OS uses a dark scheme.
+   ───────────────────────────────────────────────────────────── */
 @layer base {
   :root {
     color-scheme: light;
@@ -12,14 +14,22 @@
 
   html {
     background-color: #faf9f5;
-    color: #1c1c1f;
+    color: #151517;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
   body {
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    @apply bg-paper text-body font-sans;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  /* Money and tabular data line up to the pixel. */
+  table,
+  .tnum {
+    font-variant-numeric: tabular-nums;
   }
 
   input,
@@ -27,28 +37,33 @@
   textarea {
     color-scheme: light;
     background-color: #ffffff !important;
-    color: #111827 !important;
+    color: #151517 !important;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: #9ca3af !important;
+    color: #9a958a !important;
     opacity: 1;
   }
 
   option {
     background-color: #ffffff;
-    color: #111827;
+    color: #151517;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: #0f1b2b;
   }
 
   ::selection {
     background-color: #f2df9a;
-    color: #1c1c1f;
+    color: #151517;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-color: #d8d2c4 transparent;
   }
 
   *::-webkit-scrollbar {
@@ -57,104 +72,169 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: #cbd5e1;
+    background-color: #d8d2c4;
     border-radius: 8px;
   }
 
   *::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  :focus-visible {
+    outline: 2px solid rgba(201, 162, 39, 0.75);
+    outline-offset: 2px;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
    Component layer — one canonical definition per pattern.
-   Pages should use these classes instead of re-implementing
-   buttons, inputs, badges and tables ad-hoc.
    ───────────────────────────────────────────────────────────── */
 @layer components {
-  /* Buttons */
+  /* Buttons — 36px tall, 8px radius, weight 600. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors
-      disabled:pointer-events-none disabled:opacity-50
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
+    @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-[13px] font-semibold
+      transition-colors disabled:pointer-events-none disabled:opacity-50
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-paper;
   }
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
+    @apply bg-primary-900 text-white hover:bg-primary-800 active:bg-primary-950;
+  }
+  .btn-accent {
+    @apply bg-accent-500 text-primary-950 hover:bg-accent-600 active:bg-accent-700;
   }
   .btn-secondary {
-    @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100;
+    @apply border border-line bg-white text-ink hover:border-[#d8d2c4] hover:bg-[#fdfcf8] active:bg-[#f7f4ec];
   }
   .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+    @apply bg-[#a8382c] text-white hover:bg-[#8f2e24] active:bg-[#7a271f];
   }
   .btn-success {
-    @apply bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800;
+    @apply bg-[#1c7a4f] text-white hover:bg-[#176641] active:bg-[#125435];
   }
   .btn-ghost {
-    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    @apply text-body hover:bg-[#f3efe6] hover:text-ink;
   }
   .btn-sm {
-    @apply px-3 py-1.5 text-xs;
+    @apply h-7 gap-1.5 rounded-md px-2.5 text-[12px];
+  }
+  .btn-icon {
+    @apply h-9 w-9 rounded-lg border border-line bg-white text-muted hover:border-[#d8d2c4] hover:text-ink;
   }
 
-  /* Cards */
+  /* Surfaces — hairline structure, no lift. */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-soft;
+    @apply rounded-xl border border-line bg-white;
+  }
+  .card-pad {
+    @apply p-4 sm:p-5;
+  }
+  .card-head {
+    @apply flex items-center gap-3 border-b border-line-soft px-4 py-3 sm:px-5;
+  }
+  .card-title {
+    @apply text-[14px] font-bold tracking-[-0.01em] text-ink;
   }
 
   /* Forms */
   .input {
-    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
-      placeholder:text-slate-400
-      focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500
-      disabled:cursor-not-allowed disabled:bg-slate-50;
+    @apply block w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink
+      placeholder:text-faint
+      focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/20
+      disabled:cursor-not-allowed disabled:bg-[#faf8f2];
   }
   .label {
-    @apply block text-sm font-medium text-slate-700;
+    @apply block text-[12.5px] font-semibold text-body;
+  }
+  .hint {
+    @apply text-[11.5px] text-muted;
   }
 
-  /* Badges / status pills */
+  /* Badges — small squared chips, status only. */
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset;
+    @apply inline-flex items-center gap-1 rounded-[4px] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] ring-1 ring-inset;
   }
   .badge-success {
-    @apply bg-emerald-50 text-emerald-700 ring-emerald-600/20;
+    @apply bg-[#eef6f1] text-[#1c7a4f] ring-[#1c7a4f]/20;
   }
   .badge-warning {
-    @apply bg-amber-50 text-amber-700 ring-amber-600/20;
+    @apply bg-[#fbf4e2] text-[#8a6f13] ring-[#8a6f13]/20;
   }
   .badge-danger {
-    @apply bg-red-50 text-red-700 ring-red-600/20;
+    @apply bg-[#fbeeec] text-[#a8382c] ring-[#a8382c]/20;
   }
   .badge-info {
-    @apply bg-primary-50 text-primary-700 ring-primary-600/20;
+    @apply bg-[#eef1f6] text-[#2b3748] ring-[#2b3748]/20;
   }
   .badge-neutral {
-    @apply bg-slate-100 text-slate-600 ring-slate-500/20;
+    @apply bg-[#f4f1e9] text-muted ring-[#9a958a]/25;
   }
 
-  /* Tables */
+  /* Tables — ruled ledger lines, mono caps headers. */
   .table-wrap {
-    @apply overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-soft;
+    @apply overflow-hidden rounded-xl border border-line bg-white;
+  }
+  .table-scroll {
+    @apply overflow-x-auto;
   }
   .th {
-    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500;
+    @apply whitespace-nowrap border-b border-line bg-[#fdfcf9] px-4 py-2.5 text-left font-mono text-[9.5px]
+      font-semibold uppercase tracking-[0.13em] text-muted;
   }
   .td {
-    @apply px-4 py-3 text-sm text-slate-700;
+    @apply border-b border-line-soft px-4 py-3 text-[13px] text-body;
+  }
+  .row-hover {
+    @apply hover:bg-[#fdfbf5];
   }
 
   /* Page scaffolding */
   .page-header {
-    @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
+    @apply mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between;
   }
   .page-title {
-    @apply text-xl font-bold tracking-tight text-slate-900;
+    @apply text-[23px] font-bold leading-tight tracking-[-0.025em] text-ink sm:text-[25px];
   }
   .page-subtitle {
-    @apply mt-1 text-sm text-slate-500;
+    @apply mt-1 text-[13px] text-muted;
+  }
+  .page-subtitle b {
+    @apply font-semibold text-ink;
   }
   .section-title {
-    @apply text-sm font-semibold text-slate-900;
+    @apply text-[13.5px] font-bold tracking-[-0.01em] text-ink;
+  }
+  .eyebrow {
+    @apply font-mono text-[9.5px] font-medium uppercase tracking-[0.16em] text-muted;
+  }
+  .rule {
+    @apply border-t border-line;
+  }
+
+  /* Figures — money as typography. */
+  .stat-label {
+    @apply font-mono text-[9.5px] font-medium uppercase tracking-[0.13em] text-muted;
+  }
+  .stat-value {
+    @apply text-[28px] font-bold leading-none tracking-[-0.03em] text-ink tnum;
+  }
+  .stat-meta {
+    @apply mt-1.5 flex items-center gap-1.5 text-[12px] text-muted;
+  }
+  .gold-tick {
+    @apply inline-block h-0.5 w-4 bg-accent-500;
+  }
+}
+
+/* Utility escape hatches used across pages. */
+@layer utilities {
+  .hairline-b {
+    border-bottom: 1px solid #e7e3da;
+  }
+  .nav-fade {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+  }
+  .balance {
+    font-variant-numeric: tabular-nums;
   }
 }

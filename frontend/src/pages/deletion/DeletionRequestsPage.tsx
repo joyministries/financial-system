@@ -120,7 +120,7 @@ export default function DeletionRequestsPage() {
               'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
               filter === f.key
                 ? 'bg-[#131d3c] text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                : 'bg-white border border-line text-muted hover:border-[#d8d2c4] hover:bg-[#fdfbf5]'
             )}
           >
             {f.label}
@@ -130,12 +130,12 @@ export default function DeletionRequestsPage() {
 
       <div className="table-wrap">
         {loading ? (
-          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-faint" /></div>
         ) : rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">No {filter} deletion requests.</p>
+          <p className="py-8 text-center text-sm text-muted">No {filter} deletion requests.</p>
         ) : (
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
+          <table className="min-w-full divide-y divide-line">
+            <thead className="bg-[#faf8f2]">
               <tr>
                 <th className="th">Requested</th>
                 <th className="th">Parent (account at request time)</th>
@@ -145,26 +145,26 @@ export default function DeletionRequestsPage() {
                 <th className="th text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-line">
               {rows.map((d) => {
                 const busyRow = actingId === d.id;
                 const pending = d.status === 'pending';
                 return (
-                  <tr key={d.id} className="hover:bg-slate-50">
+                  <tr key={d.id} className="hover:bg-[#fdfbf5]">
                     <td className="td whitespace-nowrap">
-                      <span className="flex items-center gap-1.5 text-slate-600">
-                        <Clock3 className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="flex items-center gap-1.5 text-muted">
+                        <Clock3 className="h-3.5 w-3.5 text-faint" />
                         {fmtDate(d.created_at)}
                       </span>
                     </td>
                     <td className="td">
-                      <p className="font-medium text-slate-900">{d.user_full_name || '—'}</p>
-                      <p className="flex items-center gap-1 text-xs text-slate-500">
-                        <Mail className="h-3 w-3 text-slate-400" /> {d.email}
+                      <p className="font-medium text-ink">{d.user_full_name || '—'}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted">
+                        <Mail className="h-3 w-3 text-faint" /> {d.email}
                       </p>
                     </td>
                     <td className="td">
-                      <p className="max-w-md text-sm text-slate-600">{d.reason || '—'}</p>
+                      <p className="max-w-md text-sm text-muted">{d.reason || '—'}</p>
                     </td>
                     <td className="td">
                       <span
@@ -178,12 +178,12 @@ export default function DeletionRequestsPage() {
                         {d.status}
                       </span>
                       {d.rejection_reason && (
-                        <p className="mt-1 max-w-xs text-xs text-slate-400">
+                        <p className="mt-1 max-w-xs text-xs text-faint">
                           {d.rejection_reason}
                         </p>
                       )}
                     </td>
-                    <td className="td whitespace-nowrap text-xs text-slate-500">
+                    <td className="td whitespace-nowrap text-xs text-muted">
                       {d.decided_at ? fmtDate(d.decided_at) : '—'}
                     </td>
                     <td className="td">
@@ -208,7 +208,7 @@ export default function DeletionRequestsPage() {
                             </button>
                           </>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-xs text-faint">—</span>
                         )}
                       </div>
                     </td>
@@ -232,15 +232,15 @@ export default function DeletionRequestsPage() {
 
       {/* Approve confirm modal */}
       {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7eccd] text-[#8a6f13]">
                 <AlertTriangle className="h-5 w-5" />
               </span>
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Approve deletion for {confirming.email}?</h3>
-                <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                <h3 className="text-base font-semibold text-ink">Approve deletion for {confirming.email}?</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted">
                   The parent's account will be deactivated immediately and their name, email, phone
                   and other personal details anonymised. They will no longer be able to sign in.
                   Invoices, payments, receipts and statements are kept for statutory audit/tax
@@ -263,10 +263,10 @@ export default function DeletionRequestsPage() {
 
       {/* Reject modal */}
       {rejecting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-slate-900">Reject deletion request</h3>
-            <p className="mt-1 text-sm text-slate-500">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <h3 className="text-base font-semibold text-ink">Reject deletion request</h3>
+            <p className="mt-1 text-sm text-muted">
               The account is left unchanged. Explain why the request is being refused —
               this is recorded with the request and in the audit log.
             </p>
@@ -276,7 +276,7 @@ export default function DeletionRequestsPage() {
               rows={4}
               maxLength={500}
               placeholder="e.g. The learner is still enrolled and the account is needed."
-              className="mt-3 block w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              className="mt-3 block w-full rounded-xl border border-[#d8d2c4] px-3.5 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setRejecting(null)} disabled={busy} className="btn btn-outline">

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/api/client';
+import BrandMark from '@/components/Brand';
 import toast from 'react-hot-toast';
 
 export default function ForcePasswordChangePage() {
@@ -37,69 +38,71 @@ export default function ForcePasswordChangePage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#FDF6E3] to-[#F5E6C8] px-4">
+    <div className="flex min-h-screen justify-center bg-paper px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Manrope, sans-serif' }}>
-              Change Your Password
-            </h1>
-            <p className="text-gray-500 mt-2 text-sm">
-              For security, you must change your temporary password before continuing.
+        <div className="mb-7 flex items-center gap-3">
+          <BrandMark className="h-10 w-10 text-lg" />
+          <div>
+            <p className="text-[13.5px] font-bold leading-tight text-ink">Lambton Christian School</p>
+            <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted">
+              Finance Portal
             </p>
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="card p-6 sm:p-7">
+          <p className="eyebrow">Account security</p>
+          <h1 className="page-title mt-1 text-[22px]">Change your password</h1>
+          <p className="page-subtitle">
+            For security, you must replace your temporary password before continuing.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+              <label className="label mb-1.5" htmlFor="current-password">Current password</label>
               <input
+                id="current-password"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#D2A24C] focus:border-transparent outline-none"
+                className="input"
                 required
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <label className="label mb-1.5" htmlFor="new-password">New password</label>
               <input
+                id="new-password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#D2A24C] focus:border-transparent outline-none"
+                className="input"
                 required
                 minLength={8}
               />
+              <p className="hint mt-1">At least 8 characters.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <label className="label mb-1.5" htmlFor="confirm-password">Confirm new password</label>
               <input
+                id="confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#D2A24C] focus:border-transparent outline-none"
+                className="input"
                 required
                 minLength={8}
               />
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-[#D2A24C] to-[#A6742A] hover:from-[#C2953C] hover:to-[#96641A] transition-all disabled:opacity-50"
-            >
-              {loading ? 'Changing...' : 'Change Password'}
+            <button type="submit" disabled={loading} className="btn btn-primary w-full">
+              {loading ? 'Changing…' : 'Change password'}
             </button>
           </form>
 
           <button
             onClick={logout}
-            className="w-full mt-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            className="mt-3 w-full py-2 text-[12.5px] text-muted transition-colors hover:text-ink"
           >
             Sign out instead
           </button>

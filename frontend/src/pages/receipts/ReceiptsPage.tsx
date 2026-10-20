@@ -73,7 +73,7 @@ export default function ReceiptsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">{isParent ? 'My Receipts' : 'Receipts'}</h1>
+        <h1 className="text-2xl font-bold text-ink">{isParent ? 'My Receipts' : 'Receipts'}</h1>
         {!isParent && (
           <div className="flex gap-2">
             <select
@@ -101,39 +101,39 @@ export default function ReceiptsPage() {
       </div>
 
       {isParent && students.length === 0 && !loading && (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted">
           No children on your account yet. Once a child is registered you will see their receipts here.
         </p>
       )}
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
+      <div className="rounded-xl bg-white shadow-sm border border-line-soft overflow-x-auto">
         {loading || namesLoading ? (
           <div className="flex h-32 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
           </div>
         ) : (
           <>
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
+        <table className="min-w-full divide-y divide-line">
+          <thead className="bg-[#faf8f2]">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Receipt #</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Method</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Receipt #</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Student</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Method</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Date</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-line">
             {receipts.map((r) => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-sm font-mono font-medium text-slate-900">{r.receipt_number}</td>
-                <td className="px-6 py-4 text-sm text-slate-900">{getStudentName(r.student_id)}</td>
-                <td className="px-6 py-4 text-sm font-medium text-slate-900">R {r.amount.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{r.payment_method}</td>
-                <td className="px-6 py-4 text-sm text-slate-500">{new Date(r.created_at).toLocaleDateString()}</td>
+              <tr key={r.id} className="hover:bg-[#fdfbf5]">
+                <td className="px-6 py-4 text-sm font-mono font-medium text-ink">{r.receipt_number}</td>
+                <td className="px-6 py-4 text-sm text-ink">{getStudentName(r.student_id)}</td>
+                <td className="px-6 py-4 text-sm font-medium text-ink">R {r.amount.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-muted">{r.payment_method}</td>
+                <td className="px-6 py-4 text-sm text-muted">{new Date(r.created_at).toLocaleDateString()}</td>
                 <td className="px-6 py-4 text-right">
-                  <button onClick={() => downloadReceipt(r)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                  <button onClick={() => downloadReceipt(r)} className="inline-flex items-center gap-1 rounded-lg border border-[#d8d2c4] px-3 py-1.5 text-xs font-medium text-body hover:bg-[#fdfbf5]">
                     <Download className="h-3.5 w-3.5" /> Download
                   </button>
                 </td>
@@ -141,7 +141,7 @@ export default function ReceiptsPage() {
             ))}
           </tbody>
         </table>
-        {receipts.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No receipts found.</p>}
+        {receipts.length === 0 && <p className="py-8 text-center text-sm text-muted">No receipts found.</p>}
         <Pagination
           page={page}
           totalPages={Math.max(1, Math.ceil(totalCount / pageSize))}

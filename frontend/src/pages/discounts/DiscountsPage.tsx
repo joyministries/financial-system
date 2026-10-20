@@ -227,8 +227,8 @@ export default function DiscountsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Discounts</h1>
-          <p className="text-sm text-slate-500">Manage per-student fee discounts and bulk overrides</p>
+          <h1 className="text-2xl font-bold text-ink">Discounts</h1>
+          <p className="text-sm text-muted">Manage per-student fee discounts and bulk overrides</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -250,16 +250,16 @@ export default function DiscountsPage() {
 
       {/* Single Discount Form */}
       {showForm && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Apply Discount to Student</h2>
-            <button onClick={() => { setShowForm(false); resetForm(); }} className="text-slate-400 hover:text-slate-600">
+            <h2 className="text-lg font-semibold text-ink">Apply Discount to Student</h2>
+            <button onClick={() => { setShowForm(false); resetForm(); }} className="text-faint hover:text-muted">
               <X className="h-5 w-5" />
             </button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Student *</label>
+              <label className="block text-sm font-medium text-body">Student *</label>
               <select value={formStudentId} onChange={e => { setFormStudentId(e.target.value); setFormFeeId(''); }} className="input mt-1">
                 <option value="">Select student...</option>
                 {students.filter(s => s.is_active && s.registration_status === 'approved').map(s => (
@@ -268,7 +268,7 @@ export default function DiscountsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Fee Structure *</label>
+              <label className="block text-sm font-medium text-body">Fee Structure *</label>
               <select value={formFeeId} onChange={e => setFormFeeId(e.target.value)} className="input mt-1" disabled={!selectedGradeId}>
                 <option value="">{selectedGradeId ? 'Select fee...' : 'Select a student first'}</option>
                 {feesForSingle.map(f => (
@@ -277,14 +277,14 @@ export default function DiscountsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Discount Type *</label>
+              <label className="block text-sm font-medium text-body">Discount Type *</label>
               <select value={formType} onChange={e => setFormType(e.target.value as any)} className="input mt-1">
                 <option value="percent">Percentage Discount (%)</option>
                 <option value="override">Fixed Amount Override (R)</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-body">
                 {formType === 'percent' ? 'Discount Percentage *' : 'Override Amount (R) *'}
               </label>
               <input
@@ -299,7 +299,7 @@ export default function DiscountsPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">Reason</label>
+              <label className="block text-sm font-medium text-body">Reason</label>
               <input
                 type="text"
                 value={formReason}
@@ -321,16 +321,16 @@ export default function DiscountsPage() {
 
       {/* Bulk Discount Form */}
       {showBulk && (
-        <div className="rounded-2xl border border-primary-200 bg-primary-50/30 p-6 shadow-sm">
+        <div className="rounded-xl border border-primary-200 bg-primary-50/30 p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Bulk Discount — Apply to Multiple Students</h2>
-            <button onClick={() => { setShowBulk(false); resetBulk(); }} className="text-slate-400 hover:text-slate-600">
+            <h2 className="text-lg font-semibold text-ink">Bulk Discount — Apply to Multiple Students</h2>
+            <button onClick={() => { setShowBulk(false); resetBulk(); }} className="text-faint hover:text-muted">
               <X className="h-5 w-5" />
             </button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Filter by Grade</label>
+              <label className="block text-sm font-medium text-body">Filter by Grade</label>
               <select value={bulkGradeId} onChange={e => { setBulkGradeId(e.target.value); setBulkFeeId(''); setBulkSelected(new Set()); setBulkSelectAll(false); }} className="input mt-1">
                 <option value="">All grades</option>
                 {grades.map(g => (
@@ -339,7 +339,7 @@ export default function DiscountsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Fee Structure *</label>
+              <label className="block text-sm font-medium text-body">Fee Structure *</label>
               <select value={bulkFeeId} onChange={e => setBulkFeeId(e.target.value)} className="input mt-1" disabled={!bulkGradeId}>
                 <option value="">{bulkGradeId ? 'Select fee...' : 'Select a grade first'}</option>
                 {feesForBulk.map(f => (
@@ -349,14 +349,14 @@ export default function DiscountsPage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Type *</label>
+                <label className="block text-sm font-medium text-body">Type *</label>
                 <select value={bulkType} onChange={e => setBulkType(e.target.value as any)} className="input mt-1">
                   <option value="percent">% Discount</option>
                   <option value="override">R Override</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Amount *</label>
+                <label className="block text-sm font-medium text-body">Amount *</label>
                 <input
                   type="number"
                   min="0"
@@ -370,7 +370,7 @@ export default function DiscountsPage() {
               </div>
             </div>
             <div className="sm:col-span-3">
-              <label className="block text-sm font-medium text-slate-700">Reason</label>
+              <label className="block text-sm font-medium text-body">Reason</label>
               <input
                 type="text"
                 value={bulkReason}
@@ -382,12 +382,12 @@ export default function DiscountsPage() {
           </div>
 
           {/* Student selection */}
-          <div className="mt-4 rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <span className="text-sm font-medium text-slate-700">
+          <div className="mt-4 rounded-xl border border-line bg-white">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <span className="text-sm font-medium text-body">
                 Select Students ({bulkSelected.size} of {bulkStudents.length} selected)
               </span>
-              <button onClick={toggleBulkSelectAll} className="text-sm font-medium text-primary-600 hover:text-primary-700">
+              <button onClick={toggleBulkSelectAll} className="text-sm font-medium text-primary-800 hover:text-primary-800">
                 {bulkSelectAll ? 'Deselect All' : 'Select All'}
               </button>
             </div>
@@ -397,23 +397,23 @@ export default function DiscountsPage() {
                 return (
                   <label
                     key={s.id}
-                    className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-2.5 hover:bg-slate-50 last:border-b-0"
+                    className="flex cursor-pointer items-center gap-3 border-b border-line-soft px-4 py-2.5 hover:bg-[#fdfbf5] last:border-b-0"
                   >
                     <input
                       type="checkbox"
                       checked={bulkSelected.has(s.id)}
                       onChange={() => toggleBulkStudent(s.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800 focus:ring-primary-500"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900">{s.first_name} {s.last_name}</p>
-                      <p className="text-xs text-slate-500">{s.student_number} · {gradeName}</p>
+                      <p className="text-sm font-medium text-ink">{s.first_name} {s.last_name}</p>
+                      <p className="text-xs text-muted">{s.student_number} · {gradeName}</p>
                     </div>
                   </label>
                 );
               })}
               {bulkStudents.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-slate-400">No students found</p>
+                <p className="px-4 py-8 text-center text-sm text-faint">No students found</p>
               )}
             </div>
           </div>
@@ -433,11 +433,11 @@ export default function DiscountsPage() {
       )}
 
       {/* Existing Overrides Table */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">Active Discounts ({filteredOverrides.length})</h2>
+      <div className="rounded-xl border border-line bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="text-lg font-semibold text-ink">Active Discounts ({filteredOverrides.length})</h2>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
             <input
               type="text"
               value={search}
@@ -450,7 +450,7 @@ export default function DiscountsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-line-soft text-xs uppercase tracking-wider text-muted">
                 <th className="px-6 py-3">Student</th>
                 <th className="px-6 py-3">Grade</th>
                 <th className="px-6 py-3">Fee Structure</th>
@@ -462,18 +462,18 @@ export default function DiscountsPage() {
             </thead>
             <tbody>
               {filteredOverrides.map(o => (
-                <tr key={o.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="px-6 py-3 font-medium text-slate-900">{getStudentName(o.student_id)}</td>
-                  <td className="px-6 py-3 text-slate-600">{getStudentGrade(o.student_id)}</td>
-                  <td className="px-6 py-3 text-slate-600">{getFeeLabel(o.fee_structure_id)}</td>
-                  <td className="px-6 py-3 font-semibold text-slate-900">
+                <tr key={o.id} className="border-b border-line-soft hover:bg-[#fdfbf5]">
+                  <td className="px-6 py-3 font-medium text-ink">{getStudentName(o.student_id)}</td>
+                  <td className="px-6 py-3 text-muted">{getStudentGrade(o.student_id)}</td>
+                  <td className="px-6 py-3 text-muted">{getFeeLabel(o.fee_structure_id)}</td>
+                  <td className="px-6 py-3 font-semibold text-ink">
                     {o.discount_type === 'percent' ? `${o.annual_amount}%` : money(o.annual_amount)}
                   </td>
                   <td className="px-6 py-3">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                       o.discount_type === 'percent'
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'bg-green-50 text-green-700'
+                        ? 'bg-[#f4f6f9] text-primary-700'
+                        : 'bg-[#eef6f1] text-[#1c7a4f]'
                     }`}>
                       {o.discount_type === 'percent' ? (
                         <><Percent className="mr-0.5 h-3 w-3" /> Percent</>
@@ -482,11 +482,11 @@ export default function DiscountsPage() {
                       )}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-slate-500 max-w-[200px] truncate">{o.reason || '—'}</td>
+                  <td className="px-6 py-3 text-muted max-w-[200px] truncate">{o.reason || '—'}</td>
                   <td className="px-6 py-3 text-right">
                     <button
                       onClick={() => handleDelete(o.id)}
-                      className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                      className="rounded-lg p-1.5 text-faint transition-colors hover:bg-[#fbeeec] hover:text-[#a8382c]"
                       title="Remove discount"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -496,8 +496,8 @@ export default function DiscountsPage() {
               ))}
               {filteredOverrides.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                    <Percent className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                  <td colSpan={7} className="px-6 py-12 text-center text-faint">
+                    <Percent className="mx-auto mb-2 h-8 w-8 text-line" />
                     <p className="font-medium">No discounts configured</p>
                     <p className="mt-1 text-sm">Click "Single Discount" or "Bulk Discount" to get started</p>
                   </td>

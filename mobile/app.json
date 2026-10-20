@@ -3,15 +3,10 @@
     "name": "Lambton School",
     "slug": "school-finance-mobile",
     "version": "1.0.0",
+    "sdkVersion": "57.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#132043"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "co.za.lambtonchristian.school",
@@ -44,7 +39,9 @@
           "icon": "./assets/notification-icon.png",
           "color": "#C08A34"
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

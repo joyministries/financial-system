@@ -19,11 +19,11 @@ import {
 } from 'lucide-react';
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: typeof Bell; color: string }> = {
-  payment_received: { label: 'Payment', icon: CreditCard, color: 'text-green-600 bg-green-50' },
-  parent_registered: { label: 'Registration', icon: User, color: 'text-blue-600 bg-blue-50' },
-  student_applied: { label: 'Application', icon: GraduationCap, color: 'text-amber-600 bg-amber-50' },
-  payment_reversed: { label: 'Reversal', icon: AlertTriangle, color: 'text-red-600 bg-red-50' },
-  system: { label: 'System', icon: Cog, color: 'text-slate-600 bg-slate-50' },
+  payment_received: { label: 'Payment', icon: CreditCard, color: 'text-[#1c7a4f] bg-[#eef6f1]' },
+  parent_registered: { label: 'Registration', icon: User, color: 'text-primary-600 bg-[#f4f6f9]' },
+  student_applied: { label: 'Application', icon: GraduationCap, color: 'text-[#8a6f13] bg-[#fbf4e2]' },
+  payment_reversed: { label: 'Reversal', icon: AlertTriangle, color: 'text-[#a8382c] bg-[#fbeeec]' },
+  system: { label: 'System', icon: Cog, color: 'text-muted bg-[#faf8f2]' },
 };
 
 const ROLE_OPTIONS = [
@@ -107,8 +107,8 @@ export default function NotificationHistoryPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Notification History</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-bold text-ink">Notification History</h1>
+        <p className="text-sm text-muted">
           {isAdmin
             ? 'All notifications sent across the system'
             : 'Notifications you have received'}
@@ -116,9 +116,9 @@ export default function NotificationHistoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-sm sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
             type="text"
             value={searchInput}
@@ -142,51 +142,51 @@ export default function NotificationHistoryPage() {
       </div>
 
       {/* List */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="rounded-xl border border-line bg-white shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-            <Bell className="mb-3 h-10 w-10 text-slate-300" />
+          <div className="flex flex-col items-center justify-center py-16 text-faint">
+            <Bell className="mb-3 h-10 w-10 text-line" />
             <p className="font-medium">No notifications found</p>
             <p className="mt-1 text-sm">Try adjusting your filters</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-line-soft">
             {items.map(item => {
               const config = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.system;
               const Icon = config.icon;
               return (
-                <div key={item.id} className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50">
+                <div key={item.id} className="flex items-start gap-4 px-6 py-4 hover:bg-[#fdfbf5]">
                   <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${config.color}`}>
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                        <p className="mt-0.5 text-sm text-slate-600 line-clamp-2">{item.message}</p>
+                        <p className="text-sm font-semibold text-ink">{item.title}</p>
+                        <p className="mt-0.5 text-sm text-muted line-clamp-2">{item.message}</p>
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-2">
                         {!item.is_read && (
-                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          <span className="inline-flex items-center rounded-full bg-[#fbf4e2] px-2 py-0.5 text-xs font-medium text-[#8a6f13]">
                             Unread
                           </span>
                         )}
                         {item.is_read && (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className="h-4 w-4 text-[#1c7a4f]" />
                         )}
                       </div>
                     </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint">
                       {isAdmin && item.recipient_name && (
                         <span className="flex items-center gap-1">
                           <User className="h-3 w-3" />
                           {item.recipient_name}
                           {item.recipient_role && (
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                            <span className="rounded bg-[#f3efe6] px-1.5 py-0.5 text-[10px] font-medium text-muted">
                               {item.recipient_role}
                             </span>
                           )}
@@ -197,7 +197,7 @@ export default function NotificationHistoryPage() {
                         {timeAgo(item.created_at)}
                       </span>
                       {item.read_at && (
-                        <span className="flex items-center gap-1 text-green-600">
+                        <span className="flex items-center gap-1 text-[#1c7a4f]">
                           <Mail className="h-3 w-3" />
                           Read {timeAgo(item.read_at)}
                         </span>
@@ -215,15 +215,15 @@ export default function NotificationHistoryPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3">
-            <p className="text-sm text-slate-500">
+          <div className="flex items-center justify-between border-t border-line px-6 py-3">
+            <p className="text-sm text-muted">
               Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
             </p>
             <div className="flex gap-1">
               <button
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted hover:bg-[#f3efe6] disabled:opacity-40"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -238,7 +238,7 @@ export default function NotificationHistoryPage() {
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
                       p === page
                         ? 'bg-primary-500 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
+                        : 'text-muted hover:bg-[#f3efe6]'
                     }`}
                   >
                     {p + 1}
@@ -248,7 +248,7 @@ export default function NotificationHistoryPage() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted hover:bg-[#f3efe6] disabled:opacity-40"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

@@ -58,6 +58,8 @@ function ParentTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         header: (props) => <AppHeader {...props} />,
+        headerStyle: { backgroundColor: 'transparent' },
+        headerBackground: () => null,
         tabBarActiveTintColor: colors.accentDark,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: {

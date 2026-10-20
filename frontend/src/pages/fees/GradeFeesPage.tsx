@@ -107,13 +107,13 @@ export default function GradeFeesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Grade Fees</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-bold text-ink">Grade Fees</h1>
+          <p className="mt-1 text-sm text-muted">
             Monthly tuition for every grade, side by side. The annual figure is
             calculated as 12 monthly instalments.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-body">
           Academic year
           <input
             type="number"
@@ -129,24 +129,24 @@ export default function GradeFeesPage() {
         </label>
       </div>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
+      <div className="rounded-xl bg-white shadow-sm border border-line-soft overflow-x-auto">
         {loading ? (
           <div className="flex h-32 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <Loader2 className="h-6 w-6 animate-spin text-faint" />
           </div>
         ) : (
           <>
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="bg-[#faf8f2]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Grade</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Monthly tuition</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Annual</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Grade</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Monthly tuition</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Annual</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-line">
                 {grades.map((grade) => {
                   const fee = feeMap[grade.id] ?? null;
                   const editing = editingId === grade.id;
@@ -158,8 +158,8 @@ export default function GradeFeesPage() {
                     : null;
 
                   return (
-                    <tr key={grade.id} className={editing ? 'bg-blue-50/40' : 'hover:bg-slate-50'}>
-                      <td className="px-6 py-4 text-sm font-medium text-slate-900 whitespace-nowrap">
+                    <tr key={grade.id} className={editing ? 'bg-[#f4f6f9]/40' : 'hover:bg-[#fdfbf5]'}>
+                      <td className="px-6 py-4 text-sm font-medium text-ink whitespace-nowrap">
                         {grade.name}
                       </td>
 
@@ -176,33 +176,33 @@ export default function GradeFeesPage() {
                               if (e.key === 'Enter') save(grade.id);
                               if (e.key === 'Escape') cancelEdit();
                             }}
-                            className="w-36 rounded-lg border border-blue-300 px-3 py-1.5 text-right text-sm focus:border-blue-500 focus:outline-none"
+                            className="w-36 rounded-lg border border-[#d8d2c4] px-3 py-1.5 text-right text-sm focus:border-accent-500 focus:outline-none"
                             aria-label={`${grade.name} monthly tuition`}
                           />
                         ) : preview ? (
-                          <span className="text-blue-700">{rands(preview.monthly)}</span>
+                          <span className="text-primary-700">{rands(preview.monthly)}</span>
                         ) : monthly ? (
-                          <span className="font-medium text-slate-900">{rands(Number(monthly))}</span>
+                          <span className="font-medium text-ink">{rands(Number(monthly))}</span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-faint">—</span>
                         )}
                       </td>
 
-                      <td className="px-6 py-4 text-right text-sm text-slate-600 tabular-nums">
+                      <td className="px-6 py-4 text-right text-sm text-muted tabular-nums">
                         {editing && preview
                           ? rands(preview.annual)
                           : annual
                             ? rands(annual)
-                            : <span className="text-slate-400">—</span>}
+                            : <span className="text-faint">—</span>}
                       </td>
 
                       <td className="px-6 py-4">
                         {fee ? (
-                          <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                          <span className="inline-flex rounded-full bg-[#e3f0e8] px-2 py-1 text-xs font-medium text-[#1c7a4f]">
                             Set for {year}
                           </span>
                         ) : (
-                          <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                          <span className="inline-flex rounded-full bg-[#f7eccd] px-2 py-1 text-xs font-medium text-[#8a6f13]">
                             Not set
                           </span>
                         )}
@@ -215,7 +215,7 @@ export default function GradeFeesPage() {
                               <button
                                 onClick={() => save(grade.id)}
                                 disabled={saving}
-                                className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                                className="rounded-lg bg-primary-900 px-3 py-1 text-xs font-medium text-white hover:bg-primary-900 disabled:opacity-50"
                               >
                                 <Check className="mr-1 inline h-3 w-3" />
                                 {saving ? 'Saving…' : 'Save'}
@@ -223,7 +223,7 @@ export default function GradeFeesPage() {
                               <button
                                 onClick={cancelEdit}
                                 disabled={saving}
-                                className="rounded-lg bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                                className="rounded-lg bg-white px-3 py-1 text-xs font-medium text-muted ring-1 ring-[#d8d2c4] hover:bg-[#fdfbf5] disabled:opacity-50"
                               >
                                 <X className="mr-1 inline h-3 w-3" />
                                 Cancel
@@ -232,7 +232,7 @@ export default function GradeFeesPage() {
                           ) : (
                             <button
                               onClick={() => startEdit(grade.id)}
-                              className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                              className="rounded-lg bg-[#f4f6f9] px-3 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
                             >
                               <Pencil className="mr-1 inline h-3 w-3" />
                               {fee ? 'Edit' : 'Set fee'}
@@ -247,7 +247,7 @@ export default function GradeFeesPage() {
             </table>
 
             {grades.length === 0 && (
-              <p className="py-8 text-center text-sm text-slate-500">
+              <p className="py-8 text-center text-sm text-muted">
                 No grades yet. Add a grade first, then set its fee here.
               </p>
             )}
@@ -256,7 +256,7 @@ export default function GradeFeesPage() {
       </div>
 
       {grades.length > 0 && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted">
           {setCount} of {grades.length} grades have a tuition fee set for {year}.
           {' '}Changes here apply to every student in the grade.
         </p>

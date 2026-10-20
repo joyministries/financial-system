@@ -4,43 +4,89 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Lambton ink — the letterhead's black text, scaled for UI roles
-        primary: {
-          50: '#f6f6f7',
-          100: '#e8e8ea',
-          200: '#d2d2d7',
-          300: '#acadb5',
-          400: '#82838d',
-          500: '#5c5d66',
-          600: '#43444c',
-          700: '#333438',
-          800: '#232326',
-          900: '#1c1c1f',
-          950: '#0f0f11',
+        /* Ledger palette — warm paper, ink, one gold that points. */
+        ink: '#151517',
+        body: '#3f4450',
+        muted: '#6d7280',
+        faint: '#9a958a',
+        line: '#e7e3da',
+        'line-soft': '#f0ece3',
+        paper: '#faf9f5',
+        panel: '#ffffff',
+
+        navy: {
+          DEFAULT: '#0f1b2b',
+          50: '#f4f6f9',
+          100: '#e6eaf0',
+          200: '#cfd6e0',
+          300: '#a7b2c2',
+          400: '#77869a',
+          500: '#54637a',
+          600: '#3c4a5f',
+          700: '#2b3748',
+          800: '#1b2737',
+          900: '#0f1b2b',
+          950: '#0a131f',
         },
-        // Lambton gold — from the school crest
+
+        gold: {
+          DEFAULT: '#c9a227',
+          50: '#fdf9ec',
+          100: '#f9efcc',
+          200: '#f2df9a',
+          300: '#e0c465',
+          400: '#d4b13c',
+          500: '#c9a227',
+          600: '#a9851b',
+          700: '#8a6f13',
+          800: '#6b5413',
+          900: '#554211',
+        },
+
+        /* Brand action = ink. Kept as `primary` so existing markup keeps working. */
+        primary: {
+          50: '#f4f6f9',
+          100: '#e6eaf0',
+          200: '#cfd6e0',
+          300: '#a7b2c2',
+          400: '#77869a',
+          500: '#54637a',
+          600: '#3c4a5f',
+          700: '#2b3748',
+          800: '#1b2737',
+          900: '#0f1b2b',
+          950: '#0a131f',
+        },
+
+        /* School gold, unchanged name. */
         accent: {
           50: '#fdf9ec',
           100: '#f9efcc',
           200: '#f2df9a',
-          300: '#e9c766',
-          400: '#dfb445',
+          300: '#e0c465',
+          400: '#d4b13c',
           500: '#c9a227',
           600: '#a9851b',
-          700: '#8a6d16',
+          700: '#8a6f13',
           800: '#6b5413',
           900: '#554211',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-        // Letterhead display face (Trebuchet MS) for brand headings
-        display: ['"Trebuchet MS"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Manrope', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        display: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      borderRadius: {
+        md: '7px',
+        lg: '9px',
+        xl: '12px',
+        '2xl': '14px',
       },
       boxShadow: {
-        soft: '0 1px 2px rgba(16,24,40,0.04), 0 4px 16px -4px rgba(16,24,40,0.08)',
-        card: '0 1px 3px rgba(16,24,40,0.06), 0 12px 32px -12px rgba(16,24,40,0.14)',
-        lift: '0 2px 4px rgba(16,24,40,0.06), 0 16px 40px -12px rgba(16,24,40,0.18)',
+        soft: '0 1px 2px rgba(21,21,23,0.04)',
+        card: '0 1px 2px rgba(21,21,23,0.05), 0 12px 28px -18px rgba(21,21,23,0.18)',
+        lift: '0 18px 44px -16px rgba(21,21,23,0.28)',
       },
       keyframes: {
         'fade-in': {

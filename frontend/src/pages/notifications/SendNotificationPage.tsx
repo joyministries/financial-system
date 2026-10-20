@@ -34,16 +34,16 @@ export default function SendNotificationPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Send Notification</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-bold text-ink">Send Notification</h1>
+        <p className="mt-1 text-sm text-muted">
           Send an in-app notification and push alert to all registered parents.
         </p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="rounded-2xl bg-white p-6 shadow-card space-y-5">
+      <form onSubmit={handleSubmit} className="rounded-xl bg-white p-6 shadow-card space-y-5">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+          <label className="block text-sm font-medium text-body mb-1">Title</label>
           <input
             type="text"
             value={title}
@@ -56,7 +56,7 @@ export default function SendNotificationPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+          <label className="block text-sm font-medium text-body mb-1">Message</label>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -66,7 +66,7 @@ export default function SendNotificationPage() {
             className="input resize-none"
             required
           />
-          <p className="mt-1 text-xs text-slate-400">{message.length}/2000 characters</p>
+          <p className="mt-1 text-xs text-faint">{message.length}/2000 characters</p>
         </div>
 
         <button
@@ -85,24 +85,24 @@ export default function SendNotificationPage() {
 
       {/* Result */}
       {result && (
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
+        <div className="rounded-xl border border-[#cfe3d8] bg-[#eef6f1] p-6">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#1c7a4f]" />
             <div>
-              <h3 className="text-sm font-semibold text-green-900">Notification sent successfully</h3>
+              <h3 className="text-sm font-semibold text-[#125435]">Notification sent successfully</h3>
               <div className="mt-2 grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 text-green-600" />
+                  <Bell className="h-4 w-4 text-[#1c7a4f]" />
                   <div>
-                    <p className="text-lg font-bold text-green-900">{result.in_app_count}</p>
-                    <p className="text-xs text-green-700">In-app notifications</p>
+                    <p className="text-lg font-bold text-[#125435]">{result.in_app_count}</p>
+                    <p className="text-xs text-[#1c7a4f]">In-app notifications</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-green-600" />
+                  <Users className="h-4 w-4 text-[#1c7a4f]" />
                   <div>
-                    <p className="text-lg font-bold text-green-900">{result.push_sent}</p>
-                    <p className="text-xs text-green-700">Push notifications delivered</p>
+                    <p className="text-lg font-bold text-[#125435]">{result.push_sent}</p>
+                    <p className="text-xs text-[#1c7a4f]">Push notifications delivered</p>
                   </div>
                 </div>
               </div>
@@ -112,12 +112,12 @@ export default function SendNotificationPage() {
       )}
 
       {/* Info card */}
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+      <div className="rounded-xl border border-line bg-[#f4f6f9] p-5">
         <div className="flex items-start gap-3">
-          <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" />
-          <div className="text-sm text-blue-800">
+          <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary-600" />
+          <div className="text-sm text-ink">
             <p className="font-semibold">How it works</p>
-            <ul className="mt-2 space-y-1 list-disc list-inside text-blue-700">
+            <ul className="mt-2 space-y-1 list-disc list-inside text-primary-700">
               <li>An in-app notification appears in each parent's notification bell.</li>
               <li>A push notification is sent to every parent who has the mobile app installed.</li>
               <li>Parents without push tokens still see the notification in-app.</li>

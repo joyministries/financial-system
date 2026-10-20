@@ -9,57 +9,59 @@ interface AuthLayoutProps {
 }
 
 const HIGHLIGHTS = [
-  { value: 'R 0', label: 'setup fees', sub: 'for parents' },
-  { value: '24/7', label: 'portal access', sub: 'payments & history' },
-  { value: 'PDF', label: 'receipts', sub: 'instant download' },
+  { value: 'R 0', label: 'Setup fees', sub: 'for parents' },
+  { value: '24/7', label: 'Portal access', sub: 'payments & history' },
+  { value: 'PDF', label: 'Receipts', sub: 'instant download' },
 ];
 
 /**
- * Premium split-screen shell for auth pages: navy brand panel on the left
- * (desktop), centered form card on the right.
+ * Split-screen shell for auth pages: ink brand panel on the left (desktop),
+ * form on warm paper to the right.
  */
 export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-paper">
       {/* Brand panel — desktop only */}
-      <div className="relative hidden h-screen w-[46%] overflow-hidden bg-[#131d3c] lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_280px_at_85%_-10%,rgba(212,175,55,0.16),transparent),radial-gradient(600px_420px_at_0%_110%,rgba(59,99,194,0.28),transparent)]" />
+      <div className="relative hidden h-screen w-[46%] flex-col justify-between overflow-hidden bg-primary-900 p-12 lg:flex">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-accent-500/70" />
+        <div className="pointer-events-none absolute -left-24 bottom-0 h-72 w-72 rounded-full border border-white/[0.06]" />
 
         <div className="relative flex items-center gap-3">
-          <BrandMark className="h-11 w-11 text-xl" />
+          <BrandMark className="h-10 w-10 text-lg" />
           <div>
-            <p className="font-display text-lg font-bold leading-tight text-white">Lambton Christian School</p>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-300">
+            <p className="text-[13.5px] font-bold leading-tight text-white">Lambton Christian School</p>
+            <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-accent-300">
               Finance Portal
             </p>
           </div>
         </div>
 
         <div className="relative">
-          <h2 className="max-w-md text-3xl font-bold leading-tight text-white">
-            Fees, payments and statements {' '}
-            <span className="text-accent-300">all in one place.</span>
-          </h2>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-300">
-            Lambton Christian School's finance portal keeps parents and staff in sync, pay fees online,
-            download receipts and statements, and follow every rand of the academic year.
+          <p className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-white/40">
+            Fees · Payments · Statements
           </p>
-          <div className="mt-10 grid max-w-md grid-cols-3 gap-3">
+          <h2 className="mt-4 max-w-md text-[34px] font-bold leading-[1.08] tracking-[-0.03em] text-white">
+            Every rand of the school year,
+            <span className="text-accent-300"> in one ledger.</span>
+          </h2>
+          <p className="mt-4 max-w-sm text-[13.5px] leading-relaxed text-white/60">
+            Parents pay online, download receipts and statements; the bursar sees the same numbers
+            at the same moment.
+          </p>
+
+          <div className="mt-10 grid max-w-md grid-cols-3 border-t border-white/15">
             {HIGHLIGHTS.map((h) => (
-              <div
-                key={h.label}
-                className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
-              >
-                <p className="text-lg font-bold text-accent-300">{h.value}</p>
-                <p className="mt-0.5 text-xs font-medium text-white">{h.label}</p>
-                <p className="text-[11px] text-slate-400">{h.sub}</p>
+              <div key={h.label} className="border-r border-white/10 py-4 pr-3 last:border-r-0 last:pr-0">
+                <p className="text-[19px] font-bold leading-none text-white">{h.value}</p>
+                <p className="mt-1.5 text-[11.5px] font-semibold text-white/80">{h.label}</p>
+                <p className="text-[10.5px] text-white/40">{h.sub}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative text-xs text-slate-400">
-          © {new Date().getFullYear()} Lambton Christian School. All rights reserved.
+        <p className="relative font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/35">
+          © {new Date().getFullYear()} Lambton Christian School
         </p>
       </div>
 
@@ -68,10 +70,10 @@ export default function AuthLayout({ children, maxW = 'md' }: AuthLayoutProps) {
         <div className={clsx('my-auto w-full py-12 animate-fade-up', maxW === 'lg' ? 'max-w-lg' : 'max-w-md')}>
           {/* Brand — mobile */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <BrandMark className="h-11 w-11 text-xl" />
+            <BrandMark className="h-10 w-10 text-lg" />
             <div>
-              <p className="font-display text-lg font-bold leading-tight text-slate-900">Lambton Christian School</p>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-600">
+              <p className="text-[13.5px] font-bold leading-tight text-ink">Lambton Christian School</p>
+              <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted">
                 Finance Portal
               </p>
             </div>

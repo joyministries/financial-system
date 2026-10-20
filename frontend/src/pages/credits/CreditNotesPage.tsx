@@ -144,7 +144,7 @@ export default function CreditNotesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">Credit Notes</h1>
+        <h1 className="text-2xl font-bold text-ink">Credit Notes</h1>
         <div className="flex gap-2">
           <StudentSearchSelect
             value={selectedStudent}
@@ -164,7 +164,7 @@ export default function CreditNotesPage() {
       <Modal open={showForm} onClose={closeForm} title="Issue Credit Note">
         <form onSubmit={handleIssue} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Student</label>
+            <label className="block text-sm font-medium text-body">Student</label>
             <div className="mt-1">
               <StudentSearchSelect
                 value={studentId}
@@ -174,17 +174,17 @@ export default function CreditNotesPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Credit Type</label>
+            <label className="block text-sm font-medium text-body">Credit Type</label>
             <select value={creditType} onChange={(e) => setCreditType(e.target.value)} className="input mt-1">
               {CREDIT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Description</label>
+            <label className="block text-sm font-medium text-body">Description</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} required className="input mt-1" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Amount (R)</label>
+            <label className="block text-sm font-medium text-body">Amount (R)</label>
             <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="input mt-1" />
           </div>
           <label className="flex items-center gap-2 pt-1">
@@ -192,9 +192,9 @@ export default function CreditNotesPage() {
               type="checkbox"
               checked={autoApply}
               onChange={(e) => setAutoApply(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-primary-600"
+              className="h-4 w-4 rounded border-[#d8d2c4] text-primary-800"
             />
-            <span className="text-sm text-slate-700">Apply against outstanding balance immediately</span>
+            <span className="text-sm text-body">Apply against outstanding balance immediately</span>
           </label>
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={submitting} className="btn btn-primary">
@@ -206,35 +206,35 @@ export default function CreditNotesPage() {
       </Modal>
 
       {/* ── Table ──────────────────────────────────────── */}
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
+      <div className="rounded-xl bg-white shadow-sm border border-line-soft overflow-x-auto">
         {loading ? (
           <div className="flex h-32 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
           </div>
         ) : (
           <>
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="bg-[#faf8f2]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Credit No.</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Description</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Amount</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Remaining</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Credit No.</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Student</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Description</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Amount</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Remaining</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-line">
                 {pagedCredits.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.credit_number}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700">{studentName(c.student_id)}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{c.credit_type}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500 max-w-[200px] truncate">{c.description}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900 text-right">R {Number(c.amount).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500 text-right">R {Number(c.remaining_amount).toLocaleString()}</td>
+                  <tr key={c.id} className="hover:bg-[#fdfbf5]">
+                    <td className="px-6 py-4 text-sm font-medium text-ink">{c.credit_number}</td>
+                    <td className="px-6 py-4 text-sm text-body">{studentName(c.student_id)}</td>
+                    <td className="px-6 py-4 text-sm text-muted">{c.credit_type}</td>
+                    <td className="px-6 py-4 text-sm text-muted max-w-[200px] truncate">{c.description}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-ink text-right">R {Number(c.amount).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-muted text-right">R {Number(c.remaining_amount).toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <span className={clsx('inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_STYLES[c.status] ?? 'badge badge-neutral')}>
                         {STATUS_LABELS[c.status] ?? c.status}
@@ -245,7 +245,7 @@ export default function CreditNotesPage() {
                         {c.status === 'issued' && (
                           <button
                             onClick={() => handleApply(c.id)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-green-300 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#cfe3d8] px-2.5 py-1.5 text-xs font-medium text-[#1c7a4f] hover:bg-[#eef6f1]"
                             title="Apply against outstanding"
                           >
                             <HandCoins className="h-3.5 w-3.5" /> Apply
@@ -254,7 +254,7 @@ export default function CreditNotesPage() {
                         {(c.status === 'issued' || c.status === 'partial') && (
                           <button
                             onClick={() => handleVoid(c.id)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#ecd2cd] px-2.5 py-1.5 text-xs font-medium text-[#8f2e24] hover:bg-[#fbeeec]"
                             title="Void credit note"
                           >
                             <FileX2 className="h-3.5 w-3.5" /> Void
@@ -267,7 +267,7 @@ export default function CreditNotesPage() {
               </tbody>
             </table>
             {allCredits.length === 0 && !loading && (
-              <p className="py-8 text-center text-sm text-slate-500">
+              <p className="py-8 text-center text-sm text-muted">
                 {selectedStudent ? 'No credit notes for this student.' : 'No credit notes found.'}
               </p>
             )}

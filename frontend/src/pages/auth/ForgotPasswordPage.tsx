@@ -47,15 +47,15 @@ export default function ForgotPasswordPage() {
   };
 
   const inputCls =
-    'block w-full rounded-xl border border-slate-300 py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20';
+    'block w-full rounded-xl border border-[#d8d2c4] py-2.5 text-sm shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20';
   const btnCls =
     'btn btn-primary w-full';
 
   return (
     <AuthLayout>
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-card">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reset Password</h1>
-        <p className="mt-1 text-sm text-slate-500">
+      <div className="rounded-xl border border-line bg-white p-8 shadow-card">
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Reset Password</h1>
+        <p className="mt-1 text-sm text-muted">
           {step === 1
             ? 'Enter your account email and we will send a reset token.'
             : 'Enter the reset token from your email and your new password.'}
@@ -64,9 +64,9 @@ export default function ForgotPasswordPage() {
         {step === 1 ? (
           <form onSubmit={requestReset} className="mt-7 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Email</label>
+              <label className="block text-sm font-medium text-body">Email</label>
               <div className="relative mt-1.5">
-                <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
                 <input
                   type="email"
                   value={email}
@@ -83,15 +83,15 @@ export default function ForgotPasswordPage() {
         ) : (
           <form onSubmit={resetPassword} className="mt-7 space-y-4">
             {resetToken && (
-              <div className="rounded-lg bg-green-50 p-3">
-                <p className="text-xs font-medium text-green-700">Reset token captured:</p>
-                <p className="mt-1 break-all font-mono text-sm text-green-800">{resetToken}</p>
+              <div className="rounded-lg bg-[#eef6f1] p-3">
+                <p className="text-xs font-medium text-[#1c7a4f]">Reset token captured:</p>
+                <p className="mt-1 break-all font-mono text-sm text-[#176641]">{resetToken}</p>
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700">Reset Token</label>
+              <label className="block text-sm font-medium text-body">Reset Token</label>
               <div className="relative mt-1.5">
-                <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
                 <input
                   type="text"
                   value={resetToken}
@@ -102,7 +102,7 @@ export default function ForgotPasswordPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">New Password</label>
+              <label className="block text-sm font-medium text-body">New Password</label>
               <input
                 type="password"
                 value={newPassword}
@@ -113,7 +113,7 @@ export default function ForgotPasswordPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Confirm New Password</label>
+              <label className="block text-sm font-medium text-body">Confirm New Password</label>
               <input
                 type="password"
                 value={confirm}
@@ -129,8 +129,8 @@ export default function ForgotPasswordPage() {
           </form>
         )}
 
-        <p className="mt-5 text-center text-sm text-slate-500">
-          <Link to="/login" className="font-medium text-primary-600 transition-colors hover:text-primary-700">
+        <p className="mt-5 text-center text-sm text-muted">
+          <Link to="/login" className="font-medium text-primary-800 transition-colors hover:text-primary-800">
             Back to sign in
           </Link>
         </p>

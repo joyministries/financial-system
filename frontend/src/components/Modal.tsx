@@ -30,22 +30,22 @@ export default function Modal({ open, onClose, title, subtitle, children }: Moda
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="fixed inset-0 animate-fade-in bg-slate-950/60 backdrop-blur-sm" />
-      <div className="relative z-10 max-h-[90vh] w-full max-w-lg animate-modal-in overflow-y-auto rounded-2xl border border-white/10 bg-white shadow-lift">
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-primary-50/80 via-white to-white px-6 py-4">
+      <div className="fixed inset-0 animate-fade-in bg-primary-950/55 backdrop-blur-[2px]" />
+      <div className="relative z-10 max-h-[90vh] w-full max-w-lg animate-modal-in overflow-y-auto rounded-xl border border-line bg-white shadow-lift">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-xl border-b border-line-soft bg-white px-5 py-4">
           <div>
-            <h2 className="text-base font-bold tracking-tight text-slate-900">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+            <h2 className="text-[15px] font-bold tracking-[-0.01em] text-ink">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-[12px] text-muted">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            className="-mr-1 rounded-md p-1.5 text-faint transition-colors hover:bg-[#f3efe6] hover:text-ink"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-5 py-4">{children}</div>
       </div>
     </div>
   );

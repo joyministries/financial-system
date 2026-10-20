@@ -74,7 +74,7 @@ export default function GradesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Grades</h1>
+        <h1 className="text-2xl font-bold text-ink">Grades</h1>
         <button onClick={() => setShowForm(true)} className="btn btn-primary">
           <Plus className="h-4 w-4" /> Add Grade
         </button>
@@ -83,7 +83,7 @@ export default function GradesPage() {
       <Modal open={showForm} onClose={closeForm} title={editingId ? 'Edit Grade' : 'New Grade'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Name</label>
+            <label className="block text-sm font-medium text-body">Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} required className="input mt-1" />
           </div>
           <div className="flex gap-2 pt-2">
@@ -95,23 +95,23 @@ export default function GradesPage() {
         </form>
       </Modal>
 
-      <div className="rounded-xl bg-white shadow-sm border border-slate-100 overflow-x-auto">
+      <div className="rounded-xl bg-white shadow-sm border border-line-soft overflow-x-auto">
         {loading ? (
-          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
+          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-faint" /></div>
         ) : (
           <>
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="bg-[#faf8f2]">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-line">
                 {grades.map((g) => (
-                  <tr key={g.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">{g.name}</td>
+                  <tr key={g.id} className="hover:bg-[#fdfbf5]">
+                    <td className="px-6 py-4 text-sm font-medium text-ink">{g.name}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${g.is_active ? 'badge badge-success' : g.is_archived ? 'badge badge-neutral' : 'badge badge-danger'}`}>
                         {g.is_active ? 'Active' : g.is_archived ? 'Archived' : 'Inactive'}
@@ -119,20 +119,20 @@ export default function GradesPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => handleEdit(g)} className="rounded p-1 text-slate-400 hover:text-blue-600" title="Edit"><Pencil className="h-4 w-4" /></button>
+                        <button onClick={() => handleEdit(g)} className="rounded p-1 text-faint hover:text-accent-700" title="Edit"><Pencil className="h-4 w-4" /></button>
                         {g.is_active ? (
-                          <button onClick={() => handleArchive(g.id)} className="rounded p-1 text-slate-400 hover:text-yellow-600" title="Archive"><Archive className="h-4 w-4" /></button>
+                          <button onClick={() => handleArchive(g.id)} className="rounded p-1 text-faint hover:text-[#8a6f13]" title="Archive"><Archive className="h-4 w-4" /></button>
                         ) : (
-                          <button onClick={() => handleActivate(g.id)} className="rounded p-1 text-slate-400 hover:text-green-600" title="Activate"><CheckCircle className="h-4 w-4" /></button>
+                          <button onClick={() => handleActivate(g.id)} className="rounded p-1 text-faint hover:text-[#1c7a4f]" title="Activate"><CheckCircle className="h-4 w-4" /></button>
                         )}
-                        <button onClick={() => handleDelete(g.id)} className="rounded p-1 text-slate-400 hover:text-red-600" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => handleDelete(g.id)} className="rounded p-1 text-faint hover:text-[#a8382c]" title="Delete"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {grades.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No grades found.</p>}
+            {grades.length === 0 && <p className="py-8 text-center text-sm text-muted">No grades found.</p>}
           </>
         )}
       </div>
