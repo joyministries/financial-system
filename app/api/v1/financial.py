@@ -1028,8 +1028,7 @@ async def export_report_excel(
     from io import BytesIO
 
     from openpyxl import Workbook
-    from openpyxl.styles import Font
-    from openpyxl.styles.patternfill import PatternFill
+    from openpyxl.styles import Font, PatternFill
 
     service = ReportService(db)
     month_name = calendar.month_name[month]
