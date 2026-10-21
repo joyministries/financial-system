@@ -25,6 +25,7 @@ import {
   Mail,
   MessageSquare,
   Pencil,
+  Plus,
   Send,
   Users,
   Save,
@@ -65,6 +66,7 @@ function TemplatesCard({
   loading,
   onSave,
   emptyText,
+  allowCreate = false,
 }: {
   title: string;
   description: string;
@@ -73,11 +75,43 @@ function TemplatesCard({
   loading: boolean;
   onSave: (template: SmsTemplate, body: string) => Promise<void>;
   emptyText: string;
+  allowCreate?: boolean;
 }) {
   const [selectedKey, setSelectedKey] = useState('');
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftBody, setDraftBody] = useState('');
+  const [creatingSave, setCreatingSave] = useState(false);
   const selected = templates.find((t) => t.key === selectedKey) ?? null;
+
+  /** URL/key-safe slug of the template name, e.g. "Sports Day" -> sports_day */
+  const slugify = (name: string) =>
+    name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 50);
+
+  const createTemplate = async () => {
+    const name = draftName.trim();
+    if (!name) return toast.error('Give the new template a name');
+    if (!draftBody.trim()) return toast.error('Write the template message');
+    let key = slugify(name);
+    if (!key) return toast.error('Use letters or numbers in the name');
+    if (templates.some((t) => t.key === key)) {
+      return toast.error('A template named like this already exists');
+    }
+    setCreatingSave(true);
+    try {
+      await smsApi.updateTemplate(key, { name, body: draftBody.trim(), is_active: true });
+      setCreating(false);
+      setDraftName('');
+      setDraftBody('');
+      setSelectedKey(key);
+    } catch {
+      toast.error('Failed to create template — please try again');
+    } finally {
+      setCreatingSave(false);
+    }
+  };
 
   // Pick the first template automatically once the list arrives.
   useEffect(() => {
@@ -106,11 +140,54 @@ function TemplatesCard({
 
   return (
     <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
-      <div className="flex items-center gap-2">
-        {icon}
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        </div>
+        {allowCreate && !loading && (
+          <button
+            type="button"
+            onClick={() => setCreating((c) => !c)}
+            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-primary-600 hover:bg-primary-50"
+          >
+            <Plus className="h-4 w-4" />
+            New template
+          </button>
+        )}
       </div>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
+
+      {allowCreate && creating && (
+        <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/60 p-4">
+          <p className="text-sm font-semibold text-slate-900">New template</p>
+          <input
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            placeholder="Template name, e.g. Sports Day"
+            className="input mt-2"
+          />
+          <textarea
+            value={draftBody}
+            onChange={(e) => setDraftBody(e.target.value)}
+            placeholder="Message… placeholders like {parent}, {student}, {amount} work"
+            rows={3}
+            className="input mt-2"
+          />
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={createTemplate} disabled={creatingSave} className="btn btn-primary">
+              {creatingSave ? 'Creating…' : 'Create Template'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCreating(false); setDraftName(''); setDraftBody(''); }}
+              className="btn btn-secondary"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="mt-4 flex justify-center py-6">
@@ -829,6 +906,7 @@ export default function SettingsPage() {
             loading={loadingTemplates}
             onSave={saveMessageTemplate}
             emptyText="No message templates yet."
+            allowCreate
           />
 
           {/* ── Registration Fee ─────────────────────────────── */}
