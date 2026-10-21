@@ -74,19 +74,31 @@ function TemplatesCard({
   onSave: (template: SmsTemplate, body: string) => Promise<void>;
   emptyText: string;
 }) {
-  const [editing, setEditing] = useState<SmsTemplate | null>(null);
+  const [selectedKey, setSelectedKey] = useState('');
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
+  const selected = templates.find((t) => t.key === selectedKey) ?? null;
+
+  // Pick the first template automatically once the list arrives.
+  useEffect(() => {
+    if (!selectedKey && templates.length > 0) {
+      setSelectedKey(templates[0].key);
+    }
+  }, [templates, selectedKey]);
+
+  // Selecting a template loads its current saved wording into the editor.
+  useEffect(() => {
+    setBody(selected?.body ?? '');
+  }, [selected]);
 
   const save = async () => {
-    if (!editing) return;
+    if (!selected) return;
     if (!body.trim()) return toast.error('Template content cannot be empty');
     setSaving(true);
     try {
-      await onSave(editing, body);
-      setEditing(null);
+      await onSave(selected, body);
     } catch {
-      // The page already reported it — leave the editor open with the draft.
+      // The page already reported it — keep the editor open with the draft.
     } finally {
       setSaving(false);
     }
@@ -105,62 +117,62 @@ function TemplatesCard({
           <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
         </div>
       ) : (
-        <ul className="mt-4 divide-y divide-slate-100">
-          {templates.map((t) => (
-            <li key={t.key} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900">{t.name}</p>
-                <p className="truncate text-xs text-slate-500">{t.body}</p>
+        <>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-slate-700">Choose a template</label>
+            <select
+              value={selectedKey}
+              onChange={(e) => setSelectedKey(e.target.value)}
+              className="input mt-1"
+              disabled={templates.length === 0}
+            >
+              {templates.length === 0 && <option value="">{emptyText}</option>}
+              {templates.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.name}{t.is_active ? '' : ' (disabled)'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selected && (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">{selected.name}</p>
+                <span className="flex items-center gap-2">
+                  {selected.is_default && (
+                    <span className="badge badge-neutral" title="This is the built-in text">
+                      Built-in default
+                    </span>
+                  )}
+                  {!selected.is_active && <span className="badge badge-warning">Disabled</span>}
+                </span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {t.is_default && (
-                  <span className="badge badge-neutral" title="Nothing saved yet — this is the built-in text">
-                    Built-in default
-                  </span>
-                )}
-                {!t.is_active && <span className="badge badge-warning">Disabled</span>}
+                  <p className="mt-0.5 text-xs text-slate-500">
+                Use placeholders in {'{braces}'}: {'{parent}'}, {'{student}'}, {'{amount}'},
+                {'{balance}'}, {'{link}'}, {'{month}'}, {'{year}'}, {'{receipt}'}
+              </p>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={4}
+                className="input mt-2"
+              />
+              <div className="mt-3 flex gap-2">
+                <button type="button" onClick={save} disabled={saving} className="btn btn-primary">
+                  {saving ? 'Saving…' : 'Save Template'}
+                </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditing(t);
-                    setBody(t.body);
-                  }}
-                  className="rounded p-1.5 text-slate-400 hover:text-primary-600 hover:bg-slate-100"
-                  title={`Edit ${t.name}`}
+                  onClick={() => setBody(selected.body)}
+                  className="btn btn-secondary"
                 >
-                  <Pencil className="h-4 w-4" />
+                  Reset
                 </button>
               </div>
-            </li>
-          ))}
-          {templates.length === 0 && (
-            <li className="py-6 text-center text-sm text-slate-400">{emptyText}</li>
+            </div>
           )}
-        </ul>
-      )}
-
-      {editing && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-900">{editing.name}</p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Use placeholders in {'{braces}'}: {'{parent}'}, {'{student}'}, {'{amount}'},
-            {'{balance}'}, {'{link}'}, {'{month}'}, {'{year}'}, {'{receipt}'}
-          </p>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={4}
-            className="input mt-2"
-          />
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={save} disabled={saving} className="btn btn-primary">
-              {saving ? 'Saving…' : 'Save Template'}
-            </button>
-            <button type="button" onClick={() => setEditing(null)} className="btn btn-secondary">
-              Cancel
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
