@@ -578,10 +578,6 @@ export const settingsApi = {
 };
 
 // ── SMS (staff) ──────────────────────────────────────────────
-// Saved template ids are UUIDs; anything else passed to renderTemplate is a
-// slot name (payment_receipt, statement_ready…).
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export const smsApi = {
   send: (data: { to_phone: string; content: string; student_id?: string | null }) =>
     api.post<SmsSendResponse>('/sms/send', data),
@@ -592,30 +588,11 @@ export const smsApi = {
   log: (params?: { limit?: number; offset?: number; status?: string }) =>
     api.get<PageResponse<SmsMessage>>(`/sms/messages`, { params }),
   templates: () => api.get<SmsTemplate[]>('/sms/templates'),
-
   statementTemplates: () => api.get<SmsTemplate[]>('/sms/statement-templates'),
-
-  /** Save a new variant of a message slot (first variant goes live). */
-  createTemplate: (data: { slot: string; name: string; body: string }) =>
-    api.post<SmsTemplate>('/sms/templates', data),
-
-  /** Edit a saved variant; is_active: true also makes it the one in use. */
-  updateTemplate: (id: string, data: { name?: string; body?: string; is_active?: boolean }) =>
-    api.put<SmsTemplate>(`/sms/templates/${id}`, data),
-
-  /** Choose which variant a slot sends; template_id null = built-in default. */
-  activateTemplate: (slot: string, templateId: string | null) =>
-    api.put<SmsTemplate>(`/sms/templates/${slot}/activate`, { template_id: templateId }),
-
-  deleteTemplate: (id: string) => api.delete<SmsTemplate>(`/sms/templates/${id}`),
-
-  /** Preview a template: saved variant id, or a slot name for the in-use one. */
-  renderTemplate: (idOrSlot: string | null, values: Record<string, string>) =>
-    api.post<SmsTemplateRenderResult>('/sms/templates/render', {
-      id: idOrSlot && UUID_RE.test(idOrSlot) ? idOrSlot : undefined,
-      key: idOrSlot && UUID_RE.test(idOrSlot) ? undefined : (idOrSlot ?? undefined),
-      values,
-    }),
+  updateTemplate: (key: string, data: { name?: string; body: string; is_active: boolean }) =>
+    api.put<SmsTemplate>(`/sms/templates/${key}`, data),
+  renderTemplate: (key: string, values: Record<string, string>) =>
+    api.post<SmsTemplateRenderResult>(`/sms/templates/${key}/render`, { values }),
   sendToStudent: (data: { student_id: string; template_key?: string; content?: string }) =>
     api.post<SmsSendResponse>('/sms/send-to-student', data),
 };

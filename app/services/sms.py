@@ -2,7 +2,6 @@ import json
 import logging
 import re
 from decimal import Decimal, InvalidOperation
-from uuid import uuid4
 
 import httpx
 from sqlalchemy import select
@@ -63,24 +62,9 @@ MSG_TEST = _DEFAULT_TEMPLATES["test"]
 # and the card picks it up — no frontend change needed.
 STATEMENT_TEMPLATE_KEYS: tuple[str, ...] = ("statement_ready",)
 
-# Message-template slots admins can curate and choose from on the Message
-# Templates card. ("test" stays hard-wired — it verifies the channel, not copy.)
-MESSAGE_TEMPLATE_KEYS: tuple[str, ...] = (
-    "payment_receipt",
-    "balance_reminder",
-    "payment_link",
-    "invoice_ready",
-)
-
-# Human labels for a slot that has never been saved (no variant in
-# `sms_templates` supplies the name yet).
-_SLOT_NAMES: dict[str, str] = {
-    "payment_receipt": "Payment received",
-    "balance_reminder": "Balance reminder",
-    "payment_link": "Payment link",
-    "invoice_ready": "Invoice ready",
-    "statement_ready": "Statement ready",
-}
+# Human labels for statement templates that have never been saved (a row in
+# `sms_templates` supplies the name once an admin edits one).
+_STATEMENT_TEMPLATE_NAMES: dict[str, str] = {"statement_ready": "Statement ready"}
 
 
 class SmsNotConfiguredError(Exception):
@@ -425,164 +409,69 @@ class SmsService:
         return await self.send(to_phone, MSG_TEST, template="test", created_by=created_by)
 
     # ── templates ────────────────────────────────────────────
-    async def get_template(self, slot: str) -> SmsTemplate | None:
-        """Variant currently in use for `slot`, or None (use built-in default).
-
-        Every send of that slot — scheduled bulk statements, reminders, the
-        admin "send now" actions — renders this variant's body.
-        """
+    async def get_template(self, key: str) -> SmsTemplate | None:
+        """Latest curated template for `key`, or None (use built-in fallback)."""
         result = await self.db.execute(
-            select(SmsTemplate)
-            .where(SmsTemplate.slot == slot, SmsTemplate.is_active.is_(True))
-            .order_by(SmsTemplate.updated_at.desc(), SmsTemplate.id.desc())
+            select(SmsTemplate).where(SmsTemplate.key == key)
         )
         return result.scalars().first()
 
-    async def list_variants(self, slots: tuple[str, ...] | None = None) -> list[SmsTemplate]:
-        """All saved variants, ordered by slot. `slots=None` means every slot."""
-        stmt = select(SmsTemplate).order_by(SmsTemplate.slot, SmsTemplate.created_at)
-        if slots is not None:
-            stmt = stmt.where(SmsTemplate.slot.in_(slots))
-        result = await self.db.execute(stmt)
+    async def list_templates(self) -> list[SmsTemplate]:
+        result = await self.db.execute(
+            select(SmsTemplate).order_by(SmsTemplate.key)
+        )
         return list(result.scalars().all())
 
-    def template_groups(
-        self, slots: tuple[str, ...], variants: list[SmsTemplate]
-    ) -> list[dict]:
-        """Flat list for the Settings cards: built-in defaults merged in.
+    async def list_statement_templates(self) -> list[dict]:
+        """Statement-workflow templates, with built-in defaults merged in.
 
-        A slot nobody has saved yet still shows its built-in text (flagged
-        `is_default`, `id` None), so the admin can see what is being sent and
-        choose "Built-in default" to switch back to it after variants exist.
+        A template nobody has edited has no row in `sms_templates`, so listing
+        rows alone would show an empty card even though the system is sending
+        that message. Each key therefore falls back to its built-in body and is
+        flagged `is_default`, so the admin can see whether the text on screen is
+        curated or still the code default. Editing one goes through the same
+        `upsert_template` as every other template.
         """
-        by_slot: dict[str, list[SmsTemplate]] = {}
-        for v in variants:
-            by_slot.setdefault(v.slot, []).append(v)
-        groups: list[dict] = []
-        for slot in slots:
-            entries = by_slot.get(slot, [])
-            active = next((v for v in entries if v.is_active), None)
-            # Nothing saved or saved but none in use → the built-in default is
-            # what goes out.
-            groups.append(
+        stored = {t.key: t for t in await self.list_templates()}
+        merged: list[dict] = []
+        for key in STATEMENT_TEMPLATE_KEYS:
+            row = stored.get(key)
+            merged.append(
                 {
-                    "id": None,
-                    "slot": slot,
-                    "key": slot,
-                    "name": _SLOT_NAMES.get(slot, slot),
-                    "body": _DEFAULT_TEMPLATES.get(slot, ""),
-                    "is_active": active is None,
-                    "is_default": True,
-                    "updated_at": None,
+                    "key": key,
+                    "name": row.name if row else _STATEMENT_TEMPLATE_NAMES.get(key, key),
+                    "body": row.body if row else _DEFAULT_TEMPLATES.get(key, ""),
+                    "is_active": row.is_active if row else True,
+                    "is_default": row is None,
+                    "updated_at": row.updated_at if row else None,
                 }
             )
-            for v in entries:
-                groups.append(
-                    {
-                        "id": v.id,
-                        "slot": slot,
-                        "key": v.id,
-                        "name": v.name,
-                        "body": v.body,
-                        "is_active": v.is_active,
-                        "is_default": False,
-                        "updated_at": v.updated_at,
-                    }
-                )
-        return groups
+        return merged
 
-    async def list_message_template_groups(self) -> list[dict]:
-        return self.template_groups(
-            MESSAGE_TEMPLATE_KEYS, await self.list_variants(MESSAGE_TEMPLATE_KEYS)
-        )
-
-    async def list_statement_template_groups(self) -> list[dict]:
-        return self.template_groups(
-            STATEMENT_TEMPLATE_KEYS, await self.list_variants(STATEMENT_TEMPLATE_KEYS)
-        )
-
-    async def get_variant(self, template_id: str) -> SmsTemplate | None:
-        return await self.db.get(SmsTemplate, template_id)
-
-    async def create_template(
+    async def upsert_template(
         self,
-        slot: str,
-        name: str,
+        key: str,
         body: str,
-        updated_by: str | None = None,
-    ) -> SmsTemplate:
-        """Save a new variant of a message slot.
-
-        The first variant saved for a slot becomes the one in use — otherwise
-        the admin saves copy that silently never sends.
-        """
-        if slot not in set(MESSAGE_TEMPLATE_KEYS) | set(STATEMENT_TEMPLATE_KEYS):
-            raise ValueError(f"Unknown template slot: {slot!r}")
-        existing = await self.list_variants((slot,))
-        template = SmsTemplate(
-            id=str(uuid4()),
-            slot=slot,
-            name=name,
-            body=body,
-            is_active=not existing,  # first variant goes live immediately
-        )
-        if updated_by:
-            template.updated_by = updated_by
-        self.db.add(template)
-        await self.db.flush()
-        return template
-
-    async def activate_template(self, template_id: str | None, slot: str | None) -> None:
-        """Set which variant is in use for a slot.
-
-        `template_id=None` puts the built-in default back in use (every saved
-        variant is switched off).
-        """
-        if template_id:
-            template = await self.get_variant(template_id)
-            if template is None:
-                raise ValueError("Template not found")
-            slot = template.slot
-        elif not slot:
-            raise ValueError("template_id or slot is required")
-        variants = await self.list_variants((slot,))
-        for v in variants:
-            v.is_active = v.id == template_id
-        await self.db.flush()
-
-    async def update_variant(
-        self,
-        template_id: str,
         name: str | None = None,
-        body: str | None = None,
-        is_active: bool | None = None,
+        is_active: bool = True,
         updated_by: str | None = None,
     ) -> SmsTemplate:
-        """Edit a saved variant. `is_active=True` also makes it the one in use."""
-        template = await self.get_variant(template_id)
+        """Create or update a curated template row. `body` is the authoritative
+        content — when an admin edits a template, the row overrides the
+        built-in constant for every future send."""
+        template = await self.get_template(key)
         if template is None:
-            raise ValueError("Template not found")
-        if name:
-            template.name = name
-        if body is not None:
+            template = SmsTemplate(key=key, name=name or key, body=body, is_active=is_active)
+            self.db.add(template)
+        else:
             template.body = body
+            if name:
+                template.name = name
+            template.is_active = is_active
         if updated_by:
             template.updated_by = updated_by
-        if is_active is True:
-            await self.activate_template(template_id, template.slot)
-        elif is_active is False and template.is_active:
-            template.is_active = False
         await self.db.flush()
         return template
-
-    async def delete_template(self, template_id: str) -> None:
-        """Remove a saved variant. If it was the one in use, the slot falls
-        back to the built-in default (get_template returns None → constant)."""
-        template = await self.get_variant(template_id)
-        if template is None:
-            raise ValueError("Template not found")
-        await self.db.delete(template)
-        await self.db.flush()
 
     def render_template(
         self, key: str, values: dict[str, str | None], fallback: str | None = None
