@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
 import httpx
@@ -549,6 +550,94 @@ class SmsService:
             stmt = stmt.where(SmsMessage.status == status)
         result = await self.db.execute(stmt)
         return result.scalar_one()
+
+    async def broadcast(
+        self,
+        template_key: str,
+        audience: str = "all",
+        grade_id: str | None = None,
+        student_id: str | None = None,
+        content_override: str | None = None,
+        created_by: str | None = None,
+    ) -> dict:
+        """Send one curated template to an audience of parents.
+
+        Recipients follow `audience`:
+        - ``all``    — every approved learner's billing guardian
+        - ``grade``  — the guardians of one grade (filter by `grade_id`)
+        - ``student``— a single student's guardian (`student_id`)
+
+        Each recipient gets the template rendered for THEM ({parent},
+        {student}, {balance}, {month}, {year}), so one template becomes a
+        different, accurate text per family — exactly like the singles sends.
+        Every send is logged on `sms_messages`; failures do not abort the
+        run. Returns aggregate counts for the UI summary.
+        """
+        if content_override:
+            body = content_override
+        else:
+            template = await self.get_template(template_key)
+            # A system key nobody has edited has no row — its built-in
+            # default is what the other sends use, so honour it here too.
+            body = template.body if template else _DEFAULT_TEMPLATES.get(template_key)
+            if not body:
+                raise ValueError(f"Unknown template key: {template_key}")
+
+        stmt = (
+            select(Student)
+            .where(Student.registration_status == "approved")
+            .order_by(Student.last_name, Student.first_name)
+        )
+        if audience == "grade":
+            if not grade_id:
+                raise ValueError("grade audience requires grade_id")
+            stmt = stmt.where(Student.grade_id == grade_id)
+        elif audience == "student":
+            if not student_id:
+                raise ValueError("student audience requires student_id")
+            stmt = stmt.where(Student.id == student_id)
+
+        students = list((await self.db.execute(stmt)).scalars().all())
+
+        now = datetime.now(UTC)
+        sent = failed = skipped = 0
+        for student in students:
+            phone = await self.get_student_phone(student)
+            if not phone:
+                skipped += 1
+                continue
+            values: dict[str, str | None] = {
+                "parent": await self.parent_first_name(student),
+                "student": student.first_name,
+                "month": f"{now.month:02d}",
+                "year": str(now.year),
+            }
+            if "{balance}" in body:
+                from app.services.reminder import outstanding_total
+
+                values["balance"] = f"{await outstanding_total(self.db, student.id):,.2f}"
+            content, _missing = self.render_template(template_key, values, fallback=body)
+            try:
+                await self.send(
+                    phone,
+                    content,
+                    student_id=student.id,
+                    template=template_key,
+                    created_by=created_by,
+                )
+                sent += 1
+            except Exception:  # noqa: BLE001 — one bad number must not stop the whole grade
+                failed += 1
+
+        await self.db.commit()
+        return {
+            "template_key": template_key,
+            "audience": audience,
+            "total": len(students),
+            "sent": sent,
+            "failed": failed,
+            "skipped_no_phone": skipped,
+        }
 
 
 def _to_decimal(value) -> Decimal | None:

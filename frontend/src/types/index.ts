@@ -499,6 +499,15 @@ export interface SmsTemplateRenderResult {
   missing: string[];
 }
 
+export interface SmsBroadcastResult {
+  template_key: string;
+  audience: string;
+  total: number;
+  sent: number;
+  failed: number;
+  skipped_no_phone: number;
+}
+
 // ── In-app notifications (staff) ─────────────────────────────
 export type NotificationCategory =
   | 'payment_received'

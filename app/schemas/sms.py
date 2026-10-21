@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -103,3 +104,28 @@ class SmsStudentSendRequest(BaseModel):
     student_id: str = Field(min_length=1, max_length=36)
     template_key: str | None = Field(default=None, max_length=50)
     content: str | None = Field(default=None, max_length=1600)
+
+
+class SmsBroadcastRequest(BaseModel):
+    """Admin broadcast: one curated template sent to a chosen audience.
+
+    `audience` selects the recipients: every parent (`all`), one grade's
+    parents (`grade`), or a single student's parent (`student`). Placeholders
+    in the template are resolved per recipient — {parent}, {student} and
+    {balance} differ for every family.
+    """
+
+    audience: Literal["all", "grade", "student"] = "all"
+    grade_id: str | None = Field(default=None, max_length=36)
+    student_id: str | None = Field(default=None, max_length=36)
+    template_key: str = Field(min_length=1, max_length=50)
+    content: str | None = Field(default=None, max_length=1600)
+
+
+class SmsBroadcastResponse(BaseModel):
+    template_key: str
+    audience: str
+    total: int
+    sent: int
+    failed: int
+    skipped_no_phone: int

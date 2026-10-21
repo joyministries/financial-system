@@ -9,6 +9,8 @@ from app.core.deps import require_role
 from app.models.grade import Student
 from app.schemas.common import PageResponse, build_page_response
 from app.schemas.sms import (
+    SmsBroadcastRequest,
+    SmsBroadcastResponse,
     SmsMessageOut,
     SmsReminderRequest,
     SmsReminderResponse,
@@ -233,6 +235,33 @@ async def render_sms_template(
         key, payload.values, fallback=template.body if template else None
     )
     return SmsTemplateRenderResponse(key=key, content=content, missing=missing)
+
+
+@router.post("/broadcast", response_model=SmsBroadcastResponse)
+async def broadcast_sms(
+    payload: SmsBroadcastRequest,
+    user=Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+) -> SmsBroadcastResponse:
+    """Send one curated template to a whole audience — every parent, one
+    grade, or a single parent. Each recipient gets the template rendered for
+    their own child ({parent}, {student}, {balance}), and every send is
+    logged on the SMS log the same way as single sends."""
+    service = SmsService(db)
+    try:
+        result = await service.broadcast(
+            template_key=payload.template_key,
+            audience=payload.audience,
+            grade_id=payload.grade_id,
+            student_id=payload.student_id,
+            content_override=payload.content,
+            created_by=user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SmsNotConfiguredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return SmsBroadcastResponse(**result)
 
 
 # ── single parent ────────────────────────────────────────────

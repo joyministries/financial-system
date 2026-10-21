@@ -25,6 +25,7 @@ import type {
   SmsSettings,
   SmsTemplate,
   SmsTemplateRenderResult,
+  SmsBroadcastResult,
   Student,
   StudentDocument,
   UnreadCountResponse,
@@ -613,6 +614,15 @@ export const smsApi = {
     api.post<SmsTemplateRenderResult>(`/sms/templates/${key}/render`, { values }),
   sendToStudent: (data: { student_id: string; template_key?: string; content?: string }) =>
     api.post<SmsSendResponse>('/sms/send-to-student', data),
+  broadcast: (
+    data: {
+      audience: 'all' | 'grade' | 'student';
+      template_key: string;
+      grade_id?: string;
+      student_id?: string;
+      content?: string;
+    },
+  ) => api.post<SmsBroadcastResult>('/sms/broadcast', data),
 };
 
 // ── In-app notifications (staff) ─────────────────────────────

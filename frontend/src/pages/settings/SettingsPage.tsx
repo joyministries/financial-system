@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import { authApi, settingsApi, smsApi } from '@/api/client';
+import { authApi, gradesApi, settingsApi, smsApi, studentsApi } from '@/api/client';
 import type { SmsMessage } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
   AutoGenerationSettings,
   EmailSettings,
+  Grade,
   NotificationSettings,
   ReminderSettings,
   SmsSettings,
   SmsTemplate,
   StatementGenerationSettings,
   StatementGenerationRunResult,
+  Student,
 } from '@/types';
 import toast from 'react-hot-toast';
 import {
@@ -1396,6 +1398,19 @@ function SmsTools({ ready }: { ready: boolean }) {
   const [loadingLog, setLoadingLog] = useState(false);
   const [showLog, setShowLog] = useState(false);
 
+  // Broadcast: one template sent to every parent, a grade, or one parent.
+  const [bcAudience, setBcAudience] = useState<'all' | 'grade' | 'student'>('all');
+  const [bcTemplates, setBcTemplates] = useState<SmsTemplate[]>([]);
+  const [bcTemplate, setBcTemplate] = useState('');
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [gradeId, setGradeId] = useState('');
+  const [studentQuery, setStudentQuery] = useState('');
+  const [studentHits, setStudentHits] = useState<Student[]>([]);
+  const [bcStudent, setBcStudent] = useState<Student | null>(null);
+  const [bcSending, setBcSending] = useState(false);
+
+  const bcBody = bcTemplates.find((t) => t.key === bcTemplate)?.body ?? '';
+
   const now = new Date();
 
   const runTest = async () => {
@@ -1452,6 +1467,61 @@ function SmsTools({ ready }: { ready: boolean }) {
     setShowLog((s) => !s);
   };
 
+  // Load the template list and grades once for the broadcast form.
+  useEffect(() => {
+    smsApi.templates().then((r) => setBcTemplates(r.data.filter((t) => t.is_active))).catch(() => {});
+    gradesApi.list().then((r) => setGrades(r.data)).catch(() => {});
+  }, []);
+
+  // Debounced student search for the "single parent" audience.
+  useEffect(() => {
+    if (bcAudience !== 'student') return;
+    if (!studentQuery.trim()) { setStudentHits([]); return; }
+    const t = setTimeout(() => {
+      studentsApi
+        .list({ search: studentQuery.trim(), limit: 6 })
+        .then((r) => setStudentHits(r.data.items ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [studentQuery, bcAudience]);
+
+  const runBroadcast = async () => {
+    if (!bcTemplate) return toast.error('Choose the template to send');
+    if (bcAudience === 'grade' && !gradeId) return toast.error('Choose the grade');
+    if (bcAudience === 'student' && !bcStudent) return toast.error('Search and choose the parent to send to');
+    const templateName = bcTemplates.find((t) => t.key === bcTemplate)?.name ?? bcTemplate;
+    const audienceText =
+      bcAudience === 'all'
+        ? 'EVERY parent in the school'
+        : bcAudience === 'grade'
+          ? `the parents of ${grades.find((g) => g.id === gradeId)?.name ?? 'the chosen grade'}`
+          : `only ${bcStudent?.first_name} ${bcStudent?.last_name}'s parent`;
+    if (!window.confirm(`Send "${templateName}" to ${audienceText}? This texts them immediately.`)) return;
+    setBcSending(true);
+    try {
+      const res = await smsApi.broadcast({
+        audience: bcAudience,
+        template_key: bcTemplate,
+        grade_id: bcAudience === 'grade' ? gradeId : undefined,
+        student_id: bcAudience === 'student' ? bcStudent?.id : undefined,
+      });
+      const { sent, failed, skipped_no_phone } = res.data;
+      toast.success(`Broadcast sent to ${sent} parent(s)`);
+      if (failed || skipped_no_phone) {
+        toast(
+          `${skipped_no_phone} parent(s) have no phone, ${failed} send(s) failed — see SMS log`,
+          { icon: '⚠️' },
+        );
+      }
+      loadLog();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'Broadcast failed');
+    } finally {
+      setBcSending(false);
+    }
+  };
+
   return (
     <div className="mt-6 border-t border-slate-100 pt-5">
       <h4 className="text-sm font-semibold text-slate-900">SMS tools</h4>
@@ -1479,6 +1549,95 @@ function SmsTools({ ready }: { ready: boolean }) {
           >
             <Send className="h-4 w-4" />
             {testing ? 'Sending…' : 'Send test SMS'}
+          </button>
+        </div>
+
+        {/* Broadcast: one template to an audience */}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-900">Send a message to parents</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Every recipient gets the template filled in for their own child —{'{parent}'}, {'{student}'}, {'{balance}'} resolve per family.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Who receives it</label>
+              <select
+                value={bcAudience}
+                onChange={(e) => { setBcAudience(e.target.value as 'all' | 'grade' | 'student'); setGradeId(''); setBcStudent(null); }}
+                className="input mt-1"
+              >
+                <option value="all">Whole school — every parent</option>
+                <option value="grade">One grade</option>
+                <option value="student">One specific parent</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Message template</label>
+              <select
+                value={bcTemplate}
+                onChange={(e) => setBcTemplate(e.target.value)}
+                className="input mt-1"
+              >
+                <option value="">Choose a template…</option>
+                {bcTemplates.map((t) => (
+                  <option key={t.key} value={t.key}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            {bcAudience === 'grade' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Grade</label>
+                <select value={gradeId} onChange={(e) => setGradeId(e.target.value)} className="input mt-1">
+                  <option value="">Choose a grade…</option>
+                  {grades.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {bcAudience === 'student' && (
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">Find the student (texts their parent)</label>
+                <input
+                  value={studentQuery}
+                  onChange={(e) => setStudentQuery(e.target.value)}
+                  placeholder="Type a name or student number…"
+                  className="input mt-1 w-full sm:w-72"
+                />
+                {studentHits.length > 0 && !bcStudent && (
+                  <div className="mt-1 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                    {studentHits.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => { setBcStudent(s); setStudentQuery(`${s.first_name} ${s.last_name}`); setStudentHits([]); }}
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      >
+                        {s.first_name} {s.last_name} · {s.student_number}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {bcStudent && (
+                  <span className="badge badge-neutral mt-2">
+                    {bcStudent.first_name} {bcStudent.last_name} · {bcStudent.student_number}
+                    <button type="button" className="ml-2 text-slate-500 hover:text-slate-800" onClick={() => { setBcStudent(null); setStudentQuery(''); }}>✕</button>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          {bcTemplate && (
+            <p className="mt-3 rounded bg-white px-3 py-2 text-xs text-slate-600">{bcBody}</p>
+          )}
+          <button
+            type="button"
+            onClick={runBroadcast}
+            disabled={bcSending || !ready}
+            className="btn btn-primary mt-3"
+          >
+            <Send className="h-4 w-4" />
+            {bcSending ? 'Sending…' : 'Send to audience'}
           </button>
         </div>
 
