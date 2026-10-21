@@ -9,7 +9,6 @@ from app.models.financial import Statement
 from app.models.grade import Grade, Student
 from app.models.payment import Payment
 from app.services.ledger import LedgerService
-from app.services.monthly_fee import load_monthly_fee_lookup
 
 D0 = Decimal("0")
 
@@ -436,7 +435,6 @@ class ReportService:
         if grade_id:
             stu_q = stu_q.where(Student.grade_id == grade_id)
         student_rows = list((await self.db.execute(stu_q)).all())
-        students = [r[0] for r in student_rows]
 
         # Latest statement at or before the requested month. Rows arrive
         # month-ascending, so the last one seen per student wins.
@@ -457,7 +455,6 @@ class ReportService:
         for row in (await self.db.execute(stmt_q)).all():
             latest[row.student_id] = row
 
-        fee_by_student = await load_monthly_fee_lookup(self.db, students, academic_year)
 
         rows: list[dict] = []
         for student, grade_name in student_rows:
@@ -496,18 +493,22 @@ class ReportService:
         suspension). Every approved student is included once, optionally
         scoped to a single grade.
 
-        When `month` is given the Amount column is the outstanding balance
-        FOR that month (invoices with month <= month minus verified payments
-        received up to the end of that month) from the Excel-aligned ledger —
-        the same position the month's statement shows. When `month` is omitted
-        the Amount is the full-year outstanding. Either way a SUM footer row
-        is appended.
+        The Amount column is each student's CURRENT amount due as at
+        `month` — the month's fee plus the balance carried forward, straight
+        from the generated statement (amount_due_for_month), never the
+        year-to-date running balance. When `month` is omitted the figure is
+        priced at the current calendar month (or December for a past year).
+        A SUM footer row is appended.
 
         Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
         """
-        rows = await self.ledger.students_outstanding(
-            academic_year, grade_id=grade_id, up_to_month=month
-        )
+        if month is None:
+            today = datetime.now()
+            month = today.month if academic_year == today.year else 12
+
+        # Current amount due for EVERY approved student (0 when nothing is
+        # owed), priced exactly like the statement the parent receives.
+        rows = await self._monthly_statement_rows(academic_year, month, grade_id)
 
         def _grade_display(name: str) -> str:
             if name == "GRADE R":
@@ -575,7 +576,7 @@ class ReportService:
             ws.append(row_values)
 
         if len(rows) > 0:
-            ws.append([None, "OUTSTANDING BALANCE", f"=SUM(C2:C{len(rows) + 1})", None, None])
+            ws.append([None, "TOTAL AMOUNT DUE", f"=SUM(C2:C{len(rows) + 1})", None, None])
 
         for col_letter, width in (
             ("A", 56.89), ("B", 28.66), ("C", 21.66),

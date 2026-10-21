@@ -39,7 +39,6 @@ from app.services.receipt import ReceiptService
 from app.services.report import ReportService
 from app.services.statement import (
     StatementService,
-    amount_due_for_month,
     bulk_generate_statements,
     dedupe_statements_by_month,
     fee_installment_for_statement,
@@ -493,7 +492,6 @@ async def download_grade_summary(
     grade = await db.get(Grade, grade_id)
     grade_name = grade.name if grade else "Unknown Grade"
 
-    service = StatementService(db)
     students_q = _approved_students_query(grade_id, include_inactive)
     students = (
         (await db.execute(students_q.order_by(Student.last_name, Student.first_name)))
@@ -743,7 +741,7 @@ async def get_next_due_date(
             total_outstanding=total_outstanding,
         )
 
-    MONTHS = [
+    months = [
         "January",
         "February",
         "March",
@@ -758,7 +756,7 @@ async def get_next_due_date(
         "December",
     ]
     month_name = (
-        MONTHS[next_invoice.month - 1]
+        months[next_invoice.month - 1]
         if 1 <= next_invoice.month <= 12
         else f"Month {next_invoice.month}"
     )
@@ -1064,10 +1062,11 @@ async def export_students_report(
     layout (Customer | Grade | Amount | Comments | Learners on suspension).
 
     All grades when `grade_id` is omitted, or a single grade when provided.
-    When `month` is given the Amount column is the student's outstanding
-    balance FOR that month (invoices up to & including `month` minus payments
-    received in that period — the same position the month's statement shows).
-    When `month` is omitted the Amount is the full-year outstanding."""
+    The Amount column is each student's CURRENT amount due as at `month` —
+    the month's fee plus the balance carried forward from the generated
+    statement (never the year-to-date running balance). When `month` is
+    omitted it is priced at the current calendar month (or December for a
+    past year)."""
     service = ReportService(db)
     buf = await service.students_xlsx(academic_year, grade_id, month)
     fname = f"LCS-GERMISTON-SUSPENSION-LIST-{academic_year}.xlsx"

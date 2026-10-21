@@ -512,9 +512,10 @@ export default function ReportsPage() {
           <h2 className="card-title mt-1 text-[15px]">Export students (.xlsx)</h2>
           <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted">
             The school's suspension-list layout (Customer | Grade | Amount | Comments | Learners on
-            suspension). The Amount column is calculated from live invoices and payments for{' '}
-            <span className="font-semibold text-ink">{MONTH_FULL[month - 1]} {year}</span> — the month
-            selected in the report header.
+            suspension). The Amount column is each student's{' '}
+            <span className="font-semibold text-ink">current amount due</span> as at{' '}
+            <span className="font-semibold text-ink">{MONTH_FULL[month - 1]} {year}</span> — the
+            month's fee plus the balance carried forward, straight from their generated statement.
           </p>
 
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
