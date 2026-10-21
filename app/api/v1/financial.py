@@ -1,3 +1,4 @@
+import calendar
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -988,8 +989,8 @@ async def outstanding_matrix_report(
     for the year.
 
     ``month_only=False`` returns the running balance at each month's end
-    ("with carry-over"); ``month_only=True`` returns each student's ``Amount
-    Due for Month`` figure — the month's fee plus the balance carried forward.
+    ("with carry-over"); ``month_only=True`` returns each student's amount
+    due for that month — the tuition instalment less what was paid into it.
     Each column uses the same query the on-screen report uses, so the export
     always matches what the user sees.
     """
@@ -999,6 +1000,113 @@ async def outstanding_matrix_report(
         month_only=month_only,
         grade_id=grade_id,
         up_to_month=up_to_month,
+    )
+
+
+@router.get("/reports/export-excel")
+async def export_report_excel(
+    academic_year: int,
+    tab: str = Query(default="income", pattern="^(income|outstanding|payments)$"),
+    month: int = Query(ge=1, le=12),
+    grade_id: str | None = None,
+    month_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin", "finance")),
+):
+    """Real Excel (.xlsx) download for the Reports page, sheet per tab.
+
+    ``income``    — Monthly Income summary (income received, payments,
+                    students owing with their current amount due for the
+                    month), matching the on-screen cards and table.
+    ``outstanding`` — the student-by-month outstanding matrix, month-capped,
+                    same rows as the Outstanding Fees tab.
+    ``payments``  — Payments by method for the report month.
+
+    Everything is re-queried at click time, so the download reflects the
+    page's current selection exactly.
+    """
+    from io import BytesIO
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.styles.patternfill import PatternFill
+
+    service = ReportService(db)
+    month_name = calendar.month_name[month]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{month_name} {academic_year}"
+
+    header_font = Font(bold=True)
+    header_fill = PatternFill("solid", fgColor="D9E1F2")
+
+    def style_header(row_idx: int) -> None:
+        for cell in ws[row_idx]:
+            cell.font = header_font
+            cell.fill = header_fill
+
+    if tab == "income":
+        monthly = await service.monthly_summary(academic_year, month)
+        # Students list follows the report's selected balance mode exactly:
+        # "amount due for month" = the month's dues; "outstanding balances" =
+        # the cumulative carry-over figure — same rows the screen shows.
+        owing = await service.statement_report(
+            academic_year, "overdue", grade_id, month, month_only
+        )
+        ws.append(["Metric", f"{month_name} {academic_year}"])
+        style_header(1)
+        ws.append(["Income received", float(monthly["total_income"])])
+        ws.append(["Payments received", monthly["payment_count"]])
+        ws.append([])
+        mode = "Amount due for month (R)" if month_only else "Outstanding balance (R)"
+        ws.append(["Student Number", "Student", "Grade", mode])
+        style_header(ws.max_row)
+        for s in owing["students"]:
+            ws.append([s["student_number"], s["name"], s["grade"], float(s["balance"])])
+    elif tab == "outstanding":
+        matrix = await service.outstanding_matrix(
+            academic_year,
+            month_only=month_only,
+            grade_id=grade_id,
+            up_to_month=month,
+        )
+        labels = [f"{calendar.month_name[m['month']]}" for m in matrix["months"]]
+        ws.append(["Student Number", "Student", "Grade", *labels])
+        style_header(1)
+        for s in matrix["students"]:
+            ws.append([
+                s["student_number"],
+                s["name"],
+                s["grade"],
+                *(float(s["balances"].get(str(i + 1), 0)) for i in range(len(matrix["months"]))),
+            ])
+        ws.append(["", "", "Total",
+                   *(float(matrix["totals"][str(i + 1)]) for i in range(len(matrix["months"])))])
+        for cell in ws[ws.max_row]:
+            cell.font = header_font
+    else:  # payments
+        breakdown = await service.payments_received(academic_year, grade_id, None, month)
+        ws.append(["Payment Method", f"Amount (R) — {month_name} {academic_year}"])
+        style_header(1)
+        for method, amount in breakdown["by_method"].items():
+            ws.append([method, float(amount)])
+        ws.append(["Total", float(breakdown["total_received"])])
+        style_header(ws.max_row)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="report-{tab}-{academic_year}-'
+                f"{month:02d}.xlsx\""
+            )
+        },
     )
 
 

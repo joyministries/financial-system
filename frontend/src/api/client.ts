@@ -524,6 +524,24 @@ export const reportsApi = {
       params: { academic_year: year, grade_id: gradeId || undefined, month: month || undefined },
       responseType: 'blob',
     }),
+  /** Real .xlsx download for the Reports header button (sheet per tab). */
+  downloadReportExcel: (
+    tab: 'income' | 'outstanding' | 'payments',
+    year: number,
+    month: number,
+    monthOnly: boolean,
+    gradeId?: string,
+  ) =>
+    api.get('/financial/reports/export-excel', {
+      params: {
+        academic_year: year,
+        tab,
+        month,
+        month_only: monthOnly,
+        grade_id: gradeId || undefined,
+      },
+      responseType: 'blob',
+    }),
 };
 
 // ── Notification settings (admin only) ─────────────────────

@@ -26,24 +26,6 @@ interface OutstandingMonth {
   students_owing: number;
 }
 
-interface MatrixMonth {
-  month: number;
-  label: string;
-}
-
-interface MatrixStudent {
-  student_number: string;
-  name: string;
-  grade: string;
-  balances: Record<string, string>;
-}
-
-interface OutstandingMatrix {
-  months: MatrixMonth[];
-  students: MatrixStudent[];
-  totals: Record<string, string>;
-}
-
 interface PaymentsBreakdown {
   total_received: number;
   by_method: Record<string, number>;
@@ -55,10 +37,11 @@ export default function ReportsPage() {
   const year = new Date().getFullYear();
   const [tab, setTab] = useState<'income' | 'outstanding' | 'payments' | 'export'>('income');
 
-  // Reports are monthly. Outstanding balances can be shown either as the
-  // position up to month-end or as only this month's billed/paid balance.
+  // Reports are monthly. The default reading is the AMOUNT DUE FOR THE MONTH
+  // (the month's tuition instalment less what was paid into it) — carry-over
+  // is opt-in from the header selector.
   const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [balanceMode, setBalanceMode] = useState<'carry' | 'month'>('carry');
+  const [balanceMode, setBalanceMode] = useState<'carry' | 'month'>('month');
 
   const [summary, setSummary] = useState<MonthlySummaryData>({
     total_income: 0,
@@ -166,90 +149,31 @@ export default function ReportsPage() {
     }
   };
 
-  const exportCSV = (rows: (string | number)[][], filename: string) => {
-    const csv = rows
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportIncomeCsv = async () => {
-    const [monthly, statementReport] = await Promise.all([
-      reportsApi.monthlySummary(year, month),
-      reportsApi.statements(year, 'overdue', undefined, month, balanceMode === 'month'),
-    ]);
-    const owing = (statementReport.data.students || []).map(
-      (s: { student_number?: string; name: string; balance: string | number }) => ({
-        student_number: s.student_number,
-        name: s.name,
-        balance: Number(s.balance),
-      })
-    );
-    const rows: (string | number)[][] = [
-      ['Month', `${MONTH_FULL[month - 1]} ${year}`],
-      [],
-      ['Income received', Number(monthly.data.total_income)],
-      ['Payments received', Number(monthly.data.payment_count)],
-      [],
-      ...(owing.length
-        ? [
-            ['Student Number', 'Student Name', 'Balance (R)'] as (string | number)[],
-            ...owing.map((s: OwingStudent) => [s.student_number || '', s.name, s.balance] as (string | number)[]),
-          ]
-        : []),
-    ];
-    exportCSV(rows, `monthly-income-${year}-${String(month).padStart(2, '0')}.csv`);
-  };
-
-  // The Excel/CSV export shows each student's position for EVERY month up to
-  // the report month, as a student-by-month matrix — the same months the
-  // on-screen "Outstanding by month" table lists.
-  const exportOutstandingCsv = async () => {
-    const resp = await reportsApi.outstandingMatrix(year, balanceMode === 'month', undefined, month);
-    const data = resp.data as OutstandingMatrix;
-    const months = data.months || [];
-
-    const rows: (string | number)[][] = [
-      [`Outstanding per student per month — up to ${MONTH_FULL[month - 1]} ${year}`],
-      ['Student Number', 'Student Name', 'Grade', ...months.map((m) => `${m.label} (R)`)],
-      ...(data.students || []).map((s) => [
-        s.student_number || '',
-        s.name,
-        s.grade || '',
-        ...months.map((m) => Number(s.balances?.[String(m.month)] ?? 0)),
-      ]),
-      [],
-      ['', '', 'Total', ...months.map((m) => Number(data.totals?.[String(m.month)] ?? 0))],
-    ];
-
-    exportCSV(rows, `outstanding-by-month-${year}-${balanceMode}.csv`);
-  };
-
-  const exportPaymentsCsv = async () => {
-    const resp = await reportsApi.paymentsReceived(year, undefined, undefined, month);
-    const entries = Object.entries(resp.data.by_method);
-    const rows: (string | number)[][] = [
-      ['Payment Method', `Amount (R) — ${MONTH_FULL[month - 1]} ${year}`],
-      ...entries.map(([method, amount]) => [method, Number(amount)]),
-      [],
-      ['Total', Number(resp.data.total_received)],
-    ];
-    exportCSV(rows, `payments-by-method-${year}-${String(month).padStart(2, '0')}.csv`);
-  };
-
+  // The header "Export Excel" downloads a real .xlsx workbook for the tab
+  // on screen, re-queried at click time so the download reflects the page's
+  // current selection (month + balance mode) exactly.
   const exportExcel = async () => {
     if (exporting) return;
+    if (tab === 'export') return;
     setExporting(true);
+    const reportTab = tab as 'income' | 'outstanding' | 'payments';
     try {
-      if (tab === 'income') await exportIncomeCsv();
-      else if (tab === 'outstanding') await exportOutstandingCsv();
-      else if (tab === 'payments') await exportPaymentsCsv();
+      const resp = await reportsApi.downloadReportExcel(
+        reportTab,
+        year,
+        month,
+        balanceMode === 'month',
+      );
+      const blob = new Blob([resp.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const scope = reportTab === 'outstanding' ? '-by-month' : '';
+      a.download = `LCS-GERMISTON-${reportTab.replace(/^./, (c) => c.toUpperCase())}${scope}-${MONTH_FULL[month - 1]}-${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed:', err instanceof Error ? err.message : 'unknown error');
       alert('Export failed — please try again.');
