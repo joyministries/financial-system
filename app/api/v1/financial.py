@@ -1058,10 +1058,24 @@ async def export_report_excel(
         ws.append(["Payments received", monthly["payment_count"]])
         ws.append([])
         mode = "Amount due for month (R)" if month_only else "Outstanding balance (R)"
-        ws.append(["Student Number", "Student", "Grade", mode])
-        style_header(ws.max_row)
-        for s in owing["students"]:
-            ws.append([s["student_number"], s["name"], s["grade"], float(s["balance"])])
+        if month_only:
+            ws.append([
+                "Student Number", "Student", "Grade", mode,
+                "Carry-over from earlier months (R)",
+            ])
+            style_header(ws.max_row)
+            for s in owing["students"]:
+                ws.append([
+                    s["student_number"], s["name"], s["grade"],
+                    float(s["balance"]), float(s.get("carry_outstanding") or 0),
+                ])
+        else:
+            ws.append(["Student Number", "Student", "Grade", mode])
+            style_header(ws.max_row)
+            for s in owing["students"]:
+                ws.append([
+                    s["student_number"], s["name"], s["grade"], float(s["balance"]),
+                ])
     elif tab == "outstanding":
         matrix = await service.outstanding_matrix(
             academic_year,

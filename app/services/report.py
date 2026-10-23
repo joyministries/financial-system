@@ -9,6 +9,7 @@ from app.models.grade import Grade, Student
 from app.models.payment import Payment
 from app.services.ledger import LedgerService
 from app.services.monthly_fee import load_monthly_fee_lookup
+from app.utils.names import is_test_name
 
 D0 = Decimal("0")
 
@@ -380,6 +381,20 @@ class ReportService:
         """
         if month_only and month is not None:
             rows = await self.students_monthly_due(academic_year, month, grade_id)
+            # A student who paid THIS month but still owes earlier months must
+            # not disappear from the report — merge the ledger's carry-over
+            # position so every row carries both figures.
+            ledger_rows = await self.ledger.students_outstanding(
+                academic_year, grade_id=grade_id, up_to_month=month
+            )
+            carry_by_student = {
+                r["student_id"]: Decimal(str(r["outstanding"]))
+                for r in ledger_rows
+            }
+            rows = [
+                {**r, "carry_outstanding": carry_by_student.get(r["student_id"], D0)}
+                for r in rows
+            ]
         else:
             rows = await self.ledger.students_outstanding(
                 academic_year, grade_id=grade_id, up_to_month=month
@@ -387,11 +402,21 @@ class ReportService:
 
         students = []
         total_outstanding = Decimal("0")
+        carry_outstanding_total = Decimal("0")
         for r in rows:
-            balance = r["outstanding"]
-            student_status = "paid" if balance <= 0 else "overdue"
+            balance = Decimal(str(r["outstanding"]))
+            carry = Decimal(str(r.get("carry_outstanding") or 0))
+            # In month mode a student is "owing" when EITHER the month is
+            # unpaid OR they still owe earlier months; in carry mode the
+            # ledger balance alone decides.
+            student_status = (
+                "paid" if (balance <= 0 and carry <= 0 if month_only else balance <= 0)
+                else "overdue"
+            )
             if student_status == "overdue":
                 total_outstanding += balance
+                if carry > 0:
+                    carry_outstanding_total += carry
 
             if status_filter and student_status != status_filter:
                 continue
@@ -404,6 +429,8 @@ class ReportService:
                 "balance": str(balance),
                 "status": student_status,
             })
+            if month_only and carry > 0:
+                students[-1]["carry_outstanding"] = str(carry)
 
         return {
             "academic_year": academic_year,
@@ -411,13 +438,20 @@ class ReportService:
             "month_only": month_only,
             "total_students": len(students),
             "total_outstanding": str(total_outstanding),
+            "carry_outstanding_total": str(carry_outstanding_total),
             "students": students,
         }
 
     async def students_monthly_due(
         self, academic_year: int, month: int, grade_id: str | None = None
     ) -> list[dict]:
-        """Every approved student with their CURRENT amount due for `month`.
+        """Every enrolled student with their CURRENT amount due for `month`.
+
+        Enrolled = registration approved and not deactivated (`is_active`
+        False); NULL `is_active` counts as active — imported learners may
+        carry NULL and must never silently vanish from the reports.
+        Students whose name is an obvious test seed ("Test child", "Demo…")
+        are excluded here so they never reach the parent-facing exports.
 
         The amount due for the month is the student's monthly tuition
         instalment for their grade (with any per-student fee override), less
@@ -435,7 +469,12 @@ class ReportService:
         if grade_id:
             stu_q = stu_q.where(Student.grade_id == grade_id)
         student_rows = list((await self.db.execute(stu_q)).all())
-        students = [r[0] for r in student_rows]
+        student_pairs = [
+            (r[0], r[1]) for r in student_rows
+            if r[0].is_active is not False
+            and not is_test_name(r[0].first_name, r[0].last_name)
+        ]
+        students = [s for s, _ in student_pairs]
 
         fee_by_student = await load_monthly_fee_lookup(self.db, students, academic_year)
 
@@ -453,7 +492,7 @@ class ReportService:
         paid_by_student = {sid: Decimal(str(total or 0)) for sid, total in paid_rows}
 
         rows: list[dict] = []
-        for student, grade_name in student_rows:
+        for student, grade_name in student_pairs:
             fee = fee_by_student.get(student.id, D0)
             paid = paid_by_student.get(student.id, D0)
             due = fee - paid
@@ -489,7 +528,12 @@ class ReportService:
         paid into that month, never the year-to-date carry-over, so a Grade 1
         with nothing extra billed reads R 1 940, not the year figure. When
         `month` is omitted the figure is priced at the current calendar
-        month (or December for a past year). A SUM footer row is appended.
+        month (or December for a past year). The "Outstanding (R)" column
+        shows the year-to-date ledger balance still owed regardless of the
+        month's payment status — a learner who paid this month but still owes
+        earlier months reads Amount 0 with their carry-over outstanding, so
+        nobody with real debt disappears from the sheet. A SUM footer row is
+        appended.
 
         Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
         """
@@ -498,6 +542,16 @@ class ReportService:
             month = today.month if academic_year == today.year else 12
 
         rows = await self.students_monthly_due(academic_year, month, grade_id)
+
+        # Year-to-date ledger balance per student (up to and including
+        # `month`) so the sheet surfaces carry-over debt for learners who
+        # already paid the current month.
+        ledger_rows = await self.ledger.students_outstanding(
+            academic_year, grade_id=grade_id, up_to_month=month
+        )
+        carry_by_student: dict[str, Decimal] = {
+            r["student_id"]: Decimal(str(r["outstanding"])) for r in ledger_rows
+        }
 
         def _grade_display(name: str) -> str:
             if name == "GRADE R":
@@ -510,13 +564,17 @@ class ReportService:
             datetime(academic_year, month, 1).strftime("%B").upper()
             if month else "STUDENTS"
         )
-        headers = ["Customer", "Grade", "Amount", "Comments", "Learners on suspension"]
+        headers = [
+            "Customer", "Grade", "Amount", "Outstanding (R)",
+            "Comments", "Learners on suspension",
+        ]
 
         surfacing_rows = [
             [
                 f"({r['student_number']}) {r['name']}".strip(),
                 _grade_display(r["grade"]),
                 float(r["outstanding"]),
+                float(max(carry_by_student.get(r["student_id"], D0), D0)),
                 None,
                 None,
             ]
@@ -540,7 +598,7 @@ class ReportService:
                 data_rows=surfacing_rows,
                 column_widths=(
                     ("A", 56.89), ("B", 28.66), ("C", 21.66),
-                    ("D", 14.33), ("E", 24.11),
+                    ("D", 21.66), ("E", 14.33), ("F", 24.11),
                 ),
                 sum_footer=bool(surfacing_rows),
                 sum_total=sum_total,
@@ -565,11 +623,16 @@ class ReportService:
             ws.append(row_values)
 
         if len(rows) > 0:
-            ws.append([None, "TOTAL AMOUNT DUE", f"=SUM(C2:C{len(rows) + 1})", None, None])
+            ws.append([
+                None, "TOTAL AMOUNT DUE",
+                f"=SUM(C2:C{len(rows) + 1})",
+                f"=SUM(D2:D{len(rows) + 1})",
+                None, None,
+            ])
 
         for col_letter, width in (
             ("A", 56.89), ("B", 28.66), ("C", 21.66),
-            ("D", 14.33), ("E", 24.11),
+            ("D", 21.66), ("E", 14.33), ("F", 24.11),
         ):
             ws.column_dimensions[col_letter].width = width
 

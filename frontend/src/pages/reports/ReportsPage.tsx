@@ -9,6 +9,7 @@ interface OwingStudent {
   student_number?: string;
   name: string;
   balance: number;
+  carry: number;
 }
 
 interface MonthlySummaryData {
@@ -16,6 +17,7 @@ interface MonthlySummaryData {
   payment_count: number;
   outstanding_total: number;
   students_owing: number;
+  carry_total: number;
   students_owing_list: OwingStudent[];
 }
 
@@ -48,6 +50,7 @@ export default function ReportsPage() {
     payment_count: 0,
     outstanding_total: 0,
     students_owing: 0,
+    carry_total: 0,
     students_owing_list: [],
   });
   const [payments, setPayments] = useState<PaymentsBreakdown>({ total_received: 0, by_method: {} });
@@ -89,11 +92,13 @@ export default function ReportsPage() {
         payment_count: Number(monthly.data.payment_count),
         outstanding_total: Number(statementReport.data.total_outstanding),
         students_owing: Number(statementReport.data.total_students),
+        carry_total: Number(statementReport.data.carry_outstanding_total || 0),
         students_owing_list: (statementReport.data.students || []).map(
-          (s: { student_number?: string; name: string; balance: string | number }) => ({
+          (s: { student_number?: string; name: string; balance: string | number; carry_outstanding?: string | number }) => ({
             student_number: s.student_number,
             name: s.name,
             balance: Number(s.balance),
+            carry: Number(s.carry_outstanding || 0),
           })
         ),
       });
@@ -286,6 +291,7 @@ export default function ReportsPage() {
                       <th className="th">Student no.</th>
                       <th className="th">Student</th>
                       <th className="th text-right">Outstanding</th>
+                      {balanceMode === 'month' && <th className="th text-right">Earlier months (carry-over)</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -294,6 +300,11 @@ export default function ReportsPage() {
                         <td className="td font-mono text-[12px] text-muted">{s.student_number || '—'}</td>
                         <td className="td font-semibold text-ink">{s.name}</td>
                         <td className="td text-right font-semibold tabular-nums text-[#a8382c]">{money(s.balance)}</td>
+                        {balanceMode === 'month' && (
+                          <td className="td text-right tabular-nums text-[#a8382c]">
+                            {s.carry > 0 ? money(s.carry) : <span className="text-muted">—</span>}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -370,6 +381,7 @@ export default function ReportsPage() {
                       <th className="th">Student no.</th>
                       <th className="th">Student</th>
                       <th className="th text-right">Outstanding</th>
+                      {balanceMode === 'month' && <th className="th text-right">Earlier months (carry-over)</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -378,6 +390,11 @@ export default function ReportsPage() {
                         <td className="td font-mono text-[12px] text-muted">{s.student_number || '—'}</td>
                         <td className="td font-semibold text-ink">{s.name}</td>
                         <td className="td text-right font-semibold tabular-nums text-[#a8382c]">{money(s.balance)}</td>
+                        {balanceMode === 'month' && (
+                          <td className="td text-right tabular-nums text-[#a8382c]">
+                            {s.carry > 0 ? money(s.carry) : <span className="text-muted">—</span>}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.grade import Grade, Student
 from app.models.invoice import Invoice
 from app.models.payment import Payment
+from app.utils.names import is_test_name
 
 D0 = Decimal("0")
 
@@ -192,6 +193,10 @@ class LedgerService:
 
         out = []
         for r in inv_rows:
+            # Dummy "test child" accounts stay out of every outstanding /
+            # carry-over list even if an invoice was ever raised against them.
+            if is_test_name(r.first_name, r.last_name):
+                continue
             required = Decimal(str(r.required))
             paid = pay_rows.get(r.id, D0)
             out.append({
