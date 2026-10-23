@@ -623,12 +623,14 @@ class ReportService:
             ws.append(row_values)
 
         if len(rows) > 0:
-            ws.append([
-                None, "TOTAL AMOUNT DUE",
-                f"=SUM(C2:C{len(rows) + 1})",
-                f"=SUM(D2:D{len(rows) + 1})",
-                None, None,
-            ])
+            # Static computed totals, not =SUM() formulas: viewers that preview
+            # xlsx without a calculation engine (Drive preview, phone viewers)
+            # would otherwise show a blank/zero total row.
+            total_amount = sum(float(r["outstanding"]) for r in rows)
+            total_carry = sum(
+                float(max(carry_by_student.get(r["student_id"], D0), D0)) for r in rows
+            )
+            ws.append([None, "TOTAL AMOUNT DUE", total_amount, total_carry, None, None])
 
         for col_letter, width in (
             ("A", 56.89), ("B", 28.66), ("C", 21.66),
