@@ -5,6 +5,7 @@ from io import BytesIO
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.financial import Statement
 from app.models.grade import Grade, Student
 from app.models.payment import Payment
 from app.services.ledger import LedgerService
@@ -18,6 +19,43 @@ class ReportService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.ledger = LedgerService(db)
+
+    async def _statement_figures(
+        self, academic_year: int, month: int, grade_id: str | None = None
+    ) -> dict[str, tuple[Decimal, Decimal]]:
+        """Per-student ``(amount_due, closing_balance)`` from the statements.
+
+        Statements are the ledger documents the school works from, so the
+        report mirrors what the statement page shows for the same month
+        instead of recomputing rules. Learners without a statement for the
+        month (never generated) fall back to the invoice-ledger math.
+        """
+        stmt = (
+            select(
+                Statement.student_id,
+                Statement.current_amount_due,
+                Statement.closing_balance,
+                Student.first_name,
+                Student.last_name,
+                Student.is_active,
+            )
+            .join(Student, Student.id == Statement.student_id)
+            .where(
+                Statement.academic_year == academic_year,
+                Statement.month == month,
+                Student.registration_status == "approved",
+            )
+        )
+        if grade_id:
+            stmt = stmt.where(Student.grade_id == grade_id)
+        figs: dict[str, tuple[Decimal, Decimal]] = {}
+        for sid, due, close, first, last, is_active in (
+            await self.db.execute(stmt)
+        ).all():
+            if is_active is False or is_test_name(first, last):
+                continue
+            figs[sid] = (Decimal(str(due or 0)), Decimal(str(close or 0)))
+        return figs
 
     async def monthly_income(self, academic_year: int, month: int) -> dict:
         start, end = self._month_range(academic_year, month)
@@ -379,6 +417,8 @@ class ReportService:
           month (:meth:`students_monthly_due`), so a Grade 1 reads R 1 940
           in October, never the year's remaining fee figure.
         """
+        figs = await self._statement_figures(academic_year, month, grade_id)
+
         if month_only and month is not None:
             rows = await self.students_monthly_due(academic_year, month, grade_id)
             # A student who paid THIS month but still owes earlier months must
@@ -391,14 +431,46 @@ class ReportService:
                 r["student_id"]: Decimal(str(r["outstanding"]))
                 for r in ledger_rows
             }
-            rows = [
-                {**r, "carry_outstanding": carry_by_student.get(r["student_id"], D0)}
-                for r in rows
-            ]
+            if figs:
+                # Statements are the source of truth: amount due and balance
+                # come straight from the statement documents, so the report
+                # shows what the statement page shows. Learners without a
+                # statement (never generated) keep the ledger figures.
+                merged = []
+                for r in rows:
+                    if r["student_id"] in figs:
+                        due, close = figs[r["student_id"]]
+                        merged.append(
+                            {**r, "outstanding": due, "carry_outstanding": close}
+                        )
+                    else:
+                        merged.append(
+                            {
+                                **r,
+                                "carry_outstanding": carry_by_student.get(
+                                    r["student_id"], D0
+                                ),
+                            }
+                        )
+                rows = merged
+            else:
+                rows = [
+                    {**r, "carry_outstanding": carry_by_student.get(r["student_id"], D0)}
+                    for r in rows
+                ]
         else:
             rows = await self.ledger.students_outstanding(
                 academic_year, grade_id=grade_id, up_to_month=month
             )
+            if figs:
+                # Statement-backed learners read their balance from the
+                # statement document itself.
+                rows = [
+                    {**r, "outstanding": figs[r["student_id"]][1]}
+                    if r["student_id"] in figs
+                    else r
+                    for r in rows
+                ]
 
         students = []
         total_outstanding = Decimal("0")
@@ -543,15 +615,35 @@ class ReportService:
 
         rows = await self.students_monthly_due(academic_year, month, grade_id)
 
+        # Statements are the school's source of truth: learners with a
+        # statement for the month read their figures straight from it, so the
+        # workbook matches what the statement page shows. Everyone without a
+        # statement falls back to the ledger math below.
+        figs = await self._statement_figures(academic_year, month, grade_id)
+
         # Year-to-date ledger balance per student (up to and including
-        # `month`) so the sheet surfaces carry-over debt for learners who
-        # already paid the current month.
+        # `month`) as the fallback carry-over for learners without a
+        # statement.
         ledger_rows = await self.ledger.students_outstanding(
             academic_year, grade_id=grade_id, up_to_month=month
         )
-        carry_by_student: dict[str, Decimal] = {
+        ledger_carry: dict[str, Decimal] = {
             r["student_id"]: Decimal(str(r["outstanding"])) for r in ledger_rows
         }
+
+        def _figures_for(student_id: str) -> tuple[Decimal, Decimal]:
+            """(amount, outstanding) preferring the statement's own figures."""
+            if student_id in figs:
+                return figs[student_id]
+            return (
+                D0,
+                max(ledger_carry.get(student_id, D0), D0),
+            )
+
+        for r in rows:
+            amount, close = _figures_for(r["student_id"])
+            r["outstanding"] = amount
+            r["carry_outstanding"] = close
 
         def _grade_display(name: str) -> str:
             if name == "GRADE R":
@@ -574,7 +666,7 @@ class ReportService:
                 f"({r['student_number']}) {r['name']}".strip(),
                 _grade_display(r["grade"]),
                 float(r["outstanding"]),
-                float(max(carry_by_student.get(r["student_id"], D0), D0)),
+                float(max(r.get("carry_outstanding", D0), D0)),
                 None,
                 None,
             ]
@@ -628,7 +720,7 @@ class ReportService:
             # would otherwise show a blank/zero total row.
             total_amount = sum(float(r["outstanding"]) for r in rows)
             total_carry = sum(
-                float(max(carry_by_student.get(r["student_id"], D0), D0)) for r in rows
+                float(max(r.get("carry_outstanding", D0), D0)) for r in rows
             )
             ws.append([None, "TOTAL AMOUNT DUE", total_amount, total_carry, None, None])
 
