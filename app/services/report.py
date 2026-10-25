@@ -666,7 +666,7 @@ class ReportService:
                 f"({r['student_number']}) {r['name']}".strip(),
                 _grade_display(r["grade"]),
                 float(r["outstanding"]),
-                float(max(r.get("carry_outstanding", D0), D0)),
+                float(r.get("carry_outstanding", D0)),
                 None,
                 None,
             ]
@@ -720,7 +720,7 @@ class ReportService:
             # would otherwise show a blank/zero total row.
             total_amount = sum(float(r["outstanding"]) for r in rows)
             total_carry = sum(
-                float(max(r.get("carry_outstanding", D0), D0)) for r in rows
+                float(r.get("carry_outstanding", D0)) for r in rows
             )
             ws.append([None, "TOTAL AMOUNT DUE", total_amount, total_carry, None, None])
 
