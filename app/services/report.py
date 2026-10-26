@@ -23,21 +23,25 @@ class ReportService:
     async def _statement_figures(
         self, academic_year: int, month: int, grade_id: str | None = None
     ) -> dict[str, tuple[Decimal, Decimal]]:
-        """Per-student ``(amount_due, closing_balance)`` from the statements.
+        """Per-student ``(amount_due_for_month, closing_balance)`` from the statements.
 
         Statements are the ledger documents the school works from, so the
         report mirrors what the statement page shows for the same month
-        instead of recomputing rules. Learners without a statement for the
-        month (never generated) fall back to the invoice-ledger math.
+        instead of recomputing rules.
+
+        "Amount due for month" is the same arrears figure the statement PDF
+        prints: ``current_amount_due − monthly_fee × (months left + 1)`` —
+        the part of the year's balance that has already fallen due. Floored
+        at 0 so a parent who paid ahead reads nil. Learners without a
+        statement for the month (never generated) fall back to the
+        invoice-ledger math.
         """
         stmt = (
             select(
                 Statement.student_id,
                 Statement.current_amount_due,
                 Statement.closing_balance,
-                Student.first_name,
-                Student.last_name,
-                Student.is_active,
+                Student,
             )
             .join(Student, Student.id == Statement.student_id)
             .where(
@@ -48,13 +52,27 @@ class ReportService:
         )
         if grade_id:
             stmt = stmt.where(Student.grade_id == grade_id)
+        student_rows = [
+            (sid, Decimal(str(due or 0)), Decimal(str(close or 0)), student)
+            for sid, due, close, student in (await self.db.execute(stmt)).all()
+        ]
+        fee_by_student = await load_monthly_fee_lookup(
+            self.db, [s for _, _, _, s in student_rows], academic_year
+        )
+        # Not-yet-due instalments use the same "+1 current month" the PDF's
+        # "Amount Due for the Year" exclusion applies (months left + current).
         figs: dict[str, tuple[Decimal, Decimal]] = {}
-        for sid, due, close, first, last, is_active in (
-            await self.db.execute(stmt)
-        ).all():
-            if is_active is False or is_test_name(first, last):
+        for sid, due, close, student in student_rows:
+            if student.is_active is False or is_test_name(
+                student.first_name, student.last_name
+            ):
                 continue
-            figs[sid] = (Decimal(str(due or 0)), Decimal(str(close or 0)))
+            fee = fee_by_student.get(sid, D0)
+            # (12 − month) months after this one, +1 for the current month's
+            # instalment the statement excludes — identical to the PDF totals.
+            future = fee * Decimal(max(0, 12 - month) + 1)
+            arrears = max(D0, due - future)
+            figs[sid] = (arrears, close)
         return figs
 
     async def monthly_income(self, academic_year: int, month: int) -> dict:
