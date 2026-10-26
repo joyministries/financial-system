@@ -1061,7 +1061,7 @@ async def export_report_excel(
         if month_only:
             ws.append([
                 "Student Number", "Student", "Grade", mode,
-                "Carry-over from earlier months (R)",
+                "Amount due for the year (R)",
             ])
             style_header(ws.max_row)
             for s in owing["students"]:

@@ -291,7 +291,7 @@ export default function ReportsPage() {
                       <th className="th">Student no.</th>
                       <th className="th">Student</th>
                       <th className="th text-right">Outstanding</th>
-                      {balanceMode === 'month' && <th className="th text-right">Earlier months (carry-over)</th>}
+                      {balanceMode === 'month' && <th className="th text-right">Amount due for the year</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -381,7 +381,7 @@ export default function ReportsPage() {
                       <th className="th">Student no.</th>
                       <th className="th">Student</th>
                       <th className="th text-right">Outstanding</th>
-                      {balanceMode === 'month' && <th className="th text-right">Earlier months (carry-over)</th>}
+                      {balanceMode === 'month' && <th className="th text-right">Amount due for the year</th>}
                     </tr>
                   </thead>
                   <tbody>

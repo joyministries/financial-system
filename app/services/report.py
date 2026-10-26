@@ -618,12 +618,13 @@ class ReportService:
         paid into that month, never the year-to-date carry-over, so a Grade 1
         with nothing extra billed reads R 1 940, not the year figure. When
         `month` is omitted the figure is priced at the current calendar
-        month (or December for a past year). The "Outstanding (R)" column
-        shows the year-to-date ledger balance still owed regardless of the
-        month's payment status — a learner who paid this month but still owes
-        earlier months reads Amount 0 with their carry-over outstanding, so
-        nobody with real debt disappears from the sheet. A SUM footer row is
-        appended.
+        month (or December for a past year). The "Amount due for the year
+        (R)" column shows the year-to-date ledger balance still owed
+        regardless of the month's payment status — the statement's "Amount
+        due for the year" line — so a learner who paid this month but still
+        owes earlier months reads Amount 0 with their year figure, so
+        nobody with real debt disappears from the sheet. A TOTAL footer
+        row is appended.
 
         Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
         """
@@ -675,7 +676,7 @@ class ReportService:
             if month else "STUDENTS"
         )
         headers = [
-            "Customer", "Grade", "Amount", "Outstanding (R)",
+            "Customer", "Grade", "Amount", "Amount due for the year (R)",
             "Comments", "Learners on suspension",
         ]
 
