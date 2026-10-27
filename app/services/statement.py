@@ -89,10 +89,10 @@ class StatementService:
         the bulk generator — pass it in; otherwise it is read from the year's
         invoices.
 
-        NEW FORMULA:
-        - current_amount_due (amount due for the month) = fee_for_year - total_paid_to_date
-        - fee_for_year = Month 1 installment (total annual fee)
-        - total_paid_to_date = sum of all verified payments for student/year
+        Formula:
+        - current_amount_due (amount due) = billed - total_paid_to_date
+        - billed (fee_for_year) = sum of every non-void invoice in the year
+        - total_paid_to_date = sum of all verified payments for the student
         """
         month_row = next((r for r in breakdown if r["month"] == month), None)
         prev_row = next((r for r in breakdown if r["month"] == month - 1), None)
@@ -110,10 +110,14 @@ class StatementService:
 
         total_fees = sum((r["required"] for r in breakdown), D0)
 
-        # --- NEW FORMULA: Calculate current_amount_due ---
-        # fee_for_year = Month 1 installment (the total annual fee billed)
-        month1_row = next((r for r in breakdown if r["month"] == 1), None)
-        fee_for_year = month1_row["required"] if month1_row else total_fees
+        # --- Amount due for the month and year -------------------------
+        # Amount due = everything billed in the year minus all verified
+        # payments to date. "Billed" is the sum of every non-void invoice,
+        # NOT January alone: learners invoiced later in the year (February
+        # joiners, mid-year extras have no January row) previously anchored
+        # on a zero January figure, which flipped their entire paid amount
+        # into a bogus negative amount due (see student 2080: R -14,750).
+        fee_for_year = total_fees
 
         # total_paid_to_date = sum of all verified payments for this student/year
         from sqlalchemy import func, select
@@ -141,7 +145,7 @@ class StatementService:
             total_additional_charges=total_additional,
             total_payments=total_payments,
             closing_balance=closing,
-            current_amount_due=amount_due_for_month,  # NEW FORMULA
+            current_amount_due=amount_due_for_month,
             brought_forward=to_decimal(brought_forward),
             due_date=self._due_date_for(academic_year, month),
         )
