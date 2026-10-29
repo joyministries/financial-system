@@ -9,7 +9,7 @@ interface OwingStudent {
   student_number?: string;
   name: string;
   balance: number;
-  carry: number;
+  future: number;
 }
 
 interface MonthlySummaryData {
@@ -17,7 +17,6 @@ interface MonthlySummaryData {
   payment_count: number;
   outstanding_total: number;
   students_owing: number;
-  carry_total: number;
   students_owing_list: OwingStudent[];
 }
 
@@ -39,9 +38,10 @@ export default function ReportsPage() {
   const year = new Date().getFullYear();
   const [tab, setTab] = useState<'income' | 'outstanding' | 'payments' | 'export'>('income');
 
-  // Reports are monthly. The default reading is the AMOUNT DUE FOR THE MONTH
-  // (the month's tuition instalment less what was paid into it) — carry-over
-  // is opt-in from the header selector.
+  // Reports are monthly. The default reading is the FEE FOR THE MONTH: the
+  // grade's tuition instalment payable, with no carry-over from earlier
+  // months and no credit for payments received — carry-over is opt-in from
+  // the header selector.
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [balanceMode, setBalanceMode] = useState<'carry' | 'month'>('month');
 
@@ -50,7 +50,6 @@ export default function ReportsPage() {
     payment_count: 0,
     outstanding_total: 0,
     students_owing: 0,
-    carry_total: 0,
     students_owing_list: [],
   });
   const [payments, setPayments] = useState<PaymentsBreakdown>({ total_received: 0, by_method: {} });
@@ -92,13 +91,12 @@ export default function ReportsPage() {
         payment_count: Number(monthly.data.payment_count),
         outstanding_total: Number(statementReport.data.total_outstanding),
         students_owing: Number(statementReport.data.total_students),
-        carry_total: Number(statementReport.data.carry_outstanding_total || 0),
         students_owing_list: (statementReport.data.students || []).map(
-          (s: { student_number?: string; name: string; balance: string | number; carry_outstanding?: string | number }) => ({
+          (s: { student_number?: string; name: string; balance: string | number; future_fees?: string | number }) => ({
             student_number: s.student_number,
             name: s.name,
             balance: Number(s.balance),
-            carry: Number(s.carry_outstanding || 0),
+            future: Number(s.future_fees || 0),
           })
         ),
       });
@@ -224,7 +222,7 @@ export default function ReportsPage() {
         <div className="mr-auto">
           <p className="card-title">Report month</p>
           <p className="mt-0.5 text-[11.5px] text-muted">
-            Income is booked in the month received. Outstanding can include carry-over or this month only.
+            Income is booked in the month received. Fees are this month's instalment, or the balance with carry-over.
           </p>
         </div>
         <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="input w-44">
@@ -238,7 +236,7 @@ export default function ReportsPage() {
           className="input w-56"
         >
           <option value="carry">Outstanding with carry-over</option>
-          <option value="month">Amount due for month</option>
+          <option value="month">Fee for this month (no carry-over)</option>
         </select>
       </div>
 
@@ -272,8 +270,10 @@ export default function ReportsPage() {
           <section className="table-wrap">
             <div className="card-head">
               <div>
-                <p className="eyebrow">Accounts in arrears</p>
-                <h2 className="card-title mt-1">Students owing — {MONTH_FULL[month - 1]} {year}</h2>
+                <p className="eyebrow">{balanceMode === 'month' ? 'Per learner' : 'Accounts in arrears'}</p>
+                <h2 className="card-title mt-1">
+                  {balanceMode === 'month' ? 'Fees payable' : 'Students owing'} — {MONTH_FULL[month - 1]} {year}
+                </h2>
               </div>
               <span className="ml-auto badge badge-warning">{summary.students_owing}</span>
             </div>
@@ -290,8 +290,8 @@ export default function ReportsPage() {
                     <tr>
                       <th className="th">Student no.</th>
                       <th className="th">Student</th>
-                      <th className="th text-right">Outstanding</th>
-                      {balanceMode === 'month' && <th className="th text-right">Amount due for the year</th>}
+                      <th className="th text-right">{balanceMode === 'month' ? 'Fee for month' : 'Outstanding'}</th>
+                      {balanceMode === 'month' && <th className="th text-right">Fees for remaining months</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -302,7 +302,7 @@ export default function ReportsPage() {
                         <td className="td text-right font-semibold tabular-nums text-[#a8382c]">{money(s.balance)}</td>
                         {balanceMode === 'month' && (
                           <td className="td text-right tabular-nums text-[#a8382c]">
-                            {s.carry > 0 ? money(s.carry) : <span className="text-muted">—</span>}
+                            {s.future > 0 ? money(s.future) : <span className="text-muted">—</span>}
                           </td>
                         )}
                       </tr>
@@ -362,8 +362,10 @@ export default function ReportsPage() {
           <section className="table-wrap">
             <div className="card-head">
               <div>
-                <p className="eyebrow">{balanceMode === 'month' ? 'This month only' : 'With carry-over'}</p>
-                <h2 className="card-title mt-1">Students owing — {MONTH_FULL[month - 1]} {year}</h2>
+                <p className="eyebrow">{balanceMode === 'month' ? 'Per learner' : 'With carry-over'}</p>
+                <h2 className="card-title mt-1">
+                  {balanceMode === 'month' ? 'Fees payable' : 'Students owing'} — {MONTH_FULL[month - 1]} {year}
+                </h2>
               </div>
               <span className="ml-auto badge badge-warning">{summary.students_owing}</span>
             </div>
@@ -380,8 +382,8 @@ export default function ReportsPage() {
                     <tr>
                       <th className="th">Student no.</th>
                       <th className="th">Student</th>
-                      <th className="th text-right">Outstanding</th>
-                      {balanceMode === 'month' && <th className="th text-right">Amount due for the year</th>}
+                      <th className="th text-right">{balanceMode === 'month' ? 'Fee for month' : 'Outstanding'}</th>
+                      {balanceMode === 'month' && <th className="th text-right">Fees for remaining months</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -392,7 +394,7 @@ export default function ReportsPage() {
                         <td className="td text-right font-semibold tabular-nums text-[#a8382c]">{money(s.balance)}</td>
                         {balanceMode === 'month' && (
                           <td className="td text-right tabular-nums text-[#a8382c]">
-                            {s.carry > 0 ? money(s.carry) : <span className="text-muted">—</span>}
+                            {s.future > 0 ? money(s.future) : <span className="text-muted">—</span>}
                           </td>
                         )}
                       </tr>
@@ -452,11 +454,13 @@ export default function ReportsPage() {
           <p className="eyebrow">Download</p>
           <h2 className="card-title mt-1 text-[15px]">Export students (.xlsx)</h2>
           <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted">
-            The school's suspension-list layout (Customer | Grade | Amount | Comments | Learners on
-            suspension). The Amount column is each student's{' '}
-            <span className="font-semibold text-ink">current amount due</span> as at{' '}
+            The school's suspension-list layout (Customer | Grade | Amount | Fees for remaining
+            months | Comments | Learners on suspension). The Amount column is each student's{' '}
+            <span className="font-semibold text-ink">fee payable for</span>{' '}
             <span className="font-semibold text-ink">{MONTH_FULL[month - 1]} {year}</span> — the
-            month's fee plus the balance carried forward, straight from their generated statement.
+            grade's monthly instalment, with no carry-over from earlier months and no credit for
+            payments received. The next column prices that same instalment for every month still to
+            come after it.
           </p>
 
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">

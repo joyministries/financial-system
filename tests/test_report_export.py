@@ -6,10 +6,16 @@ from unittest import mock
 import pytest
 from openpyxl import load_workbook
 
+from app.services import report as report_mod
 from app.services.report import ReportService
 from app.services.xlsx_writer import build_suspension_list_xlsx
 
-HEADERS = ["Customer", "Grade", "Amount", "Comments", "Learners on suspension"]
+HEADERS = [
+    "Customer", "Grade", "Amount", "Fees for remaining months (R)",
+    "Comments", "Learners on suspension",
+]
+
+FOOTER_LABEL = "TOTAL AMOUNT DUE"
 
 
 def test_fallback_writer_builds_valid_workbook():
@@ -17,13 +23,13 @@ def test_fallback_writer_builds_valid_workbook():
         sheet_label="SEPTEMBER",
         headers=HEADERS,
         data_rows=[
-            ["(1001) Alex Kuti", "8", 1250.5, None, None],
-            ["(1002) Thandi Kunene", "R", 0.0, None, None],
-            ["(1003) O'Brien & Son", "1", 499.99, None, None],
+            ["(1001) Alex Kuti", "8", 1250.5, 3751.5, None, None],
+            ["(1002) Thandi Kunene", "R", 0.0, 0.0, None, None],
+            ["(1003) O'Brien & Son", "1", 499.99, 1499.97, None, None],
         ],
-        column_widths=(("A", 56.89), ("B", 28.66), ("C", 21.66), ("D", 14.33), ("E", 24.11)),
-        sum_footer=True,
-        sum_total=1750.49,
+        column_widths=(("A", 56.89), ("B", 28.66), ("C", 21.66),
+                       ("D", 21.66), ("E", 14.33), ("F", 24.11)),
+        footer=[None, FOOTER_LABEL, 1750.49, 5251.47, None, None],
     )
     buf.seek(0)
     wb = load_workbook(BytesIO(buf.read()))
@@ -50,42 +56,55 @@ def test_fallback_writer_builds_valid_workbook():
     # Ampersand + apostrophe survive the XML escaping round-trip
     assert ws["A4"].value == "(1003) O'Brien & Son"
 
-    # SUM footer
-    assert ws["B5"].value == "OUTSTANDING BALANCE"
-    assert ws["C5"].value == "=SUM(C2:C4)"
+    # Totals footer: static figures, not =SUM(), so engine-less previewers
+    # (Drive, phone viewers) still show the numbers.
+    assert ws["B5"].value == FOOTER_LABEL
+    assert ws["C5"].value == 1750.49
+    assert ws["D5"].value == 5251.47
 
     # Column widths
     assert ws.column_dimensions["A"].width == 56.89
 
 
-def _inv_row(student_id, student_number, first_name, last_name, grade_name, required):
-    """One row of LedgerService.students_outstanding's invoice aggregate."""
-    return SimpleNamespace(
-        id=student_id,
-        student_number=student_number,
-        first_name=first_name,
-        last_name=last_name,
-        grade_name=grade_name,
-        required=required,
+def _student(student_id, number, first, last, grade_name, is_active=True):
+    """A (Student, grade_name) pair as students_monthly_fee selects it."""
+    return (
+        SimpleNamespace(
+            id=student_id,
+            student_number=number,
+            first_name=first,
+            last_name=last,
+            is_active=is_active,
+        ),
+        grade_name,
     )
 
 
-def _fake_ledger_db(invoices, payments=()):
-    """Emulate the two queries LedgerService.students_outstanding runs.
-
-    First execute() returns invoice rows (one per student, with the summed
-    ``required``); second returns ``(student_id, paid)`` pairs, which the
-    ledger consumes with ``dict(...)``. A single AsyncMock keyed on call
-    order matches the implementation without a real database.
-    """
+def _fake_fee_db(pairs):
+    """Emulate the single query ReportService.students_monthly_fee runs."""
     db = SimpleNamespace()
-    db.execute = mock.AsyncMock(
-        side_effect=[
-            SimpleNamespace(all=lambda: list(invoices)),
-            SimpleNamespace(all=lambda: list(payments)),
-        ]
-    )
+    db.execute = mock.AsyncMock(return_value=SimpleNamespace(all=lambda: list(pairs)))
     return db
+
+
+def _fake_fees(**by_student):
+    """Patch load_monthly_fee_lookup to hand back fixed monthly instalments."""
+    async def lookup(_db, students, _year):
+        return {s.id: by_student.get(s.id, Decimal("0")) for s in students}
+
+    return mock.patch.object(report_mod, "load_monthly_fee_lookup", lookup)
+
+
+def _sheet(buf):
+    buf.seek(0)
+    return load_workbook(BytesIO(buf.read())).active
+
+
+def _cells(ws, cols=6):
+    return [
+        [c.value for c in row]
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=cols)
+    ]
 
 
 @pytest.mark.asyncio
@@ -94,12 +113,10 @@ async def test_students_xlsx_falls_back_when_openpyxl_missing():
     blocked at import time — the exact deployed failure mode — and
     assert the stdlib fallback produces a loadable workbook.
     """
-    fake_db = _fake_ledger_db(
-        [
-            _inv_row("s1", "1001", "Alex", "Kuti", "GRADE 8", 1250.5),
-            _inv_row("s2", "1002", "Thandi", "Kunene", "GRADE R", 0.0),
-        ]
-    )
+    fake_db = _fake_fee_db([
+        _student("s1", "1001", "Alex", "Kuti", "GRADE 8"),
+        _student("s2", "1002", "Thandi", "Kunene", "GRADE R"),
+    ])
 
     real_import = __import__
 
@@ -110,47 +127,58 @@ async def test_students_xlsx_falls_back_when_openpyxl_missing():
 
     service = ReportService(db=fake_db)  # type: ignore[arg-type]
 
-    with mock.patch("builtins.__import__", side_effect=_block_openpyxl):
+    with _fake_fees(s1=Decimal("2980.00"), s2=Decimal("1700.00")), \
+            mock.patch("builtins.__import__", side_effect=_block_openpyxl):
         buf = await service.students_xlsx(academic_year=2026, month=9)
 
-    buf.seek(0)
-    wb = load_workbook(BytesIO(buf.read()))
-    ws = wb.active
-
+    ws = _sheet(buf)
     assert ws.title == "SEPTEMBER"
     assert [c.value for c in ws[1]] == HEADERS
     assert ws["A2"].value == "(1001) Alex Kuti"
     assert ws["B2"].value == "8"  # GRADE 8 -> "8"
     assert ws["B3"].value == "R"  # GRADE R -> "R"
-    assert ws["C3"].value == 0.0
-    assert ws["B4"].value == "OUTSTANDING BALANCE"
-    assert ws["C4"].value == "=SUM(C2:C3)"
+    # September: the month's instalment, then Oct+Nov+Dec still to come.
+    assert ws["C2"].value == 2980.0
+    assert ws["D2"].value == 8940.0
+    assert ws["C3"].value == 1700.0
+    assert ws["D3"].value == 5100.0
+    assert ws["B4"].value == FOOTER_LABEL
+    assert ws["C4"].value == 4680.0
+    assert ws["D4"].value == 14040.0
 
 
 @pytest.mark.asyncio
-async def test_students_xlsx_still_uses_openpyxl_when_available():
-    """Parity check: the primary openpyxl path must keep working and
-    produce the same shape as the fallback.
+async def test_students_xlsx_matches_the_fallback_cell_for_cell():
+    """Parity check: the primary openpyxl path and the stdlib fallback must
+    emit the identical sheet, whichever one the runtime can load.
     """
-    fake_db = _fake_ledger_db(
-        [
-            _inv_row("s1", "1001", "Alex", "Kuti", "GRADE 8", 1250.5),
-        ]
-    )
+    pairs = [
+        _student("s1", "1001", "Alex", "Kuti", "GRADE 8"),
+        _student("s2", "1002", "Thandi", "Kunene", "GRADE RR"),
+    ]
+    fees = dict(s1=Decimal("2980.00"), s2=Decimal("1700.00"))
 
-    service = ReportService(db=fake_db)  # type: ignore[arg-type]
-    buf = await service.students_xlsx(academic_year=2026, month=9)
+    real_import = __import__
 
-    buf.seek(0)
-    wb = load_workbook(BytesIO(buf.read()))
-    ws = wb.active
+    def _block_openpyxl(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "openpyxl":
+            raise ImportError("No module named 'openpyxl'")
+        return real_import(name, globals, locals, fromlist, level)
 
-    assert ws.title == "SEPTEMBER"
-    assert ws["A2"].value == "(1001) Alex Kuti"
-    assert ws["B2"].value == "8"
-    assert ws["C2"].value == 1250.5
-    assert ws["B3"].value == "OUTSTANDING BALANCE"
-    assert ws["C3"].value == "=SUM(C2:C2)"
+    with _fake_fees(**fees):
+        primary = _sheet(
+            await ReportService(db=_fake_fee_db(pairs)).students_xlsx(2026, month=9)
+        )
+        with mock.patch("builtins.__import__", side_effect=_block_openpyxl):
+            fallback = _sheet(
+                await ReportService(db=_fake_fee_db(pairs)).students_xlsx(2026, month=9)
+            )
+
+    assert primary.title == fallback.title == "SEPTEMBER"
+    assert _cells(primary) == _cells(fallback)
+    assert _cells(primary)[0] == HEADERS
+    assert _cells(primary)[-1] == [None, FOOTER_LABEL, 4680.0, 14040.0, None, None]
+
 
 # ---------------------------------------------------------------------------
 # Per-student x per-month outstanding matrix (the Reports -> Outstanding Fees
@@ -160,7 +188,7 @@ async def test_students_xlsx_still_uses_openpyxl_when_available():
 
 
 def _matrix_row(student_id, student_number, first_name, last_name, grade, outstanding):
-    """A row shaped like students_outstanding / _monthly_statement_rows."""
+    """A row shaped like LedgerService.students_outstanding."""
     return {
         "student_id": student_id,
         "student_number": student_number,
@@ -226,16 +254,16 @@ async def test_outstanding_matrix_is_running_balance_per_month():
 
 
 @pytest.mark.asyncio
-async def test_outstanding_matrix_month_only_uses_that_months_own_rows():
-    """Month-only mode: each column is just that month, not a running total."""
+async def test_outstanding_matrix_month_only_uses_that_months_own_fee():
+    """Fee mode: each column is that month's instalment, not a running total."""
     service = ReportService(db=SimpleNamespace())
     seen = []
 
-    async def fake_rows(academic_year, month, grade_id=None):
+    async def fake_fee(academic_year, month, grade_id=None):
         seen.append(month)
         return [_matrix_row("s1", "1001", "Alex", "Kuti", "GRADE 8", str(month * 100))]
 
-    service._monthly_statement_rows = fake_rows
+    service.students_monthly_fee = fake_fee
 
     result = await service.outstanding_matrix(2026, month_only=True, up_to_month=4)
 
@@ -271,133 +299,110 @@ async def test_outstanding_matrix_defaults_to_full_year():
 
 
 # ---------------------------------------------------------------------------
-# "Amount due for month" / "This month only" — the whole-school statement
-# summary's arrears column.
+# "Fee for this month" — the reports' month view (screen, /reports/statements,
+# /reports/export-excel, /reports/export-students).
 #
-# This used to be read as ``invoices(month == m) + charges(month == m) less
-# the receipts recorded in calendar month m``. Students are billed in January
-# (one annual invoice, or a split January pair), so months 2-12 carry no
-# invoice at all and the expression collapsed to ``0 less that month's
-# payments``: in October 194 of 198 students reported R 0.00 and the school
-# total was R 0, while February-September printed negatives such as -1,940.
-#
-# It now reads each student's generated Statement and applies the same
-# formula as the statement PDF's Amount Due for Month line, so the report and
-# the document the parent receives agree to the cent.
+# The figure is the grade's monthly tuition instalment and nothing else: not
+# the generated statement document, not the balance carried over from earlier
+# months, and no credit for payments already received. The companion column
+# prices that same instalment once for every month STILL TO COME after the
+# report month, so October counts November and December, and December counts
+# nothing.
 # ---------------------------------------------------------------------------
 
 
-
-def _statement_row(student_id, month, closing, paid, brought_forward=0):
-    """A Statement row as _monthly_statement_rows selects it."""
-    return SimpleNamespace(
-        student_id=student_id,
-        month=month,
-        current_amount_due=Decimal(str(closing)),
-        total_payments=Decimal(str(paid)),
-        brought_forward=Decimal(str(brought_forward)),
-    )
-
-
-def _student(student_id, number="1982", first="Hlelolwenkosi", last="Mazibuko"):
-    return SimpleNamespace(
-        id=student_id,
-        student_number=number,
-        first_name=first,
-        last_name=last,
-        grade_id="g1",
-    )
-
-
-class _FakeDB:
-    """Returns one canned result set per execute() call, in order."""
-
-    def __init__(self, results):
-        self._results = list(results)
-        self.calls = 0
-
-    async def execute(self, query, *args, **kwargs):
-        result = self._results[self.calls]
-        self.calls += 1
-        return SimpleNamespace(all=lambda: result)
-
-
-async def _arrears(monkeypatch, statements, month=10, students=None, fees=None):
-    """Run _monthly_statement_rows with one student and canned statements.
-
-    ``_FakeDB`` cannot evaluate SQLAlchemy predicates, so the helper applies
-    the query's own ``Statement.month <= month`` filter itself.
-    """
-    from app.services import report as report_mod
-
-    students = students or [_student("s1982")]
-    db = _FakeDB([
-        [(s, "GRADE 2") for s in students],
-        [s for s in statements if s.month <= month],
-    ])
-
-    async def fake_fees(_db, _students, _year):
-        return fees if fees is not None else {"s1982": Decimal("1940.00")}
-
-    monkeypatch.setattr(report_mod, "load_monthly_fee_lookup", fake_fees)
-    return await ReportService(db=db)._monthly_statement_rows(2026, month)
-
-
 @pytest.mark.asyncio
-async def test_month_only_matches_the_statement_amount_due(monkeypatch):
-    """The whole-school figure is the fee plus the balance carried forward."""
-    rows = await _arrears(monkeypatch, [_statement_row("s1982", 10, 8400, 16920, 1940)])
+async def test_fee_view_is_the_grade_instalment_only():
+    service = ReportService(db=_fake_fee_db([
+        _student("s1", "1001", "Alex", "Kuti", "GRADE 1"),
+    ]))
+
+    with _fake_fees(s1=Decimal("1940.00")):
+        rows = await service.students_monthly_fee(2026, 10)
 
     assert len(rows) == 1
-    assert rows[0]["outstanding"] == Decimal("10340.00")
-    # Row shape shared with LedgerService.students_outstanding.
-    assert rows[0]["required"] - rows[0]["paid"] == Decimal("10340.00")
-    assert rows[0]["name"] == "Hlelolwenkosi Mazibuko"
-
-
-@pytest.mark.asyncio
-async def test_month_only_uses_the_statement_at_or_before_the_report_month(monkeypatch):
-    """February's report must not be skewed by an October statement, and an
-    October report must use the October row when one exists."""
-    statements = [
-        _statement_row("s1982", 2, 21820, 3500, 1940),
-        _statement_row("s1982", 10, 8400, 16920, 1940),
-    ]
-
-    feb = await _arrears(monkeypatch, statements, month=2)
-    oct_ = await _arrears(monkeypatch, statements, month=10)
-
-    # fee + balance carried forward
-    assert feb[0]["outstanding"] == Decimal("23760.00")
-    assert oct_[0]["outstanding"] == Decimal("10340.00")
-
-
-@pytest.mark.asyncio
-async def test_month_only_reports_the_fee_when_the_balance_is_zero(monkeypatch):
-    rows = await _arrears(
-        monkeypatch,
-        [_statement_row("s1982", 6, 0, 26000, 1940)],
-        month=6,
-    )
-
     assert rows[0]["outstanding"] == Decimal("1940.00")
+    assert rows[0]["required"] == Decimal("1940.00")
+    # November and December remain.
+    assert rows[0]["future_fees"] == Decimal("3880.00")
+    # Row shape shared with the ledger, minus the paid column this view ignores.
+    assert set(rows[0]) == {
+        "student_id", "student_number", "name", "grade",
+        "required", "outstanding", "future_fees",
+    }
 
 
 @pytest.mark.asyncio
-async def test_month_only_reports_zero_for_a_student_with_no_statement(monkeypatch):
-    """An enrolled student without generated statements still gets a row."""
-    students = [
-        _student("s1982"),
-        _student("s2000", number="2000", first="No", last="Statement"),
-    ]
-    rows = await _arrears(
-        monkeypatch,
-        [_statement_row("s1982", 10, 8400, 16920, 1940)],
-        students=students,
-        fees={"s1982": Decimal("1940.00"), "s2000": Decimal("1940.00")},
-    )
+async def test_future_fees_counts_only_the_months_after_the_report_month():
+    """October prices two months, November one, December none."""
+    pairs = [_student("s1", "1001", "Alex", "Kuti", "GRADE 1")]
+    expected = {10: "3880.00", 11: "1940.00", 12: "0", 1: "21340.00"}
 
-    by_id = {r["student_id"]: r for r in rows}
-    assert by_id["s1982"]["outstanding"] == Decimal("10340.00")
-    assert by_id["s2000"]["outstanding"] == Decimal("0")
-    assert len(rows) == 2
+    for month, future in expected.items():
+        service = ReportService(db=_fake_fee_db(pairs))
+        with _fake_fees(s1=Decimal("1940.00")):
+            rows = await service.students_monthly_fee(2026, month)
+
+        assert rows[0]["future_fees"] == Decimal(future), f"month {month}"
+        assert rows[0]["outstanding"] == Decimal("1940.00"), "the month's own fee"
+
+
+@pytest.mark.asyncio
+async def test_fee_view_skips_deactivated_and_test_seeded_students():
+    service = ReportService(db=_fake_fee_db([
+        _student("s1", "1001", "Alex", "Kuti", "GRADE 1"),
+        _student("s2", "1002", "Gone", "School", "GRADE 1", is_active=False),
+        _student("s3", "1003", "Test", "Child", "GRADE 1"),
+    ]))
+
+    with _fake_fees(s1=Decimal("1940.00"), s2=Decimal("1940.00"), s3=Decimal("1940.00")):
+        rows = await service.students_monthly_fee(2026, 10)
+
+    assert [r["student_id"] for r in rows] == ["s1"]
+
+
+@pytest.mark.asyncio
+async def test_fee_view_keeps_students_with_a_null_is_active():
+    """Imported learners can carry NULL is_active; they must not vanish."""
+    service = ReportService(db=_fake_fee_db([
+        _student("s1", "1001", "Alex", "Kuti", "GRADE 1", is_active=None),
+    ]))
+
+    with _fake_fees(s1=Decimal("1940.00")):
+        rows = await service.students_monthly_fee(2026, 10)
+
+    assert [r["student_id"] for r in rows] == ["s1"]
+
+
+@pytest.mark.asyncio
+async def test_statement_report_month_mode_lists_every_student_with_a_fee():
+    """No payment credit means a paid-up learner still lists at their fee."""
+    service = ReportService(db=_fake_fee_db([
+        _student("s1", "1001", "Alex", "Kuti", "GRADE 1"),
+        _student("s2", "1002", "Thandi", "Kunene", "GRADE R"),
+    ]))
+
+    with _fake_fees(s1=Decimal("1940.00"), s2=Decimal("1700.00")):
+        result = await service.statement_report(2026, "overdue", None, 10, month_only=True)
+
+    assert result["month_only"] is True
+    assert result["total_students"] == 2
+    assert result["total_outstanding"] == "3640.00"
+    assert result["future_fees_total"] == "7280.00"
+    assert result["students"][0]["balance"] == "1940.00"
+    assert result["students"][0]["future_fees"] == "3880.00"
+
+
+@pytest.mark.asyncio
+async def test_statement_report_carry_mode_still_uses_the_ledger():
+    """The opt-in carry-over view is untouched: it remains the running balance."""
+    service = ReportService(db=SimpleNamespace())
+    service.ledger = _FakeLedger({
+        10: [_matrix_row("s1", "1001", "Alex", "Kuti", "GRADE 1", "8400")],
+    })
+
+    result = await service.statement_report(2026, "overdue", None, 10, month_only=False)
+
+    assert service.ledger.calls == [10]
+    assert result["students"][0]["balance"] == "8400"
+    assert "future_fees" not in result["students"][0]

@@ -5,7 +5,6 @@ from io import BytesIO
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.financial import Statement
 from app.models.grade import Grade, Student
 from app.models.payment import Payment
 from app.services.ledger import LedgerService
@@ -19,61 +18,6 @@ class ReportService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.ledger = LedgerService(db)
-
-    async def _statement_figures(
-        self, academic_year: int, month: int, grade_id: str | None = None
-    ) -> dict[str, tuple[Decimal, Decimal]]:
-        """Per-student ``(amount_due_for_month, closing_balance)`` from the statements.
-
-        Statements are the ledger documents the school works from, so the
-        report mirrors what the statement page shows for the same month
-        instead of recomputing rules.
-
-        "Amount due for month" is the same arrears figure the statement PDF
-        prints: ``current_amount_due − monthly_fee × (months left + 1)`` —
-        the part of the year's balance that has already fallen due. Floored
-        at 0 so a parent who paid ahead reads nil. Learners without a
-        statement for the month (never generated) fall back to the
-        invoice-ledger math.
-        """
-        stmt = (
-            select(
-                Statement.student_id,
-                Statement.current_amount_due,
-                Statement.closing_balance,
-                Student,
-            )
-            .join(Student, Student.id == Statement.student_id)
-            .where(
-                Statement.academic_year == academic_year,
-                Statement.month == month,
-                Student.registration_status == "approved",
-            )
-        )
-        if grade_id:
-            stmt = stmt.where(Student.grade_id == grade_id)
-        student_rows = [
-            (sid, Decimal(str(due or 0)), Decimal(str(close or 0)), student)
-            for sid, due, close, student in (await self.db.execute(stmt)).all()
-        ]
-        fee_by_student = await load_monthly_fee_lookup(
-            self.db, [s for _, _, _, s in student_rows], academic_year
-        )
-        # Not-yet-due instalments use the same "+1 current month" the PDF's
-        # "Amount Due for the Year" exclusion applies (months left + current).
-        figs: dict[str, tuple[Decimal, Decimal]] = {}
-        for sid, due, close, student in student_rows:
-            if student.is_active is False or is_test_name(
-                student.first_name, student.last_name
-            ):
-                continue
-            fee = fee_by_student.get(sid, D0)
-            # (12 − month) months after this one, +1 for the current month's
-            # instalment the statement excludes — identical to the PDF totals.
-            future = fee * Decimal(max(0, 12 - month) + 1)
-            arrears = max(D0, due - future)
-            figs[sid] = (arrears, close)
-        return figs
 
     async def monthly_income(self, academic_year: int, month: int) -> dict:
         start, end = self._month_range(academic_year, month)
@@ -264,9 +208,9 @@ class ReportService:
         - ``month_only`` False reuses :meth:`LedgerService.students_outstanding`
           capped at each month, i.e. the running balance at that month's end
           (the "Outstanding with carry-over" view).
-        - ``month_only`` True reuses :meth:`students_monthly_due`, i.e. each
-          student's amount due for THAT month — the tuition instalment less
-          what was paid into it (the "Amount due for month" view).
+        - ``month_only`` True reuses :meth:`students_monthly_fee`, i.e. each
+          student's tuition instalment for THAT month, priced from the fee
+          structure alone (the "Fee for month" view).
 
         Students are unioned across all months in first-seen order, so someone
         owing only in January still gets a row for the whole year; months in
@@ -278,7 +222,7 @@ class ReportService:
         per_month: list[list[dict]] = []
         for m in range(1, up_to_month + 1):
             if month_only:
-                rows = await self.students_monthly_due(academic_year, m, grade_id)
+                rows = await self.students_monthly_fee(academic_year, m, grade_id)
             else:
                 rows = await self.ledger.students_outstanding(
                     academic_year, grade_id=grade_id, up_to_month=m
@@ -424,89 +368,39 @@ class ReportService:
         month: int | None = None,
         month_only: bool = False,
     ) -> dict:
-        """School-wide statement summary — every approved student with their
-        outstanding balance for a selected month, in one of two modes:
+        """School-wide summary for a selected month, in one of two modes:
 
         * **With carry-over** (default) — the Excel-aligned running balance:
           everything invoiced up to ``month`` less everything paid up to
           ``month`` (``LedgerService.students_outstanding``).
-        * **Amount due for month** (``month_only``) — each student's tuition
-          instalment for the month less what was already paid into that
-          month (:meth:`students_monthly_due`), so a Grade 1 reads R 1 940
-          in October, never the year's remaining fee figure.
+        * **Fee for month** (``month_only``) — each student's tuition
+          instalment for that month, priced from the fee structure alone
+          (:meth:`students_monthly_fee`): no carry-over from earlier months
+          and no credit for payments received, so a Grade 1 reads R 1 940 in
+          October whatever they have paid. ``future_fees`` prices every month
+          still to come.
         """
-        figs = await self._statement_figures(academic_year, month, grade_id)
-
         if month_only and month is not None:
-            rows = await self.students_monthly_due(academic_year, month, grade_id)
-            # A student who paid THIS month but still owes earlier months must
-            # not disappear from the report — merge the ledger's carry-over
-            # position so every row carries both figures.
-            ledger_rows = await self.ledger.students_outstanding(
-                academic_year, grade_id=grade_id, up_to_month=month
-            )
-            carry_by_student = {
-                r["student_id"]: Decimal(str(r["outstanding"]))
-                for r in ledger_rows
-            }
-            if figs:
-                # Statements are the source of truth: amount due and balance
-                # come straight from the statement documents, so the report
-                # shows what the statement page shows. Learners without a
-                # statement (never generated) keep the ledger figures.
-                merged = []
-                for r in rows:
-                    if r["student_id"] in figs:
-                        due, close = figs[r["student_id"]]
-                        merged.append(
-                            {**r, "outstanding": due, "carry_outstanding": close}
-                        )
-                    else:
-                        merged.append(
-                            {
-                                **r,
-                                "carry_outstanding": carry_by_student.get(
-                                    r["student_id"], D0
-                                ),
-                            }
-                        )
-                rows = merged
-            else:
-                rows = [
-                    {**r, "carry_outstanding": carry_by_student.get(r["student_id"], D0)}
-                    for r in rows
-                ]
+            rows = await self.students_monthly_fee(academic_year, month, grade_id)
         else:
             rows = await self.ledger.students_outstanding(
                 academic_year, grade_id=grade_id, up_to_month=month
             )
-            if figs:
-                # Statement-backed learners read their balance from the
-                # statement document itself.
-                rows = [
-                    {**r, "outstanding": figs[r["student_id"]][1]}
-                    if r["student_id"] in figs
-                    else r
-                    for r in rows
-                ]
 
         students = []
         total_outstanding = Decimal("0")
-        carry_outstanding_total = Decimal("0")
+        future_fees_total = Decimal("0")
         for r in rows:
             balance = Decimal(str(r["outstanding"]))
-            carry = Decimal(str(r.get("carry_outstanding") or 0))
-            # In month mode a student is "owing" when EITHER the month is
-            # unpaid OR they still owe earlier months; in carry mode the
-            # ledger balance alone decides.
-            student_status = (
-                "paid" if (balance <= 0 and carry <= 0 if month_only else balance <= 0)
-                else "overdue"
-            )
+            future = Decimal(str(r.get("future_fees") or 0))
+            # In month mode the figure is the month's fee, so a learner with a
+            # fee to pay this month always lists; in carry mode the ledger
+            # balance decides.
+            student_status = "paid" if balance <= 0 else "overdue"
             if student_status == "overdue":
                 total_outstanding += balance
-                if carry > 0:
-                    carry_outstanding_total += carry
+                if future > 0:
+                    future_fees_total += future
 
             if status_filter and student_status != status_filter:
                 continue
@@ -519,8 +413,8 @@ class ReportService:
                 "balance": str(balance),
                 "status": student_status,
             })
-            if month_only and carry > 0:
-                students[-1]["carry_outstanding"] = str(carry)
+            if month_only and future > 0:
+                students[-1]["future_fees"] = str(future)
 
         return {
             "academic_year": academic_year,
@@ -528,14 +422,14 @@ class ReportService:
             "month_only": month_only,
             "total_students": len(students),
             "total_outstanding": str(total_outstanding),
-            "carry_outstanding_total": str(carry_outstanding_total),
+            "future_fees_total": str(future_fees_total),
             "students": students,
         }
 
-    async def students_monthly_due(
+    async def students_monthly_fee(
         self, academic_year: int, month: int, grade_id: str | None = None
     ) -> list[dict]:
-        """Every enrolled student with their CURRENT amount due for `month`.
+        """Every enrolled student with the fee payable for `month`.
 
         Enrolled = registration approved and not deactivated (`is_active`
         False); NULL `is_active` counts as active — imported learners may
@@ -543,12 +437,16 @@ class ReportService:
         Students whose name is an obvious test seed ("Test child", "Demo…")
         are excluded here so they never reach the parent-facing exports.
 
-        The amount due for the month is the student's monthly tuition
-        instalment for their grade (with any per-student fee override), less
-        what was already paid INTO that month — never the year-to-date
-        carry-over, so a Grade 1 with nothing extra billed reads R 1 940 in
-        October, not 4×1 940. A student who has paid the month's instalment
-        reads 0. Same row shape as LedgerService.students_outstanding.
+        Both figures are priced from the grade's monthly tuition instalment
+        (with any per-student ``StudentFeeOverride``) and nothing else: no
+        statement document, no balance carried over from earlier months, and
+        no credit for payments already received. ``outstanding`` is that
+        month's fee; ``future_fees`` is the same fee once for every month
+        still to come AFTER ``month``, so October prices November and December
+        and December prices nothing.
+
+        Row shape follows LedgerService.students_outstanding except ``paid``,
+        which this view deliberately does not look at.
         """
         stu_q = (
             select(Student, Grade.name.label("grade_name"))
@@ -567,35 +465,19 @@ class ReportService:
         students = [s for s, _ in student_pairs]
 
         fee_by_student = await load_monthly_fee_lookup(self.db, students, academic_year)
-
-        # Verified payments received inside the target month, grouped once.
-        start, end = self._month_range(academic_year, month)
-        paid_rows = (await self.db.execute(
-            select(Payment.student_id, func.coalesce(func.sum(Payment.amount), D0))
-            .where(
-                Payment.status == "verified",
-                Payment.payment_date >= start,
-                Payment.payment_date < end,
-            )
-            .group_by(Payment.student_id)
-        )).all()
-        paid_by_student = {sid: Decimal(str(total or 0)) for sid, total in paid_rows}
+        months_left = Decimal(max(0, 12 - month))
 
         rows: list[dict] = []
         for student, grade_name in student_pairs:
             fee = fee_by_student.get(student.id, D0)
-            paid = paid_by_student.get(student.id, D0)
-            due = fee - paid
-            if due < 0:
-                due = D0
             rows.append({
                 "student_id": student.id,
                 "student_number": student.student_number,
                 "name": f"{student.first_name} {student.last_name}",
                 "grade": grade_name or "",
                 "required": fee,
-                "paid": paid,
-                "outstanding": due,
+                "outstanding": fee,
+                "future_fees": fee * months_left,
             })
         return rows
 
@@ -609,22 +491,19 @@ class ReportService:
 
         Produces an .xlsx workbook with the same shape as the office's
         "LCS GERMISTON <MONTH> SUSPENSION LIST" spreadsheet (yellow bold
-        headers: Customer | Grade | Amount | Comments | Learners on
-        suspension). Every approved student is included once, optionally
-        scoped to a single grade.
+        headers: Customer | Grade | Amount | Fees for remaining months |
+        Comments | Learners on suspension). Every approved student is
+        included once, optionally scoped to a single grade.
 
-        The Amount column is each student's CURRENT amount due as at
-        `month` — the month's tuition instalment less what had already been
-        paid into that month, never the year-to-date carry-over, so a Grade 1
-        with nothing extra billed reads R 1 940, not the year figure. When
-        `month` is omitted the figure is priced at the current calendar
-        month (or December for a past year). The "Amount due for the year
-        (R)" column shows the year-to-date ledger balance still owed
-        regardless of the month's payment status — the statement's "Amount
-        due for the year" line — so a learner who paid this month but still
-        owes earlier months reads Amount 0 with their year figure, so
-        nobody with real debt disappears from the sheet. A TOTAL footer
-        row is appended.
+        The Amount column is the month's tuition instalment for that student's
+        grade — the plain fee payable, with no carry-over from earlier months
+        and no credit for payments already received, so a Grade 1 reads
+        R 1 940 in October whether or not they have paid. When `month` is
+        omitted the figure is priced at the current calendar month (or
+        December for a past year). The "Fees for remaining months (R)" column
+        prices that same instalment once for every month still to come after
+        the report month, so October counts November and December. A TOTAL
+        footer row is appended.
 
         Grade cells mirror the office convention: 'RR' / 'R' or 1-9.
         """
@@ -632,37 +511,7 @@ class ReportService:
             today = datetime.now()
             month = today.month if academic_year == today.year else 12
 
-        rows = await self.students_monthly_due(academic_year, month, grade_id)
-
-        # Statements are the school's source of truth: learners with a
-        # statement for the month read their figures straight from it, so the
-        # workbook matches what the statement page shows. Everyone without a
-        # statement falls back to the ledger math below.
-        figs = await self._statement_figures(academic_year, month, grade_id)
-
-        # Year-to-date ledger balance per student (up to and including
-        # `month`) as the fallback carry-over for learners without a
-        # statement.
-        ledger_rows = await self.ledger.students_outstanding(
-            academic_year, grade_id=grade_id, up_to_month=month
-        )
-        ledger_carry: dict[str, Decimal] = {
-            r["student_id"]: Decimal(str(r["outstanding"])) for r in ledger_rows
-        }
-
-        def _figures_for(student_id: str) -> tuple[Decimal, Decimal]:
-            """(amount, outstanding) preferring the statement's own figures."""
-            if student_id in figs:
-                return figs[student_id]
-            return (
-                D0,
-                max(ledger_carry.get(student_id, D0), D0),
-            )
-
-        for r in rows:
-            amount, close = _figures_for(r["student_id"])
-            r["outstanding"] = amount
-            r["carry_outstanding"] = close
+        rows = await self.students_monthly_fee(academic_year, month, grade_id)
 
         def _grade_display(name: str) -> str:
             if name == "GRADE R":
@@ -676,7 +525,7 @@ class ReportService:
             if month else "STUDENTS"
         )
         headers = [
-            "Customer", "Grade", "Amount", "Amount due for the year (R)",
+            "Customer", "Grade", "Amount", "Fees for remaining months (R)",
             "Comments", "Learners on suspension",
         ]
 
@@ -685,7 +534,7 @@ class ReportService:
                 f"({r['student_number']}) {r['name']}".strip(),
                 _grade_display(r["grade"]),
                 float(r["outstanding"]),
-                float(r.get("carry_outstanding", D0)),
+                float(r.get("future_fees", D0)),
                 None,
                 None,
             ]
@@ -696,13 +545,26 @@ class ReportService:
         # spreadsheet library is missing/mis-installed in the serverless runtime.
         # If it is unavailable, fall back to the stdlib writer so the export
         # endpoint keeps working regardless of what the runtime bundled.
+        #
+        # Static computed totals, not =SUM() formulas: viewers that preview
+        # xlsx without a calculation engine (Drive preview, phone viewers)
+        # would otherwise show a blank/zero total row. Both writers emit the
+        # identical row so the fallback matches the primary path cell for cell.
+        footer = [
+            None,
+            "TOTAL AMOUNT DUE",
+            sum(float(r["outstanding"]) for r in rows),
+            sum(float(r.get("future_fees", D0)) for r in rows),
+            None,
+            None,
+        ] if rows else None
+
         try:
             from openpyxl import Workbook
             from openpyxl.styles import Alignment, Font, PatternFill
         except ImportError:
             from app.services.xlsx_writer import build_suspension_list_xlsx
 
-            sum_total = sum(row[2] for row in surfacing_rows)
             return build_suspension_list_xlsx(
                 sheet_label=sheet_label,
                 headers=headers,
@@ -711,8 +573,7 @@ class ReportService:
                     ("A", 56.89), ("B", 28.66), ("C", 21.66),
                     ("D", 21.66), ("E", 14.33), ("F", 24.11),
                 ),
-                sum_footer=bool(surfacing_rows),
-                sum_total=sum_total,
+                footer=footer,
             )
 
         wb = Workbook()
@@ -733,15 +594,8 @@ class ReportService:
         for row_values in surfacing_rows:
             ws.append(row_values)
 
-        if len(rows) > 0:
-            # Static computed totals, not =SUM() formulas: viewers that preview
-            # xlsx without a calculation engine (Drive preview, phone viewers)
-            # would otherwise show a blank/zero total row.
-            total_amount = sum(float(r["outstanding"]) for r in rows)
-            total_carry = sum(
-                float(r.get("carry_outstanding", D0)) for r in rows
-            )
-            ws.append([None, "TOTAL AMOUNT DUE", total_amount, total_carry, None, None])
+        if footer:
+            ws.append(footer)
 
         for col_letter, width in (
             ("A", 56.89), ("B", 28.66), ("C", 21.66),

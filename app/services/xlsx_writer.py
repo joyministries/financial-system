@@ -7,7 +7,7 @@ readable by Excel, LibreOffice, and openpyxl.
 
 Only supports what the school's suspension-list export needs: a single
 styled header row (bold, yellow fill), plain text/number rows, fixed
-column widths, and an optional SUM formula footer row.
+column widths, and an optional footer row.
 """
 
 from __future__ import annotations
@@ -35,8 +35,7 @@ def build_suspension_list_xlsx(
     headers: Sequence[str],
     data_rows: Iterable[Sequence[str | float | None]],
     column_widths: Sequence[tuple[str, float]] | None = None,
-    sum_footer: bool = False,
-    sum_total: float = 0.0,
+    footer: Sequence[str | float | None] | None = None,
 ) -> BytesIO:
     """Build an .xlsx workbook with one styled sheet.
 
@@ -46,20 +45,20 @@ def build_suspension_list_xlsx(
         data_rows: Row cells; ``str`` -> inline string, ``float`` ->
             number, ``None`` -> empty cell.
         column_widths: (column letter, width) pairs, e.g. ("A", 56.89).
-        sum_footer: Append a footer row with ``=SUM(C2:C{last})`` in the
-            third column (0-indexed header position 2).
-        sum_total: Cached value for the SUM formula cell.
+        footer: Final row written verbatim, e.g. the totals line. Ignored
+            when there are no data rows.
     """
     sheet_name = _safe_sheet_name(sheet_label)
 
     data = list(data_rows)
-    total_rows = 1 + len(data) + (1 if sum_footer and data else 0)
+    has_footer = bool(footer and data)
+    total_rows = 1 + len(data) + (1 if has_footer else 0)
 
     row_xml: list[str] = [_header_row(headers)]
     for idx, values in enumerate(data):
         row_xml.append(_data_row(idx + 2, values))
-    if sum_footer and data:
-        row_xml.append(_sum_footer_row(len(data), sum_total))
+    if has_footer:
+        row_xml.append(_data_row(len(data) + 2, footer))
 
     dimension = _dimension_ref(len(headers), total_rows)
 
@@ -198,19 +197,3 @@ def _data_row(row_num: int, values: Sequence[str | float | None]) -> str:
             )
     joined = "".join(cells)
     return '<row r="' + str(row_num) + '">' + joined + "</row>"
-
-
-def _sum_footer_row(num_data_rows: int, sum_total: float) -> str:
-    """Footer row: 'OUTSTANDING BALANCE' in B, =SUM(C2:C{last}) in C."""
-    footer_row = num_data_rows + 2
-    last_data_row = num_data_rows + 1
-    b = (
-        f'<c r="B{footer_row}" t="inlineStr">'
-        "<is><t>OUTSTANDING BALANCE</t></is></c>"
-    )
-    formula = (
-        f'<c r="C{footer_row}">'
-        f"<f>SUM(C2:C{last_data_row})</f>"
-        f"<v>{sum_total!r}</v></c>"
-    )
-    return '<row r="' + str(footer_row) + '">' + b + formula + "</row>"

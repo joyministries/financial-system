@@ -989,10 +989,10 @@ async def outstanding_matrix_report(
     for the year.
 
     ``month_only=False`` returns the running balance at each month's end
-    ("with carry-over"); ``month_only=True`` returns each student's amount
-    due for that month — the tuition instalment less what was paid into it.
-    Each column uses the same query the on-screen report uses, so the export
-    always matches what the user sees.
+    ("with carry-over"); ``month_only=True`` returns the tuition instalment
+    payable for that month, priced from the fee structure — no carry-over and
+    no payment credit. Each column uses the same query the on-screen report
+    uses, so the export always matches what the user sees.
     """
     service = ReportService(db)
     return await service.outstanding_matrix(
@@ -1015,9 +1015,9 @@ async def export_report_excel(
 ):
     """Real Excel (.xlsx) download for the Reports page, sheet per tab.
 
-    ``income``    — Monthly Income summary (income received, payments,
-                    students owing with their current amount due for the
-                    month), matching the on-screen cards and table.
+    ``income``    — Monthly Income summary (income received, payments, and the
+                    students with a fee for the month), matching the on-screen
+                    cards and table.
     ``outstanding`` — the student-by-month outstanding matrix, month-capped,
                     same rows as the Outstanding Fees tab.
     ``payments``  — Payments by method for the report month.
@@ -1047,7 +1047,7 @@ async def export_report_excel(
     if tab == "income":
         monthly = await service.monthly_summary(academic_year, month)
         # Students list follows the report's selected balance mode exactly:
-        # "amount due for month" = the month's dues; "outstanding balances" =
+        # "fee for month" = that month's instalment; "outstanding balances" =
         # the cumulative carry-over figure — same rows the screen shows.
         owing = await service.statement_report(
             academic_year, "overdue", grade_id, month, month_only
@@ -1057,17 +1057,17 @@ async def export_report_excel(
         ws.append(["Income received", float(monthly["total_income"])])
         ws.append(["Payments received", monthly["payment_count"]])
         ws.append([])
-        mode = "Amount due for month (R)" if month_only else "Outstanding balance (R)"
+        mode = "Fee for month (R)" if month_only else "Outstanding balance (R)"
         if month_only:
             ws.append([
                 "Student Number", "Student", "Grade", mode,
-                "Amount due for the year (R)",
+                "Fees for remaining months (R)",
             ])
             style_header(ws.max_row)
             for s in owing["students"]:
                 ws.append([
                     s["student_number"], s["name"], s["grade"],
-                    float(s["balance"]), float(s.get("carry_outstanding") or 0),
+                    float(s["balance"]), float(s.get("future_fees") or 0),
                 ])
         else:
             ws.append(["Student Number", "Student", "Grade", mode])
@@ -1180,12 +1180,14 @@ async def export_students_report(
     user: User = Depends(require_role("admin", "finance")),
 ):
     """Admin Excel export of approved students in the school's suspension-list
-    layout (Customer | Grade | Amount | Comments | Learners on suspension).
+    layout (Customer | Grade | Amount | Fees for remaining months | Comments |
+    Learners on suspension).
 
     All grades when `grade_id` is omitted, or a single grade when provided.
-    The Amount column is each student's CURRENT amount due as at `month` —
-    the month's fee plus the balance carried forward from the generated
-    statement (never the year-to-date running balance). When `month` is
+    The Amount column is the plain tuition instalment payable for `month` at
+    that student's grade — no carry-over from earlier months and no credit for
+    payments already received. The second money column prices that same
+    instalment for every month still to come after `month`. When `month` is
     omitted it is priced at the current calendar month (or December for a
     past year)."""
     service = ReportService(db)
